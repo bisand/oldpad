@@ -109,7 +109,8 @@ fn map_device(d: &Value, zones: &HashMap<String, String>) -> Option<Entity> {
         id,
         name: d["name"].as_str().unwrap_or("?").to_string(),
         zone: zones.get(d["zone"].as_str().unwrap_or("")).cloned().unwrap_or_default(),
-        class: d["class"].as_str().unwrap_or("other").to_string(),
+        // A plug the user told Homey has a lamp in it is a light here too.
+        class: if d["virtualClass"] == "light" { "light" } else { d["class"].as_str().unwrap_or("other") }.to_string(),
         capabilities,
     })
 }
@@ -129,13 +130,87 @@ fn map_flow(f: &Value, prefix: &str) -> Option<Entity> {
 }
 
 fn load(api: &Api) -> Result<Vec<Entity>, String> {
-    let zones = load_zones(api)?;
-    let mut out: Vec<Entity> = items(&api.call("GET", "/api/manager/devices/device", None)?)
-        .into_iter()
-        .filter_map(|d| map_device(d, &zones))
-        .collect();
-    out.extend(load_flows(api));
+    let zones_raw = api.call("GET", "/api/manager/zones/zone", None)?;
+    let zones: HashMap<String, String> = items(&zones_raw).into_iter().filter_map(|z| Some((z["id"].as_str()?.to_string(), z["name"].as_str()?.to_string()))).collect();
+    let devices = api.call("GET", "/api/manager/devices/device", None)?;
+    let mut out: Vec<Entity> = items(&devices).into_iter().filter_map(|d| map_device(d, &zones)).collect();
+    let house = House::new(&zones_raw, &devices);
+    out.extend(load_flows(api, &house));
     Ok(out)
+}
+
+/// What the zoneLights HomeyScript (docs/homey-zone-lights.md) would switch, so a
+/// Flow that runs it can show On while any of its lights is on.
+struct House {
+    zones: Vec<(String, String, Option<String>)>, // id, name, parent
+    lights: Vec<(String, String, bool)>,          // device id, zone id, on
+}
+
+/// Zone names may hold non-breaking spaces; compare loosely, as the script does.
+fn loose(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+impl House {
+    fn new(zones: &Value, devices: &Value) -> Self {
+        let zones = items(zones).into_iter().filter_map(|z| Some((z["id"].as_str()?.to_string(), z["name"].as_str()?.to_string(), z["parent"].as_str().map(str::to_string)))).collect();
+        let lights = items(devices)
+            .into_iter()
+            .filter(|d| (d["class"] == "light" || d["virtualClass"] == "light") && d["available"] != false)
+            .filter(|d| !d["driverId"].as_str().unwrap_or("").contains("com.swttt.devicegroups"))
+            .filter_map(|d| Some((d["id"].as_str()?.to_string(), d["zone"].as_str()?.to_string(), d["capabilitiesObj"]["onoff"]["value"].as_bool()?)))
+            .collect();
+        House { zones, lights }
+    }
+
+    /// The lights in "toggle: Zone, Zone" (sub-zones included), or None if it names no zone we know.
+    fn members(&self, argument: &str) -> Option<Vec<&(String, String, bool)>> {
+        let (_, list) = argument.split_once(':')?;
+        let wanted: Vec<String> = list.split(',').map(loose).filter(|s| !s.is_empty()).collect();
+        let mut inside: Vec<&str> = self.zones.iter().filter(|z| wanted.contains(&loose(&z.1))).map(|z| z.0.as_str()).collect();
+        if inside.is_empty() {
+            return None;
+        }
+        while let Some(child) = self.zones.iter().find(|z| !inside.contains(&z.0.as_str()) && z.2.as_deref().is_some_and(|p| inside.contains(&p))) {
+            inside.push(&child.0);
+        }
+        Some(self.lights.iter().filter(|l| inside.contains(&l.1.as_str())).collect())
+    }
+}
+
+/// The argument a Flow gives the zoneLights script, from either kind of Flow.
+fn zone_argument(f: &Value) -> Option<String> {
+    let cards: Vec<&Value> = f["cards"].as_object().map(|c| c.values().collect()).unwrap_or_else(|| f["actions"].as_array().map(|a| a.iter().collect()).unwrap_or_default());
+    cards.into_iter().find_map(|c| {
+        let runs = c["args"]["script"]["name"] == "zoneLights" || c["args"]["code"].as_str().is_some_and(|code| code.contains("zoneLights"));
+        c["args"]["argument"].as_str().filter(|_| runs).map(str::to_string)
+    })
+}
+
+/// Gives a lights Flow a read-only `onoff` (any light on) and its `members`.
+fn group(e: &mut Entity, members: &[&(String, String, bool)]) {
+    let ids: Vec<&String> = members.iter().map(|m| &m.0).collect();
+    e.capabilities.insert("onoff".into(), Capability::new(json!(members.iter().any(|m| m.2)), false));
+    e.capabilities.insert("members".into(), Capability::new(json!(ids), false));
+}
+
+/// A light changed: the lights Flows it belongs to, with their new state if that changed.
+fn regroup(list: &mut [Entity], device: &str) -> Vec<(String, Value)> {
+    let on = |list: &[Entity], id: &str| list.iter().find(|e| e.id == id).and_then(|e| e.capabilities.get("onoff")).is_some_and(|c| c.value == true);
+    let mut changed = Vec::new();
+    for i in 0..list.len() {
+        let Some(ids) = list[i].capabilities.get("members").and_then(|c| c.value.as_array()).cloned() else { continue };
+        if !ids.iter().any(|m| m == device) {
+            continue;
+        }
+        let any = json!(ids.iter().filter_map(Value::as_str).any(|m| on(list, m)));
+        let c = list[i].capabilities.get_mut("onoff").unwrap();
+        if c.value != any {
+            c.value = any.clone();
+            changed.push((list[i].id.clone(), any));
+        }
+    }
+    changed
 }
 
 /// Zone id → name.
@@ -146,25 +221,31 @@ fn load_zones(api: &Api) -> Result<HashMap<String, String>, String> {
         .collect())
 }
 
-/// Takes a renamed or moved device's new name, room and kind; true if any changed.
-fn apply_update(list: &mut [Entity], device: &Value, zones: &HashMap<String, String>) -> bool {
-    let Some(new) = map_device(device, zones) else { return false };
-    let Some(e) = list.iter_mut().find(|e| e.id == new.id) else { return false };
+/// Takes a renamed or moved device's new name, room and kind. None if nothing changed,
+/// else whether it moved room (or became or stopped being a light), which lights Flows care about.
+fn apply_update(list: &mut [Entity], device: &Value, zones: &HashMap<String, String>) -> Option<bool> {
+    let new = map_device(device, zones)?;
+    let e = list.iter_mut().find(|e| e.id == new.id)?;
     if (&e.name, &e.zone, &e.class) == (&new.name, &new.zone, &new.class) {
-        return false;
+        return None;
     }
+    let moved = (&e.zone, &e.class) != (&new.zone, &new.class);
     (e.name, e.zone, e.class) = (new.name, new.zone, new.class);
-    true
+    Some(moved)
 }
 
 /// The Flows that can be started. Optional: a key without the Flow permissions still gives devices.
-fn load_flows(api: &Api) -> Vec<Entity> {
+fn load_flows(api: &Api, house: &House) -> Vec<Entity> {
     let mut out = Vec::new();
-    if let Ok(flows) = api.call("GET", "/api/manager/flow/flow", None) {
-        out.extend(items(&flows).into_iter().filter_map(|f| map_flow(f, "flow-")));
-    }
-    if let Ok(flows) = api.call("GET", "/api/manager/flow/advancedflow", None) {
-        out.extend(items(&flows).into_iter().filter_map(|f| map_flow(f, "aflow-")));
+    for (path, prefix) in [("/api/manager/flow/flow", "flow-"), ("/api/manager/flow/advancedflow", "aflow-")] {
+        let Ok(flows) = api.call("GET", path, None) else { continue };
+        for f in items(&flows) {
+            let Some(mut e) = map_flow(f, prefix) else { continue };
+            if let Some(members) = zone_argument(f).and_then(|a| house.members(&a)) {
+                group(&mut e, &members);
+            }
+            out.push(e);
+        }
     }
     out
 }
@@ -323,14 +404,18 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
             let mut list = entities.lock().unwrap();
             if let Some(c) = list.iter_mut().find(|e| e.id == id).and_then(|e| e.capabilities.get_mut(cap)) {
                 c.value = value.clone();
+                let flows = if cap == "onoff" { regroup(&mut list, id) } else { vec![] };
                 drop(list);
                 sink(Event::Changed { entity: id.to_string(), capability: cap.to_string(), value });
+                for (flow, on) in flows {
+                    sink(Event::Changed { entity: flow, capability: "onoff".into(), value: on });
+                }
             }
         } else if uri == "homey:manager:flow" && event.contains("flow.") {
-            // Flows also report every run; reload only when the startable list really changed.
-            let fresh = load_flows(api);
+            // Flows don't report runs, only edits; reload only when the startable list really changed.
+            let fresh: Vec<Entity> = load(api)?.into_iter().filter(is_flow).collect();
             let mut list = entities.lock().unwrap();
-            let names = |l: &mut dyn Iterator<Item = &Entity>| l.map(|e| (e.id.clone(), e.name.clone())).collect::<Vec<_>>();
+            let names = |l: &mut dyn Iterator<Item = &Entity>| l.map(|e| (e.id.clone(), e.name.clone(), e.capabilities.get("members").map(|c| c.value.clone()))).collect::<Vec<_>>();
             if names(&mut list.iter().filter(|e| is_flow(e))) != names(&mut fresh.iter()) {
                 list.retain(|e| !is_flow(e));
                 list.extend(fresh);
@@ -340,9 +425,14 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
             }
         } else if uri == "homey:manager:devices" && event == "device.update" {
             // Sent on renames and moves, not on value changes; also when a device comes and goes.
-            if apply_update(&mut entities.lock().unwrap(), data, &zones) {
-                eprintln!("homey: {} renamed or moved", data["name"]);
-                sink(Event::Reloaded);
+            match apply_update(&mut entities.lock().unwrap(), data, &zones) {
+                // A move changes which lights Flows hold it: reconnect, which reloads them.
+                Some(true) => return Err(format!("{} moved", data["name"])),
+                Some(false) => {
+                    eprintln!("homey: {} renamed", data["name"]);
+                    sink(Event::Reloaded);
+                }
+                None => {}
             }
         } else if uri == "homey:manager:zones" && event.starts_with("zone.") {
             // A renamed or new room: reconnect, which reloads names and rooms.
@@ -404,6 +494,46 @@ mod tests {
     }
 
     #[test]
+    fn lights_flows_follow_their_zones() {
+        let zones = json!({
+            "h": {"id": "h", "name": "Hjem", "parent": null},
+            "o": {"id": "o", "name": "Andre etasje", "parent": "h"},
+            "s": {"id": "s", "name": "Lys\u{a0}Stue", "parent": "o"},
+            "n": {"id": "n", "name": "Første etasje", "parent": "h"},
+        });
+        let light = |id: &str, zone: &str, on: bool| json!({"id": id, "zone": zone, "class": "light", "driverId": "homey:app:nl.philips.hue:bulb", "capabilitiesObj": {"onoff": {"value": on}}});
+        let devices = json!({
+            "a": light("a", "s", false),
+            "b": {"id": "b", "zone": "o", "class": "socket", "virtualClass": "light", "driverId": "homey:app:se.nexa:x", "capabilitiesObj": {"onoff": {"value": false}}},
+            "c": light("c", "n", true),
+            "dead": {"id": "dead", "zone": "s", "class": "light", "available": false, "capabilitiesObj": {"onoff": {"value": true}}},
+            "grp": {"id": "grp", "zone": "s", "class": "light", "driverId": "homey:app:com.swttt.devicegroups:light", "capabilitiesObj": {"onoff": {"value": true}}},
+            "plug": {"id": "plug", "zone": "s", "class": "socket", "capabilitiesObj": {"onoff": {"value": true}}},
+        });
+        let house = House::new(&zones, &devices);
+        let ids = |arg: &str| house.members(arg).map(|m| m.iter().map(|l| l.0.clone()).collect::<Vec<_>>());
+        assert_eq!(ids("toggle: andre  etasje"), Some(vec!["a".into(), "b".into()]), "sub-zones, plug lamps; not dead, groups or plain plugs");
+        assert_eq!(ids("off: Lys Stue, Første etasje").map(|v| v.len()), Some(2));
+        assert_eq!(ids("toggle: Nowhere"), None);
+
+        let flow = json!({"id": "f", "name": "Lys: Andre etasje", "triggerable": true, "cards": {
+            "1": {"type": "start"},
+            "2": {"id": "homey:app:com.athom.homeyscript:runCodeWithArg_v2", "args": {"code": "… name: 'zoneLights' …", "argument": "toggle: Andre etasje"}}}});
+        let mut e = map_flow(&flow, "aflow-").unwrap();
+        group(&mut e, &house.members(&zone_argument(&flow).unwrap()).unwrap());
+        assert_eq!(e.capabilities["onoff"].value, false);
+        assert!(!e.capabilities["onoff"].settable, "tapping runs the Flow");
+
+        let zone_names = HashMap::new();
+        let mut list: Vec<Entity> = ["a", "b"].iter().filter_map(|id| map_device(&devices[*id], &zone_names)).collect();
+        list.push(e);
+        assert_eq!(list[1].class, "light");
+        list[1].capabilities.get_mut("onoff").unwrap().value = json!(true);
+        assert_eq!(regroup(&mut list, "b"), vec![("aflow-f".to_string(), json!(true))]);
+        assert_eq!(regroup(&mut list, "b"), vec![], "no news, no event");
+    }
+
+    #[test]
     fn maps_devices_and_flows() {
         let zones = HashMap::from([("z1".to_string(), "Stue".to_string())]);
         let d = json!({"id": "d1", "name": "Taklampe", "zone": "z1", "class": "light",
@@ -418,10 +548,10 @@ mod tests {
         assert_eq!(e.capabilities["thermostat_mode"].values, Some(json!([{"id": "heat", "title": "Varme"}, {"id": "off", "title": "Off"}])));
 
         let mut list = vec![e];
-        assert!(!apply_update(&mut list, &d, &zones), "nothing changed");
+        assert_eq!(apply_update(&mut list, &d, &zones), None, "nothing changed");
         let moved = json!({"id": "d1", "name": "Taklampe stue", "zone": "z2", "class": "light", "capabilitiesObj": {}});
         let zones = HashMap::from([("z2".to_string(), "Kjøkken".to_string())]);
-        assert!(apply_update(&mut list, &moved, &zones));
+        assert_eq!(apply_update(&mut list, &moved, &zones), Some(true), "renamed and moved");
         assert_eq!((list[0].name.as_str(), list[0].zone.as_str()), ("Taklampe stue", "Kjøkken"));
         assert_eq!(list[0].capabilities.len(), 3, "keeps its capabilities and values");
 
