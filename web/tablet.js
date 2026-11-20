@@ -9,7 +9,8 @@
 
   var TOKEN_KEY = 'oldpad.token';
   var THEME_KEY = 'oldpad.theme';
-  var SIZE_KEY = 'oldpad.size';     // how big the clock and temperatures are: normal, large, xl
+  var SIZE_KEY = 'oldpad.size';
+  var SHIPVIEW_KEY = 'oldpad.shipview'; // radar, chart (nautical) or map     // how big the clock and temperatures are: normal, large, xl
   // ?preview=<screen id>: an admin looking at a screen from the admin page. Read only.
   var PREVIEW = (/[?&]preview=([A-Za-z0-9]+)/.exec(window.location.search) || [])[1] || null;
 
@@ -23,14 +24,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -88,6 +89,7 @@
     door: 'M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M15 12h.01',
     clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
     dots: 'M5 12h.01M12 12h.01M19 12h.01',
+    boat: 'M3 16h18l-2.5 4h-13zM12 3v11M12 4l6 9h-6',
     cog: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.7 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.7 1-.5 2.4h-3.4l-.5-2.4-1.7-1-2.3.8-1.7-2.9 1.8-1.6v-2L4.1 8.5l1.7-2.9 2.3.8 1.7-1z'
   };
 
@@ -109,6 +111,7 @@
   var events = null;
   var pairTimer = null;
   var toastTimer = null;
+  var mapZoom = 0;              // + and − on the ships map, on top of the zoom that fits the radius
   var sheet = null;            // the entity whose controls are open
   var holdUntil = 0;          // don't redraw under a finger on the volume slider
   var redrawPending = false;
@@ -459,6 +462,7 @@
     if (c === 'sensor') { return 'thermo'; }
     if (c === 'speaker') { return 'music'; }
     if (c === 'garagedoor' || c === 'door' || c === 'lock') { return 'door'; }
+    if (c === 'ais') { return 'boat'; }
     return 'bolt';
   }
 
@@ -484,6 +488,9 @@
       body = '<div class="value sub">' + T.run + '</div>';
     } else if (measure) {
       body = '<div class="value">' + num(measure.value, 1) + '°</div>';
+    } else if (cap(e, 'ships')) {
+      var near = val(e, 'ships') || [];
+      body = '<div class="value up">' + near.length + '<div class="sub">' + (near.length ? esc(shipName(near[0])) + ' · ' + km(near[0].km) : '') + '</div></div>';
     }
     if (controls(e).length > 1) { body += '<span class="more" data-act="more" data-id="' + esc(e.id) + '">' + icon('dots') + '</span>'; }
     return '<div class="' + cls + '" data-act="tile" data-id="' + esc(e.id) + '"><div class="in">' + icon(tileIcon(e)) +
@@ -562,6 +569,102 @@
       '<span class="x" data-act="close">✕</span><div class="sheet-h">' + esc(e.name) + '</div><div class="sub">' + esc(e.zone) + '</div>' + html + '</div></div>';
   }
 
+  // ------------------------------------------------------------- ships
+
+  function shipKind(code) {
+    if (code === 30) { return 'fishing'; }
+    if (code === 31 || code === 32 || code === 52) { return 'tug'; }
+    if (code === 36) { return 'sailing'; }
+    if (code === 37) { return 'pleasure'; }
+    if (code >= 40 && code < 50) { return 'fast'; }
+    if (code === 50) { return 'pilot'; }
+    if (code === 51) { return 'sar'; }
+    if (code >= 60 && code < 70) { return 'passenger'; }
+    if (code >= 70 && code < 80) { return 'cargo'; }
+    if (code >= 80 && code < 90) { return 'tanker'; }
+    return 'other';
+  }
+  function shipName(s) { return s.name || 'MMSI ' + s.mmsi; }
+  function km(d) { return (d < 1 ? Math.round(d * 1000) + ' m' : num(d, d < 10 ? 1 : 0) + ' km'); }
+  // The page's CSP allows no inline styles: positions ride on data attributes and place() sets them.
+  function rot(deg) { return ' data-rot="' + Math.round(deg) + '"'; }
+  function place(root) {
+    var els = root.querySelectorAll('[data-l],[data-rot],[data-w]'), i, el, r;
+    for (i = 0; i < els.length; i++) {
+      el = els[i];
+      if (el.getAttribute('data-w')) { el.style.height = el.getAttribute('data-w'); }
+      if (el.getAttribute('data-l')) { el.style.left = el.getAttribute('data-l'); el.style.top = el.getAttribute('data-t'); }
+      r = el.getAttribute('data-rot');
+      if (r) { el.style.webkitTransform = el.style.transform = 'rotate(' + r + 'deg)'; }
+    }
+  }
+
+  // A radar with home in the middle and north up, and the nearest ships listed beside it.
+  function shipsCard(e) {
+    var list = val(e, 'ships') || [], r = val(e, 'radius') || 20, dots = '', rows = '', i, s, x, y, dir, moving, kind;
+    for (i = list.length - 1; i >= 0; i--) { // nearest drawn last, on top
+      s = list[i];
+      x = 50 + 50 * Math.sin(s.brg * Math.PI / 180) * s.km / r;
+      y = 50 - 50 * Math.cos(s.brg * Math.PI / 180) * s.km / r;
+      dir = typeof s.cog === 'number' ? s.cog : s.hdg;
+      moving = s.kn >= 0.5 && typeof dir === 'number';
+      kind = shipKind(s.type);
+      dots += '<span class="ship k-' + kind + (moving ? '' : ' still') + '" data-l="' + x.toFixed(1) + '%" data-t="' + y.toFixed(1) + '%">' +
+        '<i' + (moving ? rot(dir) : '') + '></i>' + (i < 4 ? '<b>' + esc(shipName(s)) + '</b>' : '') + '</span>';
+    }
+    for (i = 0; i < list.length && i < 12; i++) {
+      s = list[i];
+      kind = shipKind(s.type);
+      moving = s.kn >= 0.5 && typeof s.cog === 'number';
+      rows += '<div class="sh"><span class="sw k-' + kind + '"></span><span class="sn">' + esc(shipName(s)) +
+        '<span class="sub">' + T.shipKinds[kind] + (s.dest ? ' → ' + esc(s.dest) : '') + '</span></span>' +
+        '<span class="sd">' + km(s.km) + '<span class="sub">' + (moving ? num(s.kn, 0) + ' ' + T.kn + ' <i class="arr"' + rot(s.cog) + '>↑</i>' : '—') + '</span></span></div>';
+    }
+    var view = load(SHIPVIEW_KEY) || 'radar';
+    var head = '<div class="ships-head"><span class="sub">' + T.ships + '</span>' + choices('shipview', view, [['radar', T.radar], ['chart', T.chart], ['map', T.map]]) + '</div>';
+    if (view !== 'radar' && val(e, 'home')) {
+      return '<div class="card ships">' + head + mapHtml(e, list, r, view === 'chart' ? 'sjokartraster' : 'topograatone') + '</div>';
+    }
+    return '<div class="card ships">' + head + '<div class="ships-in">' +
+      '<div class="radar"><span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>' +
+      '<span class="rl">' + km(r / 3) + '</span><span class="rl l2">' + km(2 * r / 3) + '</span><span class="rl l3">' + km(r) + '</span>' +
+      '<span class="n">N</span><span class="home"></span>' + dots + '</div>' +
+      '<div class="ship-list">' + (rows || '<p class="muted">' + T.noShips + ' ' + km(r) + '</p>') + '</div></div></div>';
+  }
+
+  // Web Mercator pixels of a place at zoom z.
+  function merc(lat, lon, z) {
+    var n = 256 * Math.pow(2, z), s = Math.sin(lat * Math.PI / 180);
+    return { x: (lon + 180) / 360 * n, y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n };
+  }
+
+  // Kartverket's tiles around home (through oldpad: the page may only load from it), ships on top.
+  function mapHtml(e, list, r, layer) {
+    var home = val(e, 'home'), w = Math.max(300, $('page').clientWidth - 36), h = Math.max(300, Math.min(620, window.innerHeight - 150));
+    var fit = Math.floor(Math.log(156543 * Math.cos(home[0] * Math.PI / 180) * Math.min(w, h) / 2 / (r * 1000)) / Math.LN2);
+    var z = Math.max(7, Math.min(15, fit + mapZoom)), c = merc(home[0], home[1], z), left = c.x - w / 2, top = c.y - h / 2;
+    var iid = e.id.slice(0, e.id.indexOf(':')), html = '', tx, ty, i, s, p, dir, moving, kind;
+    for (ty = Math.floor(top / 256); ty <= Math.floor((top + h) / 256); ty++) {
+      for (tx = Math.floor(left / 256); tx <= Math.floor((left + w) / 256); tx++) {
+        html += '<img class="tile-img" alt="" src="/api/image/' + esc(iid) + '/' + layer + '-' + z + '-' + ty + '-' + tx + '" data-l="' + Math.round(tx * 256 - left) + 'px" data-t="' + Math.round(ty * 256 - top) + 'px">';
+      }
+    }
+    html += '<span class="home" data-l="' + Math.round(w / 2) + 'px" data-t="' + Math.round(h / 2) + 'px"></span>';
+    for (i = list.length - 1; i >= 0; i--) {
+      s = list[i];
+      if (typeof s.lat !== 'number') { continue; }
+      p = merc(s.lat, s.lon, z);
+      dir = typeof s.cog === 'number' ? s.cog : s.hdg;
+      moving = s.kn >= 0.5 && typeof dir === 'number';
+      kind = shipKind(s.type);
+      html += '<span class="ship k-' + kind + (moving ? '' : ' still') + '" data-l="' + Math.round(p.x - left) + 'px" data-t="' + Math.round(p.y - top) + 'px"><i' + (moving ? rot(dir) : '') + '></i>' +
+        '<b>' + esc(shipName(s)) + (moving ? ' · ' + num(s.kn, 0) + ' ' + T.kn : '') + '</b></span>';
+    }
+    return '<div class="map ' + layer + '" data-w="' + h + 'px">' + html +
+      '<span class="zoom"><span class="step" data-act="zoom" data-step="1">+</span><span class="step" data-act="zoom" data-step="-1">−</span></span>' +
+      '<span class="credit">© Kartverket</span></div>';
+  }
+
   function tilesHtml(list, big) {
     var html = '', i;
     for (i = 0; i < list.length; i++) { html += tileHtml(list[i]); }
@@ -576,7 +679,8 @@
     { id: 'lights', icon: 'bulb', when: function () { return byClass(['light', 'socket']).length > 0; } },
     { id: 'climate', icon: 'thermo', when: function () { return !!(panel('indoor') || panel('outdoor')) || byClass(['thermostat', 'heater', 'sensor']).length > 0; } },
     { id: 'flows', icon: 'bolt', when: function () { return byClass(['button']).length > 0; } },
-    { id: 'weather', icon: 'cloud', when: function () { return !!series(); } }
+    { id: 'weather', icon: 'cloud', when: function () { return !!series(); } },
+    { id: 'ships', icon: 'boat', when: function () { return byClass(['ais']).length > 0; } }
   ];
 
   function homePage() {
@@ -694,7 +798,8 @@
         if (it.card === 'forecast') { html += forecastCard(); }
         if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], favRows(), true); }
       } else {
-        run.push(typeof it === 'string' ? entities[it] || { missing: true } : it);
+        it = typeof it === 'string' ? entities[it] || { missing: true } : it;
+        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else { run.push(it); }
       }
     }
     flush();
@@ -709,6 +814,7 @@
     if (page === 'climate') { return '<div class="row">' + climateCard('w100') + '</div>' + tilesHtml(byClass(['thermostat', 'heater', 'sensor']), true); }
     if (page === 'flows') { return tilesHtml(byClass(['button']), true); }
     if (page === 'weather') { return weatherPage(); }
+    if (page === 'ships') { return byClass(['ais']).map(shipsCard).join(''); }
     if (page === 'settings') { return settingsPage(); }
     return homePage();
   }
@@ -731,6 +837,7 @@
     rail += '<a data-act="page" data-page="settings" class="cog' + (page === 'settings' ? ' on' : '') + '">' + icon('cog') + '</a>';
     $('rail').innerHTML = rail;
     $('page').innerHTML = pageHtml() + sheetHtml();
+    place($('page'));
     tick();
   }
 
@@ -785,6 +892,9 @@
       c.value = next;
       render();
       set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
+    } else if (act === 'tile' && e && cap(e, 'ships')) {
+      page = 'ships';
+      render();
     } else if (act === 'tile' && e && cap(e, 'target_temperature')) {
       sheet = id; // a tap shouldn't switch the heat off; the sheet has the switch
       render();
@@ -816,6 +926,13 @@
       c.value = !prev;
       render();
       set(e, 'speaker_playing', c.value, prev);
+    } else if (act === 'shipview') {
+      save(SHIPVIEW_KEY, el.getAttribute('data-value'));
+      mapZoom = 0;
+      render();
+    } else if (act === 'zoom') {
+      mapZoom = Math.max(-3, Math.min(4, mapZoom + parseInt(el.getAttribute('data-step'), 10)));
+      render();
     } else if (act === 'theme') {
       save(THEME_KEY, el.getAttribute('data-value'));
       render();

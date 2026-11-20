@@ -8,11 +8,13 @@
 //! To add one: write a module with a `pub fn kind() -> Kind`, add it to
 //! `kinds()` below. See docs/integrations.md.
 
+pub mod ais;
 pub mod demo;
 pub mod homey;
 pub mod influx;
 pub mod met;
 pub mod smapi;
+pub mod spot;
 pub mod sonos;
 
 use serde::Serialize;
@@ -129,7 +131,7 @@ pub struct Kind {
 }
 
 pub fn kinds() -> Vec<Kind> {
-    vec![homey::kind(), influx::kind(), met::kind(), sonos::kind(), demo::kind()]
+    vec![homey::kind(), influx::kind(), met::kind(), sonos::kind(), ais::kind(), spot::kind(), demo::kind()]
 }
 
 /// Checks a submitted config against the kind's fields and returns it cleaned:

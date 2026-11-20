@@ -369,6 +369,7 @@ const MENU_PAGES = [
   ['lights', 'Lights', ['light', 'socket'], 'lights and sockets'],
   ['climate', 'Climate', ['thermostat', 'heater', 'sensor'], 'thermostats, heaters and sensors'],
   ['flows', 'Flows', ['button'], 'buttons and Flows'],
+  ['ships', 'Ships', ['ais'], 'ships nearby (AIS)'],
 ];
 const CARDS = [['card:clock', 'Clock'], ['card:climate', 'Indoor / outdoor'], ['card:forecast', 'Forecast'], ['card:music', 'Music']];
 const PAGE_ICONS = ['home', 'music', 'bulb', 'thermo', 'bolt', 'cloud', 'sun', 'moon', 'chart', 'radio', 'flame', 'plug'];
