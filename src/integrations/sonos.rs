@@ -362,6 +362,8 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
     let seeds = seeds(config)?;
     let state = Arc::new(Mutex::new(State { rooms: vec![], favs: vec![], entities: vec![] }));
     refresh(&seeds, &state, &(Arc::new(|_| {}) as Sink), true)?;
+    let rooms: Vec<String> = state.lock().unwrap().rooms.iter().map(|r| format!("{} {}", r.name, r.host)).collect();
+    eprintln!("sonos: {} rooms: {}", rooms.len(), rooms.join(", "));
     let (stopped, poke) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
     let (st, stop, pk) = (state.clone(), stopped.clone(), poke.clone());
     std::thread::spawn(move || {
