@@ -69,10 +69,14 @@ pub struct Store {
 impl Store {
     pub fn open(dir: &Path) -> std::io::Result<Store> {
         fs::create_dir_all(dir)?;
+        // Best effort: a mounted volume (Kubernetes, Docker) is often owned by root
+        // and cannot be chmod-ed by us. The file itself is still created 0600.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
+            if let Err(e) = fs::set_permissions(dir, fs::Permissions::from_mode(0o700)) {
+                eprintln!("store: could not restrict {} to 0700 ({e}); continuing", dir.display());
+            }
         }
         let file = dir.join("oldpad.json");
         let data = match fs::read(&file) {
