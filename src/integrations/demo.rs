@@ -50,6 +50,7 @@ fn speaker(id: &str, room: &str, group: &str, playing: bool, volume: f64, track:
     entity(id, room, room, "speaker", vec![
         ("speaker_playing", Capability::new(json!(playing), true)),
         ("volume_set", Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(volume), true) }),
+        ("group_volume", Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(volume), true) }),
         ("speaker_track", Capability::new(json!(track), false)),
         ("speaker_artist", Capability::new(json!(if track.is_empty() { "" } else { "Morning news" }), false)),
         ("favourites", Capability::new(json!(favs), false)),
@@ -105,6 +106,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
         speaker("bath", "Bathroom", "bath", false, 0.15, ""),
         entity("night", "Good night", "Scenes", "button", vec![("button", Capability::new(Value::Null, true))]),
     ]));
+    group_volumes(&mut entities.lock().unwrap());
     let stopped = Arc::new(AtomicBool::new(false));
 
     // Let the indoor temperature drift towards the setpoint, so live updates can be seen.
@@ -127,6 +129,23 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
     });
 
     Ok(Box::new(Demo { entities, stopped, sink }))
+}
+
+/// Each group's volume is the average of its rooms', as Sonos reports it. Returns what changed.
+fn group_volumes(list: &mut [Entity]) -> Vec<(String, Value)> {
+    let groups: Vec<(String, Value, f64)> = list.iter().filter_map(|e| Some((e.id.clone(), e.capabilities.get("speaker_group")?.value.clone(), e.capabilities["volume_set"].value.as_f64()?))).collect();
+    let mut changed = vec![];
+    for e in list.iter_mut().filter(|e| e.capabilities.contains_key("group_volume")) {
+        let g = &e.capabilities["speaker_group"].value;
+        let vols: Vec<f64> = groups.iter().filter(|(_, og, _)| og == g).map(|(_, _, v)| *v).collect();
+        let avg = json!((vols.iter().sum::<f64>() / vols.len() as f64 * 100.0).round() / 100.0);
+        let c = e.capabilities.get_mut("group_volume").unwrap();
+        if c.value != avg {
+            c.value = avg.clone();
+            changed.push((e.id.clone(), avg));
+        }
+    }
+    changed
 }
 
 impl Instance for Demo {
@@ -158,7 +177,11 @@ impl Instance for Demo {
             for (id, v) in &changes {
                 list.iter_mut().find(|e| e.id == *id).unwrap().capabilities.get_mut("speaker_group").unwrap().value = v.clone();
             }
+            let groups = group_volumes(&mut list);
             drop(list);
+            for (id, v) in groups {
+                (self.sink)(Event::Changed { entity: id, capability: "group_volume".into(), value: v });
+            }
             for (id, v) in changes {
                 (self.sink)(Event::Changed { entity: id, capability: "speaker_group".into(), value: v });
             }
@@ -202,6 +225,25 @@ impl Instance for Demo {
             }
             return Ok(());
         }
+        if capability == "group_volume" {
+            let v = value.as_f64().filter(|v| (0.0..=1.0).contains(v)).ok_or("volume must be 0..1")?;
+            let g = e.capabilities["speaker_group"].value.clone();
+            let old = e.capabilities["group_volume"].value.as_f64().unwrap_or(0.0);
+            let mut changes = vec![];
+            for m in list.iter_mut().filter(|m| m.capabilities.get("speaker_group").is_some_and(|c| c.value == g)) {
+                let c = m.capabilities.get_mut("volume_set").unwrap();
+                // Each room keeps its share; from silence they all start equal.
+                let next = if old > 0.0 { (c.value.as_f64().unwrap_or(0.0) * v / old).min(1.0) } else { v };
+                c.value = json!((next * 100.0).round() / 100.0);
+                changes.push((m.id.clone(), "volume_set", c.value.clone()));
+            }
+            changes.extend(group_volumes(&mut list).into_iter().map(|(id, v)| (id, "group_volume", v)));
+            drop(list);
+            for (id, cap, v) in changes {
+                (self.sink)(Event::Changed { entity: id, capability: cap.into(), value: v });
+            }
+            return Ok(());
+        }
         if capability == "play_favourite" {
             let favs = e.capabilities["favourites"].value.clone();
             let station = value.as_str().and_then(|v| v.strip_prefix("radio:")).and_then(|i| i.parse::<usize>().ok()).and_then(|i| STATIONS.get(i));
@@ -225,8 +267,12 @@ impl Instance for Demo {
             return Err(format!("invalid value for {capability}"));
         }
         cap.value = value.clone();
+        let groups = if capability == "volume_set" { group_volumes(&mut list) } else { vec![] };
         drop(list);
         (self.sink)(Event::Changed { entity: entity.into(), capability: capability.into(), value: value.clone() });
+        for (id, v) in groups {
+            (self.sink)(Event::Changed { entity: id, capability: "group_volume".into(), value: v });
+        }
         Ok(())
     }
 
@@ -237,5 +283,23 @@ impl Instance for Demo {
 
     fn stop(&self) {
         self.stopped.store(true, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn group_volume_keeps_each_rooms_share() {
+        let demo = start(&Map::new(), Arc::new(|_| {})).unwrap();
+        let vol = |id: &str, cap: &str| demo.entities().into_iter().find(|e| e.id == id).unwrap().capabilities[cap].value.as_f64().unwrap();
+        // Living room 0.28 and kitchen 0.2 play together; the bathroom alone at 0.15.
+        assert_eq!(vol("kitchen", "group_volume"), 0.24);
+        demo.set("kitchen", "group_volume", &json!(0.48)).unwrap();
+        assert_eq!((vol("speaker", "volume_set"), vol("kitchen", "volume_set"), vol("bath", "volume_set")), (0.56, 0.4, 0.15));
+        assert_eq!(vol("speaker", "group_volume"), 0.48);
+        demo.set("speaker", "volume_set", &json!(0.2)).unwrap();
+        assert_eq!(vol("kitchen", "group_volume"), 0.3);
     }
 }

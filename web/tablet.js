@@ -423,9 +423,11 @@
     return html;
   }
 
-  function volHtml(e) {
-    var vol = Math.round((val(e, 'volume_set') || 0) * 100);
-    return '<input type="range" min="0" max="100" step="1" value="' + vol + '" data-id="' + esc(e.id) + '"><span>' + vol + '</span>';
+  // A room's own volume, or with `name` 'group_volume' (on the leader) the whole group's.
+  function volHtml(e, name) {
+    name = name || 'volume_set';
+    var vol = Math.round((val(e, name) || 0) * 100);
+    return '<input type="range" min="0" max="100" step="1" value="' + vol + '" data-id="' + esc(e.id) + '" data-cap="' + name + '"><span>' + vol + '</span>';
   }
 
   // One room's card: what its group plays, with the room's own volume unless left out.
@@ -438,11 +440,13 @@
     var playing = val(lead, 'speaker_playing') === true;
     var title = val(lead, 'speaker_track') || T.nothing, sub = val(lead, 'speaker_artist') || '';
     var art = val(lead, 'speaker_art');
+    // A group gets the group's volume, which keeps each room's share like the Sonos app does.
+    var grouped = (leadOf(room) !== room.id || groupOf(room).length > 1) && cap(lead, 'group_volume');
     var artHtml = art ? '<img src="' + imgSrc(lead, art) + '" alt="">' : icon('radio');
-    return '<div class="card music' + (rows ? (rows > 1 ? ' r' + rows : '') : ' short') + '"><div class="art">' + artHtml + '</div>' +
+    return '<div class="card music' + (rows ? (rows > 1 ? ' r' + rows : '') : ' short') + (withVol ? ' sv' : '') + '"><div class="art">' + artHtml + '</div>' +
       '<div class="now-playing"><div class="sub">' + esc(groupName(groupOf(room))) + '</div><div class="np-title">' + esc(title) + '</div><div class="np-sub sub">' + esc(sub) + '</div></div>' +
       '<span class="play" data-act="play" data-id="' + esc(lead.id) + '">' + icon(playing ? 'pause' : 'play', true) + '</span>' +
-      (withVol ? '<div class="vol">' + volHtml(room) + '</div>' : '') +
+      (withVol ? '<div class="vol">' + (grouped ? volHtml(lead, 'group_volume') : volHtml(room)) + '</div>' : '') +
       (rows ? '<div class="favs">' + favsHtml(lead, title, rows * 5, true) + '</div>' : '') + '</div>';
   }
 
@@ -594,7 +598,7 @@
         (inside ? '' : '<span class="sub">' + esc(val(other, 'speaker_playing') ? val(other, 'speaker_track') || '' : T.nothing) + '</span>') + '</span>' +
         (inside ? '<span class="rv">' + volHtml(e) + '</span>' : '') + '</div>';
     }
-    return musicCard(room, 0, false) +
+    return musicCard(room, 0, leadOf(room) !== room.id || groupOf(room).length > 1) +
       '<div class="row"><div class="col w50"><div class="card rooms"><span class="label-s">' + T.rooms + '</span>' +
       (all.length > 1 ? '<span class="all" data-act="all">' + T.allRooms + '</span>' : '') + rows + '</div></div>' +
       '<div class="col w50"><div class="card">' + searchHtml(leader(room)) + '</div></div></div>';
@@ -860,7 +864,7 @@
     if (!e || t.type !== 'range' || !(c = cap(e, name))) { return; }
     holdUntil = new Date().getTime() + 1500;
     v = parseFloat(t.value) / scale;
-    if (t.nextSibling) { t.nextSibling.textContent = name === 'volume_set' ? t.value : fmt(c, v).replace('&amp;', '&'); }
+    if (t.nextSibling) { t.nextSibling.textContent = t.getAttribute('data-scale') ? fmt(c, v).replace('&amp;', '&') : t.value; }
     if (ev.type === 'change') {
       prev = c.value;
       c.value = v;

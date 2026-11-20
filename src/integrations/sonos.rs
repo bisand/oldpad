@@ -34,6 +34,7 @@ pub fn kind() -> Kind {
 
 const AV: (&str, &str) = ("/MediaRenderer/AVTransport/Control", "AVTransport");
 const RC: (&str, &str) = ("/MediaRenderer/RenderingControl/Control", "RenderingControl");
+const GRC: (&str, &str) = ("/MediaRenderer/GroupRenderingControl/Control", "GroupRenderingControl");
 const CD: (&str, &str) = ("/MediaServer/ContentDirectory/Control", "ContentDirectory");
 const ZT: (&str, &str) = ("/ZoneGroupTopology/Control", "ZoneGroupTopology");
 const DP: (&str, &str) = ("/DeviceProperties/Control", "DeviceProperties");
@@ -282,6 +283,8 @@ fn favourite_didl(f: &Favourite) -> String {
 struct Now {
     playing: bool,
     volume: f64,
+    /// The whole group's volume, as the Sonos app's group slider shows it; the room's own when it plays alone.
+    group_volume: f64,
     title: String,
     subtitle: String,
     art: String, // absolute image URL, or empty
@@ -296,6 +299,13 @@ fn now_playing(room: &Room) -> Result<Now, String> {
         .and_then(|v| v.parse::<f64>().ok())
         .unwrap_or(0.0);
 
+    // Only the coordinator knows the group's volume; members take theirs from it on the screen.
+    let group_volume = if room.uuid == room.coordinator_uuid {
+        soap(&room.coordinator, GRC, "GetGroupVolume", &[("InstanceID", "0")]).ok().and_then(|x| tag(&x, "CurrentVolume")).and_then(|v| v.parse::<f64>().ok()).unwrap_or(volume)
+    } else {
+        volume
+    };
+
     // Radio: the station is the media title and the song is streamContent.
     // Music: the track title, with the artist underneath.
     let station = tag(&media, "dc:title").unwrap_or_default();
@@ -308,7 +318,7 @@ fn now_playing(room: &Room) -> Result<Now, String> {
     // The track's cover, else the station's logo; speakers give their own as a path.
     let art = [tag(&track, "upnp:albumArtURI"), tag(&media, "upnp:albumArtURI")].into_iter().flatten().find(|u| !u.is_empty()).unwrap_or_default();
     let art = art_url(&art, &room.coordinator);
-    Ok(Now { playing: matches!(state.as_str(), "PLAYING" | "TRANSITIONING"), volume: volume / 100.0, title, subtitle, art })
+    Ok(Now { playing: matches!(state.as_str(), "PLAYING" | "TRANSITIONING"), volume: volume / 100.0, group_volume: group_volume / 100.0, title, subtitle, art })
 }
 
 /// An opaque name for an image URL: the screen asks for this, never for a URL.
@@ -321,6 +331,7 @@ fn entity(room: &Room, now: &Now, favs: &[(&Favourite, bool)]) -> Entity {
     let mut caps = BTreeMap::new();
     caps.insert("speaker_playing".to_string(), Capability::new(json!(now.playing), true));
     caps.insert("volume_set".to_string(), Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(now.volume), true) });
+    caps.insert("group_volume".to_string(), Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(now.group_volume), true) });
     caps.insert("speaker_track".to_string(), ro(json!(now.title)));
     caps.insert("speaker_artist".to_string(), ro(json!(now.subtitle)));
     caps.insert("favourites".to_string(), ro(json!(favs.iter().map(|(f, front)| json!({ "id": f.id, "title": f.title, "art": art_key(&f.art), "front": front })).collect::<Vec<_>>())));
@@ -517,6 +528,13 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
                     fresh.push(old.clone());
                 }
             }
+        }
+    }
+    // Members show their group's volume too: a screen may not have the coordinator on it.
+    for room in rooms.iter().filter(|r| r.uuid != r.coordinator_uuid) {
+        let lead = fresh.iter().find(|e| e.id == room.coordinator_uuid).map(|e| e.capabilities["group_volume"].value.clone());
+        if let (Some(v), Some(e)) = (lead, fresh.iter_mut().find(|e| e.id == room.uuid)) {
+            e.capabilities.get_mut("group_volume").unwrap().value = v;
         }
     }
     let mut s = state.lock().unwrap();
@@ -733,6 +751,17 @@ impl Instance for Sonos {
                 let v = value.as_f64().filter(|v| (0.0..=1.0).contains(v)).ok_or("volume must be 0..1")?;
                 let pct = ((v * 100.0).round() as u32).to_string();
                 soap(&room.host, RC, "SetVolume", &[("InstanceID", "0"), ("Channel", "Master"), ("DesiredVolume", &pct)])?;
+            }
+            "group_volume" => {
+                let v = value.as_f64().filter(|v| (0.0..=1.0).contains(v)).ok_or("volume must be 0..1")?;
+                let pct = ((v * 100.0).round() as u32).to_string();
+                // Sonos keeps each room's share of the group volume from the last snapshot.
+                // At 0 every share is 0, so keep the old snapshot to bring the balance back.
+                let now = self.state.lock().unwrap().entities.iter().find(|e| e.id == room.coordinator_uuid).and_then(|e| e.capabilities["group_volume"].value.as_f64()).unwrap_or(1.0);
+                if now > 0.0 {
+                    soap(&room.coordinator, GRC, "SnapshotGroupVolume", &[("InstanceID", "0")])?;
+                }
+                soap(&room.coordinator, GRC, "SetGroupVolume", &[("InstanceID", "0"), ("DesiredVolume", &pct)])?;
             }
             "play_favourite" => {
                 let fav = fav.ok_or("no such favourite")?;
