@@ -156,6 +156,14 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!((state["pages"][0]["name"].as_str(), state["pages"][0]["items"][0]["card"].as_str()), (Some("Evening"), Some("clock")));
     assert_eq!(state["pages"][0]["items"][1]["name"], "Good night");
 
+    // --- names: a screen can call things its own name, wherever they show
+    let dev = format!("/api/admin/devices/{device_id}");
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "names": { night.clone(): "x".repeat(33) } }))).0, 400);
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "names": { night.clone(): " Natta ", plug.clone(): "" } }))).0, 200);
+    let (_, state) = tablet.call("GET", "/api/tablet", None);
+    assert_eq!((state["pages"][0]["items"][1]["name"].as_str(), state["more"][0]["name"].as_str()), (Some("Natta"), Some("Coffee maker")), "trimmed; empty means its own name");
+    assert_eq!(phone.call("GET", "/api/admin/devices", None).1[0]["names"], json!({ night.clone(): "Natta" }));
+
     // --- live stream: flip the lamp, the event arrives on the stream
     let (_, ticket) = tablet.call("POST", "/api/tablet/ticket", Some(json!({})));
     let mut sse = TcpStream::connect(base.trim_start_matches("http://")).unwrap();

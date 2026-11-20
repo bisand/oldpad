@@ -50,6 +50,9 @@ pub struct Device {
     /// Rows of favourites on the home page's music card (0 to 3); unset means one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fav_rows: Option<u8>,
+    /// Names this screen shows instead of the integration's, by entity id.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub names: std::collections::BTreeMap<String, String>,
 }
 
 /// A page of the admin's choosing. Items are entity ids, or `card:<name>` for
@@ -216,6 +219,7 @@ mod tests {
             more: vec![],
             pages: vec![],
             fav_rows: None,
+            names: Default::default(),
         });
         s.save().unwrap();
         let s2 = Store::open(&dir).unwrap();

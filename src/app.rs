@@ -293,6 +293,7 @@ impl App {
             more: Vec::new(),
             pages: Vec::new(),
             fav_rows: None,
+            names: Default::default(),
         };
         let mut store = self.store.lock().unwrap();
         store.data.devices.push(device.clone());

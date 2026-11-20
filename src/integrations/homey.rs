@@ -144,6 +144,7 @@ fn load(api: &Api) -> Result<Vec<Entity>, String> {
 struct House {
     zones: Vec<(String, String, Option<String>)>, // id, name, parent
     lights: Vec<(String, String, bool)>,          // device id, zone id, on
+    switches: Vec<((String, String, bool), String)>, // any device with on/off, by its loose name
 }
 
 /// Zone names may hold non-breaking spaces; compare loosely, as the script does.
@@ -154,27 +155,37 @@ fn loose(s: &str) -> String {
 impl House {
     fn new(zones: &Value, devices: &Value) -> Self {
         let zones = items(zones).into_iter().filter_map(|z| Some((z["id"].as_str()?.to_string(), z["name"].as_str()?.to_string(), z["parent"].as_str().map(str::to_string)))).collect();
-        let lights = items(devices)
-            .into_iter()
-            .filter(|d| (d["class"] == "light" || d["virtualClass"] == "light") && d["available"] != false)
+        let state = |d: &Value| Some((d["id"].as_str()?.to_string(), d["zone"].as_str()?.to_string(), d["capabilitiesObj"]["onoff"]["value"].as_bool()?));
+        let usable: Vec<&Value> = items(devices).into_iter().filter(|d| d["available"] != false).collect();
+        let lights = usable
+            .iter()
+            .filter(|d| d["class"] == "light" || d["virtualClass"] == "light")
             .filter(|d| !d["driverId"].as_str().unwrap_or("").contains("com.swttt.devicegroups"))
-            .filter_map(|d| Some((d["id"].as_str()?.to_string(), d["zone"].as_str()?.to_string(), d["capabilitiesObj"]["onoff"]["value"].as_bool()?)))
+            .filter_map(|d| state(d))
             .collect();
-        House { zones, lights }
+        let switches = usable.iter().filter_map(|d| Some((state(d)?, loose(d["name"].as_str()?)))).collect();
+        House { zones, lights, switches }
     }
 
-    /// The lights in "toggle: Zone, Zone" (sub-zones included), or None if it names no zone we know.
+    /// What "toggle: Zone, Device, …" switches: the lights in each zone (sub-zones included),
+    /// and each named device. None if a name is neither, as the script then does nothing.
     fn members(&self, argument: &str) -> Option<Vec<&(String, String, bool)>> {
         let (_, list) = argument.split_once(':')?;
-        let wanted: Vec<String> = list.split(',').map(loose).filter(|s| !s.is_empty()).collect();
-        let mut inside: Vec<&str> = self.zones.iter().filter(|z| wanted.contains(&loose(&z.1))).map(|z| z.0.as_str()).collect();
-        if inside.is_empty() {
-            return None;
+        let mut inside: Vec<&str> = Vec::new();
+        let mut out = Vec::new();
+        for want in list.split(',').map(loose).filter(|s| !s.is_empty()) {
+            if let Some(z) = self.zones.iter().find(|z| loose(&z.1) == want) {
+                inside.push(&z.0);
+            } else {
+                out.push(&self.switches.iter().find(|s| s.1 == want)?.0);
+            }
         }
         while let Some(child) = self.zones.iter().find(|z| !inside.contains(&z.0.as_str()) && z.2.as_deref().is_some_and(|p| inside.contains(&p))) {
             inside.push(&child.0);
         }
-        Some(self.lights.iter().filter(|l| inside.contains(&l.1.as_str())).collect())
+        let zoned: Vec<_> = self.lights.iter().filter(|l| inside.contains(&l.1.as_str()) && !out.iter().any(|o| o.0 == l.0)).collect();
+        out.extend(zoned);
+        Some(out)
     }
 }
 
@@ -523,13 +534,15 @@ mod tests {
             "c": light("c", "n", true),
             "dead": {"id": "dead", "zone": "s", "class": "light", "available": false, "capabilitiesObj": {"onoff": {"value": true}}},
             "grp": {"id": "grp", "zone": "s", "class": "light", "driverId": "homey:app:com.swttt.devicegroups:light", "capabilitiesObj": {"onoff": {"value": true}}},
-            "plug": {"id": "plug", "zone": "s", "class": "socket", "capabilitiesObj": {"onoff": {"value": true}}},
+            "plug": {"id": "plug", "name": "Plug", "zone": "s", "class": "socket", "capabilitiesObj": {"onoff": {"value": true}}},
         });
         let house = House::new(&zones, &devices);
         let ids = |arg: &str| house.members(arg).map(|m| m.iter().map(|l| l.0.clone()).collect::<Vec<_>>());
         assert_eq!(ids("toggle: andre  etasje"), Some(vec!["a".into(), "b".into()]), "sub-zones, plug lamps; not dead, groups or plain plugs");
         assert_eq!(ids("off: Lys Stue, Første etasje").map(|v| v.len()), Some(2));
         assert_eq!(ids("toggle: Nowhere"), None);
+        assert_eq!(ids("on: Første etasje, Plug"), Some(vec!["plug".into(), "c".into()]), "a device by name, light or not");
+        assert_eq!(ids("toggle: Stue, Gone"), None, "an unknown name makes the script do nothing");
 
         let flow = json!({"id": "f", "name": "Lys: Andre etasje", "triggerable": true, "cards": {
             "1": {"type": "start"},

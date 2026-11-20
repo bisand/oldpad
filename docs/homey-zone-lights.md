@@ -22,8 +22,9 @@ tile that is **On while any of its lights is on** (it reads the zones from the F
    return true;
    ```
 
-   Argument: `toggle: Stue, Spisestue` (or `on:` / `off:`). Zone names as Homey shows them,
-   any case; sub-zones are included. New group: duplicate a Flow and change the argument.
+   Argument: `toggle: Stue, Spisestue, Lys Kjøkkenvindu` (or `on:` / `off:`). Zone names as
+   Homey shows them, any case; sub-zones are included. A name that is not a zone is a single
+   device, light or not. New group: duplicate a Flow and change the argument.
 
 Notes from setting this up over the Web API:
 - The saved-script card (`runWithArg`) is not allowed in Advanced Flows; the code card is.
@@ -39,7 +40,8 @@ oldpad's `House` in `src/integrations/homey.rs` picks the same lights for the ti
 
 ```js
 // zoneLights: turn all lights in some zones on or off, and make sure they heard it.
-// Argument: "<toggle|on|off>: Zone, Zone, …"   (sub-zones are included)
+// Argument: "<toggle|on|off>: Zone, Zone, Device, …"   (sub-zones are included)
+//           a name that is not a zone is a device: any device that can be switched, light or not
 //           prefix "dry " to only list what would happen, e.g. "dry toggle: Stue"
 // toggle: off if any light is on, otherwise on.
 // Lights that confirm (Zigbee, Z-Wave, Hue, Wi-Fi) are re-sent until they report the new state.
@@ -55,16 +57,19 @@ const SETTLE = 3000;        // ms to wait before checking they did
 const arg = String(args[0] || '').trim();
 const dry = /^dry\s+/i.test(arg);
 const m = arg.replace(/^dry\s+/i, '').match(/^(toggle|on|off)\s*:\s*(.+)$/i);
-if (!m) throw new Error('Argument: "toggle|on|off: Zone, Zone"');
+if (!m) throw new Error('Argument: "toggle|on|off: Zone, Device, …"');
 const action = m[1].toLowerCase();
 // Zone names may hold non-breaking spaces; compare loosely.
 const norm = (s) => String(s).normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
 const wanted = m[2].split(',').map(norm).filter(Boolean);
 
 const zones = Object.values(await Homey.zones.getZones());
+const devices = Object.values(await Homey.devices.getDevices());
 const roots = zones.filter((z) => wanted.includes(norm(z.name)));
-const missing = wanted.filter((w) => !roots.some((z) => norm(z.name) === w));
-if (missing.length) throw new Error(`No zone named: ${missing.join(', ')}`);
+// Names that are not zones are single devices.
+const named = devices.filter((d) => d.capabilities.includes('onoff') && wanted.includes(norm(d.name)) && !roots.some((z) => norm(z.name) === norm(d.name)));
+const missing = wanted.filter((w) => !roots.some((z) => norm(z.name) === w) && !named.some((d) => norm(d.name) === w));
+if (missing.length) throw new Error(`No zone or device named: ${missing.join(', ')}`);
 // The chosen zones and everything under them.
 const inside = new Set(roots.map((z) => z.id));
 for (let grew = true; grew;) {
@@ -73,14 +78,14 @@ for (let grew = true; grew;) {
 }
 
 const app = (d) => (d.driverId || d.driverUri || '').replace(/^homey:app:/, '').split(':')[0];
-const all = Object.values(await Homey.devices.getDevices()).filter((d) =>
+const all = devices.filter((d) => named.includes(d) || (
   inside.has(d.zone) && (d.class === 'light' || d.virtualClass === 'light') && d.capabilities.includes('onoff')
-  && app(d) !== 'com.swttt.devicegroups');
+  && app(d) !== 'com.swttt.devicegroups'));
 // An unavailable device keeps its last state, which would spoil the toggle: leave it out.
 const gone = all.filter((d) => d.available === false);
 const lights = all.filter((d) => d.available !== false);
 const goneNote = gone.length ? `; unavailable: ${gone.map((d) => d.name).join(', ')}` : '';
-if (!lights.length) return `No lights in ${roots.map((z) => z.name).join(', ')}`;
+if (!lights.length) return `No lights in ${m[2]}${goneNote}`;
 
 const isOn = (d) => d.capabilitiesObj && d.capabilitiesObj.onoff && d.capabilitiesObj.onoff.value === true;
 const target = action === 'on' ? true : action === 'off' ? false : !lights.some(isOn);

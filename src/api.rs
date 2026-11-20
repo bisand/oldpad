@@ -94,7 +94,13 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
             let device = preview.or_else(|| app.device_from(req)).ok_or_else(|| Response::error(401, "Not paired"))?;
             match (m, s) {
                 ("GET", ["tablet"]) => {
-                    let get = |id: &String| app.registry.entity(id).map(|e| json!(e)).unwrap_or_else(|| json!({ "id": id, "missing": true }));
+                    let get = |id: &String| {
+                        let Some(mut e) = app.registry.entity(id) else { return json!({ "id": id, "missing": true }) };
+                        if let Some(name) = device.names.get(id) {
+                            e.name = name.clone();
+                        }
+                        json!(e)
+                    };
                     let p = &device.panels;
                     let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
                     Ok(Response::ok(json!({
@@ -304,7 +310,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .data
                 .devices
                 .iter()
-                .map(|d| json!({ "id": d.id, "name": d.name, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1) }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
@@ -335,6 +341,14 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                     return Err(Response::error(400, "Bad panels"));
                 }
                 d.panels = panels;
+            }
+            if let Some(names) = body.get("names") {
+                let names: std::collections::BTreeMap<String, String> = serde_json::from_value(names.clone()).map_err(|_| Response::error(400, "Bad names"))?;
+                let names: std::collections::BTreeMap<String, String> = names.into_iter().map(|(id, n)| (id, n.trim().to_string())).filter(|(_, n)| !n.is_empty()).collect();
+                if names.len() > 300 || names.iter().any(|(id, n)| id.len() > 200 || n.chars().count() > 32) {
+                    return Err(Response::error(400, "Names: up to 32 characters"));
+                }
+                d.names = names;
             }
             if let Some(rows) = body.get("favRows") {
                 d.fav_rows = Some(rows.as_u64().filter(|r| *r <= 3).ok_or_else(|| Response::error(400, "Favourite rows: 0 to 3"))? as u8);

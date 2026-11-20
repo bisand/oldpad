@@ -390,7 +390,7 @@ async function deviceView(id) {
   if (!device) return render(errorBox(new Error('No such screen.')));
   main.classList.add('wide');
   const ent = new Map(entities.map((e) => [e.id, e]));
-  const s = { name: device.name, tiles: [...device.tiles], more: [...device.more], panels: { ...device.panels }, pages: structuredClone(device.pages || []), favRows: device.favRows ?? 1 };
+  const s = { name: device.name, tiles: [...device.tiles], more: [...device.more], panels: { ...device.panels }, pages: structuredClone(device.pages || []), favRows: device.favRows ?? 1, names: { ...(device.names || {}) } };
   const here = location.hash;
   let dirty = false;
   let current = 'home';
@@ -400,7 +400,19 @@ async function deviceView(id) {
   let dragging = null; // { from: index } inside the page, or { id } from the library
 
   const has = (e, cap) => !!(e && e.capabilities && cap in e.capabilities);
-  const nameOf = (item) => CARDS.find(([c]) => c === item)?.[1] ?? ent.get(item)?.name ?? 'Unavailable';
+  const nameOf = (item) => CARDS.find(([c]) => c === item)?.[1] ?? s.names[item] ?? ent.get(item)?.name ?? 'Unavailable';
+  // Only names of things still on the screen are kept.
+  const shownNames = () => {
+    const on = new Set([...s.tiles, ...s.more, ...s.pages.flatMap((p) => p.items), ...Object.values(s.panels).filter(Boolean)]);
+    return Object.fromEntries(Object.entries(s.names).filter(([id]) => on.has(id)));
+  };
+  function rename(item) {
+    const own = ent.get(item)?.name ?? '';
+    const name = prompt(`Name on this screen (empty for "${own}")`, s.names[item] ?? own);
+    if (name === null) return;
+    if (name.trim() && name.trim() !== own) s.names[item] = name.trim().slice(0, 32); else delete s.names[item];
+    changed();
+  }
   const menuOf = (key) => MENU_PAGES.find((p) => p[0] === key);
   const ownOf = (key) => s.pages.find((p) => `own:${p.id}` === key);
   const fitsMenu = (m, item) => m[2].includes(ent.get(item)?.class);
@@ -485,7 +497,7 @@ async function deviceView(id) {
     try {
       if (!s.name.trim()) throw new Error('Give the screen a name in Settings.');
       if (s.pages.some((p) => !p.name.trim())) throw new Error('Every page needs a name.');
-      await api('PUT', `/devices/${id}`, { name: s.name.trim(), tiles: s.tiles, more: s.more, panels: s.panels, pages: s.pages, favRows: s.favRows });
+      await api('PUT', `/devices/${id}`, { name: s.name.trim(), tiles: s.tiles, more: s.more, panels: s.panels, pages: s.pages, favRows: s.favRows, names: shownNames() });
       dirty = false;
       note = h('span', { class: 'ok small' }, 'Saved. The screen reloads by itself.');
     } catch (e) { note = h('span', { class: 'bad small' }, e.message); }
@@ -526,13 +538,14 @@ async function deviceView(id) {
   // One row or tile in the page: drag it, or use the buttons (touch, keyboard).
   function itemEl(item, i, n, { grid = false, extra = false } = {}) {
     const e = ent.get(item);
-    const sub = item.startsWith('card:') ? 'Card' : e ? [e.zone, e.class].filter(Boolean).join(' · ') : 'Not found. Removed from its integration?';
+    const sub = item.startsWith('card:') ? 'Card' : e ? [s.names[item] ? `“${e.name}”` : null, e.zone, e.class].filter(Boolean).join(' · ') : 'Not found. Removed from its integration?';
     const el = h('div', { class: `${grid ? 'tile' : 'item'}${extra ? ' extra' : ''}${e || item.startsWith('card:') ? '' : ' gone'}` },
       h('span', { class: 'grip', 'aria-hidden': 'true' }, '⋮⋮'),
       h('span', { class: 'grow' }, h('span', { class: 't-name' }, nameOf(item)), h('span', { class: 't-sub' }, extra ? 'Not shown: 6 fit' : sub)),
       h('span', { class: 'tools' },
         h('button', { class: 'chip', 'aria-label': `Move ${nameOf(item)} earlier`, onclick: () => i > 0 && move(i, i - 1) }, grid ? '←' : '↑'),
         h('button', { class: 'chip', 'aria-label': `Move ${nameOf(item)} later`, onclick: () => i < n - 1 && move(i, i + 1) }, grid ? '→' : '↓'),
+        e ? h('button', { class: 'chip', title: 'Rename on this screen', 'aria-label': `Rename ${nameOf(item)}`, onclick: () => rename(item) }, '✎') : null,
         h('button', { class: 'chip danger', 'aria-label': `Remove ${nameOf(item)}`, onclick: () => remove(item) }, '✕')));
     dragFrom(el, { from: i });
     dropOn(el, i);
