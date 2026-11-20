@@ -77,6 +77,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
         ]),
         entity("reading", "Reading lamp", zone, "light", vec![("onoff", Capability::new(json!(false), true))]),
         entity("heater", "Heater", zone, "thermostat", vec![
+            ("onoff", Capability::new(json!(true), true)), // like floor heating thermostats
             ("target_temperature", Capability { step: Some(0.5), title: Some("Target temperature".into()), ..temp(21.5, true) }),
             ("measure_temperature", temp(20.8, false)),
             ("thermostat_mode", Capability {

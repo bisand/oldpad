@@ -468,12 +468,14 @@
     }
     var cls = 'tile', body = '';
     var onoff = cap(e, 'onoff'), dim = cap(e, 'dim'), target = cap(e, 'target_temperature'), measure = cap(e, 'measure_temperature');
-    if (onoff) {
+    // A thermostat may have an on/off switch too; its setpoint matters more (the switch is in its sheet).
+    if (target) {
+      body = '<div class="value up">' + num(target.value, 1) + '°<div class="sub">' + (onoff && onoff.value === false ? T.off + ' · ' : '') +
+        (measure ? T.now + ' ' + num(measure.value, 1) + '°' : '') + '</div></div>' +
+        '<div class="steps"><span class="step" data-act="step" data-step="-' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">−</span><span class="step" data-act="step" data-step="' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">+</span></div>';
+    } else if (onoff) {
       if (onoff.value) { cls += ' on'; }
       body = '<div class="value">' + (onoff.value ? (dim ? Math.round(dim.value * 100) + ' %' : T.on) : T.off) + '</div>';
-    } else if (target) {
-      body = '<div class="value up">' + num(target.value, 1) + '°' + (measure ? '<div class="sub">' + T.now + ' ' + num(measure.value, 1) + '°</div>' : '') + '</div>' +
-        '<div class="steps"><span class="step" data-act="step" data-step="-' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">−</span><span class="step" data-act="step" data-step="' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">+</span></div>';
     } else if (cap(e, 'speaker_playing')) {
       if (val(leader(e), 'speaker_playing')) { cls += ' on'; }
       body = '<div class="value sub">' + esc(val(leader(e), 'speaker_playing') ? val(leader(e), 'speaker_track') || T.on : T.off) + '</div>';
@@ -782,6 +784,9 @@
       c.value = next;
       render();
       set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
+    } else if (act === 'tile' && e && cap(e, 'target_temperature')) {
+      sheet = id; // a tap shouldn't switch the heat off; the sheet has the switch
+      render();
     } else if (act === 'tile' && e && (c = cap(e, 'onoff')) && c.settable) {
       c.value = !c.value;
       render();
