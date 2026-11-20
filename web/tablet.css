@@ -189,3 +189,24 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 .choices .fav { width: 32%; margin-right: 2%; font-size: 17px; padding: 14px 4px; }
 .choices .fav:last-child { margin-right: 0; }
 .big-s { font-size: 22px; margin: 6px 0 14px; }
+
+/* ---------- bigger clock and temperatures, for reading across a room ---------- */
+.size-large .clock, .size-large .climate { height: 196px; }
+.size-large .time { font-size: 104px; font-weight: 400; letter-spacing: -2px; }
+.size-large .date { font-size: 22px; }
+.size-large .big { font-size: 68px; font-weight: 400; }
+.size-large .slot { font-size: 19px; }
+.size-large .slot .h { font-size: 15px; }
+.size-large .forecast { height: 104px; }
+.size-xl .clock, .size-xl .climate { height: 232px; }
+.size-xl .time { font-size: 136px; font-weight: 500; letter-spacing: -3px; margin-top: 2px; }
+.size-xl .date { font-size: 24px; margin-top: 6px; }
+.size-xl .big { font-size: 88px; font-weight: 500; letter-spacing: -2px; }
+.size-xl .slot { font-size: 21px; font-weight: 500; }
+.size-xl .slot .h { font-size: 16px; font-weight: 400; }
+.size-xl .forecast { height: 112px; }
+.size-xl .w30 { width: 42%; }
+.size-xl .w70 { width: 58%; }
+.size-xl .time { font-size: 128px; }
+.size-xl .half.divider { padding-left: 14px; }
+@media (max-width: 900px) { .size-xl .w30, .size-xl .w70 { width: 100%; } }
