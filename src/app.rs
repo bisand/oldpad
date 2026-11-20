@@ -60,7 +60,8 @@ pub struct Pairing {
 }
 
 pub enum Challenge {
-    Register { admin_id: Option<String>, name: String, user_handle: String },
+    /// `invite` is set when someone joins through an admin's invitation.
+    Register { admin_id: Option<String>, name: String, user_handle: String, invite: Option<String> },
     Login,
 }
 
@@ -80,6 +81,8 @@ pub struct App {
     clients: Mutex<Vec<Client>>,
     /// Printed at startup while no admin exists; needed to register the first passkey.
     pub setup_code: Mutex<Option<String>>,
+    /// Invitations for another admin: (code, expires). One use each.
+    pub invites: Mutex<Vec<(String, u64)>>,
 }
 
 impl App {
@@ -94,6 +97,7 @@ impl App {
             tickets: Mutex::new(HashMap::new()),
             clients: Mutex::new(Vec::new()),
             setup_code: Mutex::new(setup_code),
+            invites: Mutex::new(Vec::new()),
         })
     }
 
@@ -180,6 +184,18 @@ impl App {
         store.data.sessions.push(crate::store::Session { hash: sha256_hex(&token), admin_id: admin_id.into(), expires: t + self.cfg.admin_ttl });
         store.save()?;
         Ok(self.cookie(&token, self.cfg.admin_ttl))
+    }
+
+    /// Whether `code` is a live invitation; `take` also uses it up.
+    pub fn invite_valid(&self, code: &str, take: bool) -> bool {
+        let mut invites = self.invites.lock().unwrap();
+        let t = now();
+        invites.retain(|(_, exp)| *exp > t);
+        let found = invites.iter().position(|(c, _)| !code.is_empty() && constant_eq(c, &code.trim().to_ascii_uppercase()));
+        if let (Some(i), true) = (found, take) {
+            invites.remove(i);
+        }
+        found.is_some()
     }
 
     pub fn end_session(&self, req: &Request) -> Result<String, &'static str> {

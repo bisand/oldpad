@@ -8,6 +8,8 @@ pub struct Credential {
     pub public_key: String, // base64url SEC1 uncompressed P-256 point
     pub counter: u32,
     pub created: u64,
+    #[serde(default)]
+    pub last_used: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

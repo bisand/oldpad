@@ -74,6 +74,28 @@ fn phone_and_tablet_end_to_end() {
     let assertion = assertion_for(&rp, &key, challenge, rp.origin, 0x05, 0);
     assert_eq!(phone.call("POST", "/api/admin/login/verify", Some(json!({ "challenge": challenge, "credential": assertion }))).0, 200);
 
+    // --- inviting a second admin: one use, then gone; the last admin can't be removed
+    let (s, inv) = phone.call("POST", "/api/admin/invites", Some(json!({})));
+    assert_eq!(s, 200);
+    let code = inv["url"].as_str().unwrap().rsplit('/').next().unwrap().to_string();
+    let mut guest = Client { base: base.clone(), cookie: None, bearer: None };
+    assert_eq!(guest.call("POST", "/api/admin/register/options", Some(json!({ "name": "Kari", "invite": "NOPE" }))).0, 410);
+    let (s, opts) = guest.call("POST", "/api/admin/register/options", Some(json!({ "name": "Kari", "invite": code })));
+    assert_eq!(s, 200, "{opts}");
+    let challenge = opts["challenge"].as_str().unwrap();
+    let credential = register_for(&rp, &key, challenge);
+    assert_eq!(guest.call("POST", "/api/admin/register/verify", Some(json!({ "challenge": challenge, "credential": credential }))).0, 200);
+    assert_eq!(guest.call("GET", "/api/admin/status", None).1["admin"]["name"], "Kari");
+    assert_eq!(guest.call("POST", "/api/admin/register/options", Some(json!({ "name": "Again", "invite": code }))).0, 200, "signed in now: adds a passkey to Kari");
+    let mut other = Client { base: base.clone(), cookie: None, bearer: None };
+    assert_eq!(other.call("POST", "/api/admin/register/options", Some(json!({ "name": "Ola", "invite": code }))).0, 410, "used up");
+    let (_, people) = phone.call("GET", "/api/admin/people", None);
+    let kari = people["people"].as_array().unwrap().iter().find(|p| p["name"] == "Kari").unwrap()["id"].as_str().unwrap().to_string();
+    let me = people["people"].as_array().unwrap().iter().find(|p| p["me"] == true).unwrap()["id"].as_str().unwrap().to_string();
+    assert_eq!(phone.call("DELETE", &format!("/api/admin/people/{kari}"), None).0, 200);
+    assert_eq!(guest.call("GET", "/api/admin/devices", None).0, 401, "her session ended with her");
+    assert_eq!(phone.call("DELETE", &format!("/api/admin/people/{me}"), None).0, 409);
+
     // --- writes need the custom header, and must not come from another origin
     assert_eq!(phone.call_with("POST", "/api/admin/logout", Some(json!({})), &[]).0, 403);
     assert_eq!(phone.call_with("POST", "/api/admin/logout", Some(json!({})), &[("X-Oldpad", "1"), ("Origin", "https://evil.example")]).0, 403);

@@ -158,8 +158,67 @@ function accountRow(i, a) {
   return h('div', { class: 'row account' }, h('div', {}, a.name, ' · ', status), go);
 }
 
+const day = (ts) => new Date(ts * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+function peopleSection({ people, invites }) {
+  return [
+    h('h2', {}, 'People'),
+    people.map((p) => h('div', { class: 'card' },
+      h('div', { class: 'row' },
+        h('strong', {}, p.name, p.me ? h('span', { class: 'small muted' }, ' · you') : null),
+        p.me
+          ? h('button', { onclick: async () => { try { await register({}); route(); } catch (e) { alert(e.message); } } }, 'Add passkey on this device')
+          : h('button', { class: 'danger', onclick: async () => {
+              if (!confirm(`Remove ${p.name}? They can no longer sign in.`)) return;
+              try { await api('DELETE', `/people/${p.id}`); route(); } catch (e) { alert(e.message); }
+            } }, 'Remove')),
+      p.passkeys.map((k) => h('div', { class: 'row account' },
+        h('div', { class: 'small' }, `Passkey added ${day(k.created)}`, h('span', { class: 'muted' }, k.lastUsed ? ` · last used ${ago(k.lastUsed)}` : '')),
+        p.passkeys.length > 1 ? h('button', { class: 'chip danger', onclick: async () => {
+          if (!confirm('Remove this passkey? The device it lives on can no longer sign in.')) return;
+          try { await api('DELETE', `/passkeys/${encodeURIComponent(k.id)}`); route(); } catch (e) { alert(e.message); }
+        } }, 'Remove') : null)))),
+    invites.length ? h('p', { class: 'small muted' }, `${invites.length} open invitation${invites.length > 1 ? 's' : ''}, valid until ${new Date(Math.max(...invites) * 1000).toLocaleString()}. `,
+      h('button', { class: 'chip', onclick: async () => { await api('DELETE', '/invites'); route(); } }, 'Cancel invitations')) : null,
+    h('div', { class: 'actions' },
+      h('button', { class: 'primary', onclick: () => (location.hash = '#/invite-new') }, 'Invite someone'),
+      h('button', { onclick: async () => { await api('POST', '/logout', {}); route(); } }, 'Sign out')),
+  ];
+}
+
+// A one-time link for another adult: they open it on their phone and make their own passkey.
+async function inviteNewView() {
+  const inv = await api('POST', '/invites', {});
+  const link = h('input', { type: 'text', readonly: true, value: inv.url, onfocus: (e) => e.target.select() });
+  render(
+    h('h1', {}, 'Invite someone'),
+    h('p', {}, 'Let them scan this code with their phone, or send them the link. They choose a name and make their own passkey. The link works once, for 24 hours.'),
+    h('img', { class: 'qr', alt: 'QR code for the invitation link', src: `data:image/svg+xml;base64,${btoa(inv.qr)}` }),
+    link,
+    h('div', { class: 'actions' },
+      navigator.share ? h('button', { class: 'primary', onclick: () => navigator.share({ title: 'oldpad', url: inv.url }).catch(() => {}) }, 'Share link') : null,
+      h('button', { onclick: async () => { await navigator.clipboard.writeText(inv.url); alert('Copied.'); } }, 'Copy link'),
+      h('button', { onclick: () => (location.hash = '#/') }, 'Done')),
+  );
+}
+
+function inviteView(code) {
+  const name = h('input', { type: 'text', id: 'name', autocomplete: 'name', placeholder: 'Your name', maxlength: '64' });
+  const out = h('div');
+  const go = h('button', { class: 'primary', onclick: async () => {
+    go.disabled = true;
+    try { await register({ name: name.value, invite: code }); location.hash = '#/'; route(); } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
+  } }, 'Create passkey');
+  render(
+    h('h1', {}, 'Join oldpad'),
+    h('p', {}, 'You were invited to help run the screens in this home. You will sign in with a passkey (Face ID, Touch ID or your device PIN) — there is no password.'),
+    h('label', { for: 'name' }, 'Your name'), name,
+    h('div', { class: 'actions' }, go), out,
+  );
+}
+
 async function homeView() {
-  const [devices, integrations] = await Promise.all([api('GET', '/devices'), api('GET', '/integrations')]);
+  const [devices, integrations, people] = await Promise.all([api('GET', '/devices'), api('GET', '/integrations'), api('GET', '/people')]);
   render(
     h('h2', {}, 'Screens'),
     devices.length
@@ -195,12 +254,7 @@ async function homeView() {
           } }, 'Remove'))),
       (i.accounts || []).map((a) => accountRow(i, a)))),
     h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/integration/new') }, 'Add integration')),
-    h('h2', {}, 'Account'),
-    h('div', { class: 'actions' },
-      h('button', { onclick: async () => {
-        try { await register({}); alert('Passkey added.'); } catch (e) { alert(e.message); }
-      } }, 'Add another passkey'),
-      h('button', { onclick: async () => { await api('POST', '/logout', {}); route(); } }, 'Sign out')),
+    peopleSection(people),
   );
 }
 
@@ -420,8 +474,10 @@ async function route() {
     const status = await api('GET', '/status');
     document.getElementById('who').textContent = status.admin ? status.admin.name : '';
     if (status.setupNeeded) return setupView();
-    if (!status.admin) return loginView();
     const [, view, arg] = (location.hash || '#/').split('/');
+    if (!status.admin) return view === 'invite' && arg ? inviteView(arg) : loginView();
+    if (view === 'invite') { location.hash = '#/'; return; }
+    if (view === 'invite-new') return await inviteNewView();
     if (view === 'pair' && arg) return await pairView(arg);
     if (view === 'add-screen') return addScreenView();
     if (view === 'device' && arg) return await deviceView(arg);

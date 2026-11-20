@@ -180,8 +180,13 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         }
         ("POST", ["register", "options"]) => {
             let body = req.json()?;
+            let invite = body["invite"].as_str().map(str::to_string);
             let (admin_id, name, user_handle) = if let Some(a) = &current {
                 (Some(a.id.clone()), a.name.clone(), a.user_handle.clone())
+            } else if invite.as_deref().is_some_and(|c| app.invite_valid(c, false)) {
+                (None, str_field(&body, "name", 64)?.to_string(), b64url_encode(&random_bytes::<16>()))
+            } else if invite.is_some() {
+                return Err(Response::error(410, "This invitation has expired or was already used. Ask for a new one."));
             } else if needs_setup {
                 let code = app.setup_code.lock().unwrap().clone().unwrap_or_default();
                 if !constant_eq(&code, &body["setupCode"].as_str().unwrap_or("").trim().to_ascii_uppercase()) {
@@ -191,18 +196,19 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             } else {
                 return Err(Response::error(401, "Sign in first"));
             };
-            let challenge = app.new_challenge(Challenge::Register { admin_id, name: name.clone(), user_handle: user_handle.clone() });
+            let invite = if current.is_none() { invite } else { None };
+            let challenge = app.new_challenge(Challenge::Register { admin_id, name: name.clone(), user_handle: user_handle.clone(), invite });
             let exclude: Vec<String> = current.iter().flat_map(|a| a.credentials.iter().map(|c| c.id.clone())).collect();
             return Ok(Response::ok(webauthn::registration_options(&rp(app), &challenge, &user_handle, &name, &exclude)));
         }
         ("POST", ["register", "verify"]) => {
             let body = req.json()?;
             let challenge = body["challenge"].as_str().unwrap_or("");
-            let Some(Challenge::Register { admin_id, name, user_handle }) = app.take_challenge(challenge) else {
+            let Some(Challenge::Register { admin_id, name, user_handle, invite }) = app.take_challenge(challenge) else {
                 return Err(Response::error(400, "Challenge expired. Try again."));
             };
             let cred = webauthn::verify_registration(&rp(app), challenge, &body["credential"]).map_err(|e| Response::error(400, &e))?;
-            let cred = Credential { id: cred.id, public_key: cred.public_key, counter: cred.counter, created: now() };
+            let cred = Credential { id: cred.id, public_key: cred.public_key, counter: cred.counter, created: now(), last_used: now() };
             let mut store = app.store.lock().unwrap();
             let admin_id = match admin_id {
                 Some(id) => {
@@ -211,7 +217,9 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                     id
                 }
                 None => {
-                    if !store.data.admins.is_empty() {
+                    // Joining by invitation, or creating the very first admin.
+                    let invited = invite.as_deref().is_some_and(|c| app.invite_valid(c, true));
+                    if !invited && !store.data.admins.is_empty() {
                         return Err(Response::error(409, "Setup is already done"));
                     }
                     let id = random_code(10);
@@ -249,6 +257,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .ok_or_else(|| Response::error(401, "Unknown passkey"))?;
             cred.counter = webauthn::verify_authentication(&rp(app), challenge, &body["credential"], &cred.public_key, cred.counter)
                 .map_err(|e| Response::error(401, &e))?;
+            cred.last_used = now();
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             let cookie = app.new_session(&admin_id).map_err(|e| Response::error(500, e))?;
@@ -348,6 +357,57 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.notify_device(id, "revoked");
+            Ok(Response::ok(json!({ "ok": true })))
+        }
+        ("GET", ["people"]) => {
+            let me = current.as_ref().map(|a| a.id.clone()).unwrap_or_default();
+            let store = app.store.lock().unwrap();
+            let people: Vec<Value> = store.data.admins.iter().map(|a| json!({
+                "id": a.id, "name": a.name, "me": a.id == me,
+                "passkeys": a.credentials.iter().map(|c| json!({ "id": c.id, "created": c.created, "lastUsed": c.last_used })).collect::<Vec<_>>(),
+            })).collect();
+            drop(store);
+            app.invite_valid("", false); // drops expired ones
+            let invites: Vec<u64> = app.invites.lock().unwrap().iter().map(|(_, e)| *e).collect();
+            Ok(Response::ok(json!({ "people": people, "invites": invites })))
+        }
+        ("POST", ["invites"]) => {
+            let code = random_code(10);
+            let expires = now() + 24 * 3600;
+            let mut invites = app.invites.lock().unwrap();
+            if invites.len() >= 10 {
+                return Err(Response::error(429, "Too many open invitations. Cancel some first."));
+            }
+            invites.push((code.clone(), expires));
+            drop(invites);
+            let url = format!("{}/admin#/invite/{code}", app.cfg.public_url);
+            Ok(Response::ok(json!({ "url": url, "qr": qr_svg(&url), "expires": expires })))
+        }
+        ("DELETE", ["invites"]) => {
+            app.invites.lock().unwrap().clear();
+            Ok(Response::ok(json!({ "ok": true })))
+        }
+        ("DELETE", ["passkeys", cred_id]) => {
+            let mut store = app.store.lock().unwrap();
+            let a = store.data.admins.iter_mut().find(|a| a.credentials.iter().any(|c| c.id == *cred_id)).ok_or_else(|| Response::error(404, "No such passkey"))?;
+            if a.credentials.len() == 1 {
+                return Err(Response::error(409, &format!("That is {}'s only passkey. Remove the person instead.", a.name)));
+            }
+            a.credentials.retain(|c| c.id != *cred_id);
+            store.save().map_err(|e| Response::error(500, e))?;
+            Ok(Response::ok(json!({ "ok": true })))
+        }
+        ("DELETE", ["people", id]) => {
+            let mut store = app.store.lock().unwrap();
+            if !store.data.admins.iter().any(|a| a.id == *id) {
+                return Err(Response::error(404, "No such person"));
+            }
+            if store.data.admins.len() == 1 {
+                return Err(Response::error(409, "oldpad needs at least one admin."));
+            }
+            store.data.admins.retain(|a| a.id != *id);
+            store.data.sessions.retain(|s| s.admin_id != *id);
+            store.save().map_err(|e| Response::error(500, e))?;
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["kinds"]) => Ok(Response::ok(json!(app
