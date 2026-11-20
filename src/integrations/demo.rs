@@ -26,6 +26,8 @@ pub fn kind() -> Kind {
     }
 }
 
+const STATIONS: [&str; 6] = ["Jazz Radio", "Jazz FM", "Classic Rock", "Rock Antenne", "News 24", "Lo-fi Beats"];
+
 struct Demo {
     entities: Arc<Mutex<Vec<Entity>>>,
     stopped: Arc<AtomicBool>,
@@ -52,6 +54,7 @@ fn speaker(id: &str, room: &str, group: &str, playing: bool, volume: f64, track:
         ("speaker_artist", Capability::new(json!(if track.is_empty() { "" } else { "Morning news" }), false)),
         ("favourites", Capability::new(json!(favs), false)),
         ("play_favourite", Capability::new(Value::Null, true)),
+        ("add_favourite", Capability::new(Value::Null, true)),
         ("speaker_group", Capability::new(json!(group), true)),
     ])
 }
@@ -145,9 +148,27 @@ impl Instance for Demo {
             }
             return Ok(());
         }
+        if capability == "add_favourite" {
+            let i = value.as_str().and_then(|v| v.strip_prefix("radio:")).and_then(|i| i.parse::<usize>().ok()).filter(|i| *i < STATIONS.len()).ok_or("no such station")?;
+            let mut changed = vec![];
+            for e in list.iter_mut().filter(|e| e.capabilities.contains_key("favourites")) {
+                let favs = e.capabilities.get_mut("favourites").unwrap();
+                let arr = favs.value.as_array_mut().unwrap();
+                if !arr.iter().any(|f| f["id"] == *value) {
+                    arr.push(json!({ "id": value, "title": STATIONS[i] }));
+                }
+                changed.push((e.id.clone(), favs.value.clone()));
+            }
+            drop(list);
+            for (id, v) in changed {
+                (self.sink)(Event::Changed { entity: id, capability: "favourites".into(), value: v });
+            }
+            return Ok(());
+        }
         if capability == "play_favourite" {
             let favs = e.capabilities["favourites"].value.clone();
-            let title = favs.as_array().into_iter().flatten().find(|f| f["id"] == *value).map(|f| f["title"].clone()).ok_or("no such favourite")?;
+            let station = value.as_str().and_then(|v| v.strip_prefix("radio:")).and_then(|i| i.parse::<usize>().ok()).and_then(|i| STATIONS.get(i));
+            let title = favs.as_array().into_iter().flatten().find(|f| f["id"] == *value).map(|f| f["title"].clone()).or(station.map(|t| json!(t))).ok_or("no such favourite")?;
             e.capabilities.get_mut("speaker_track").unwrap().value = title.clone();
             e.capabilities.get_mut("speaker_playing").unwrap().value = json!(true);
             drop(list);
@@ -169,6 +190,11 @@ impl Instance for Demo {
         drop(list);
         (self.sink)(Event::Changed { entity: entity.into(), capability: capability.into(), value: value.clone() });
         Ok(())
+    }
+
+    fn search(&self, _entity: &str, query: &str) -> Result<Vec<Value>, String> {
+        let q = query.to_lowercase();
+        Ok(STATIONS.iter().enumerate().filter(|(_, t)| t.to_lowercase().contains(&q)).map(|(i, t)| json!({ "id": format!("radio:{i}"), "title": t, "sub": "Demo", "kind": "radio" })).collect())
     }
 
     fn stop(&self) {

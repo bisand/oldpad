@@ -19,14 +19,14 @@
     indoor: 'Inne', outdoor: 'Ute', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter'
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter radiokanal', searching: 'Søker…', noHits: 'Fant ingenting.'
   } : {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites'
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search radio stations', searching: 'Searching…', noHits: 'Nothing found.'
   };
   var DECIMAL = (function () { try { return (1.5).toLocaleString().charAt(1) === ',' || NB ? ',' : '.'; } catch (e) { return '.'; } }());
 
@@ -94,6 +94,8 @@
   var layout = { tiles: [], more: [], panels: {} };
   var page = 'home';
   var anchor = null;           // the speaker whose group the music page shows
+  var query = '', results = null, searching = false, saved = {};
+  var typing = false;          // don't redraw the search box under the keyboard
   var events = null;
   var pairTimer = null;
   var toastTimer = null;
@@ -460,8 +462,43 @@
     return musicCard(room, 0, false) +
       '<div class="row"><div class="col w50"><div class="card rooms"><span class="label-s">' + T.rooms + '</span>' +
       (all.length > 1 ? '<span class="all" data-act="all">' + T.allRooms + '</span>' : '') + rows + '</div></div>' +
-      '<div class="col w50"><div class="card"><span class="label-s">' + T.favourites + '</span><div class="favgrid">' +
-      favsHtml(leader(room), val(leader(room), 'speaker_track'), 100) + '</div></div></div></div>';
+      '<div class="col w50"><div class="card">' + searchHtml(leader(room)) + '</div></div></div>';
+  }
+
+  // The search box, then either the results or the favourites.
+  function searchHtml(lead) {
+    var html = '<form class="search" id="search"><input type="search" id="q" placeholder="' + T.search + '" value="' + esc(query) + '" autocomplete="off" autocorrect="off">' +
+      (results || searching ? '<span class="clear" data-act="clear">×</span>' : '') + '</form>', i, r, favs, known;
+    if (searching) { return html + '<p class="muted">' + T.searching + '</p>'; }
+    if (!results) {
+      return html + '<span class="label-s">' + T.favourites + '</span><div class="favgrid">' + favsHtml(lead, val(lead, 'speaker_track'), 100) + '</div>';
+    }
+    if (!results.length) { return html + '<p class="muted">' + T.noHits + '</p>'; }
+    favs = val(lead, 'favourites') || [];
+    for (i = 0; i < results.length; i++) {
+      r = results[i];
+      known = saved[r.id] || favs.some(function (f) { return f.title === r.title; });
+      html += '<div class="hit"><span class="hit-t" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(r.id) + '">' + esc(r.title) +
+        '<span class="sub">' + esc(r.sub || '') + '</span></span>' +
+        '<span class="star' + (known ? ' on' : '') + '" data-act="save" data-id="' + esc(lead.id) + '" data-fav="' + esc(r.id) + '">' + (known ? '★' : '☆') + '</span></div>';
+    }
+    return html;
+  }
+
+  function runSearch() {
+    var lead = leader(anchorRoom() || {}), q = $('q') ? $('q').value : query;
+    query = q.replace(/^\s+|\s+$/g, '');
+    if (!query || !lead.id) { return; }
+    searching = true;
+    typing = false;
+    if ($('q')) { $('q').blur(); }
+    render();
+    request('POST', '/api/tablet/search', { id: lead.id, query: query }, {}, function (status, data) {
+      searching = false;
+      results = status === 200 && data ? data.results : [];
+      if (status !== 200) { toast((data && data.error) || T.failed); }
+      render();
+    });
   }
 
   function weatherPage() {
@@ -491,6 +528,7 @@
   }
 
   function render() {
+    if (typing) { return; }
     if (new Date().getTime() < holdUntil) {
       if (!redrawPending) { redrawPending = true; setTimeout(function () { redrawPending = false; render(); }, 600); }
       return;
@@ -561,6 +599,14 @@
       c.value = !prev;
       render();
       set(e, 'speaker_playing', c.value, prev);
+    } else if (act === 'clear') {
+      results = null;
+      query = '';
+      render();
+    } else if (act === 'save' && e && !saved[el.getAttribute('data-fav')]) {
+      saved[el.getAttribute('data-fav')] = true;
+      render();
+      set(e, 'add_favourite', el.getAttribute('data-fav'));
     } else if (act === 'fav' && e) {
       el.className += ' on';
       set(e, 'play_favourite', el.getAttribute('data-fav'));
@@ -619,6 +665,11 @@
   }
 
   document.addEventListener('click', onTap, false);
+  document.addEventListener('submit', function (ev) { ev.preventDefault(); runSearch(); }, false);
+  document.addEventListener('focus', function (ev) { if (ev.target && ev.target.id === 'q') { typing = true; } }, true);
+  document.addEventListener('blur', function (ev) {
+    if (ev.target && ev.target.id === 'q') { typing = false; query = ev.target.value; setTimeout(render, 0); }
+  }, true);
   document.addEventListener('input', onSlide, false);
   document.addEventListener('change', onSlide, false);
   setInterval(tick, 10000);

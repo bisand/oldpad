@@ -4,7 +4,7 @@
 
 use super::{Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
 use crate::client::request;
-use crate::util::{escape_xml, unescape_xml};
+use crate::util::{escape_xml, percent_encode, unescape_xml};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::net::Ipv4Addr;
@@ -137,6 +137,7 @@ struct Favourite {
     title: String,
     uri: String,
     meta: String,
+    sub: String, // shown under a search result
 }
 
 fn parse_favourites(didl: &str) -> Vec<Favourite> {
@@ -149,6 +150,7 @@ fn parse_favourites(didl: &str) -> Vec<Favourite> {
                 uri: tag(item, "res").unwrap_or_default(),
                 // resMD is escaped once more inside the item; tag() already unescaped it once.
                 meta: tag(item, "r:resMD").unwrap_or_default(),
+                sub: String::new(),
             })
         })
         .filter(|f| !f.uri.is_empty())
@@ -159,6 +161,54 @@ fn favourites(host: &str) -> Result<Vec<Favourite>, String> {
     let args = [("ObjectID", "FV:2"), ("BrowseFlag", "BrowseDirectChildren"), ("Filter", "dc:title,res,r:resMD"), ("StartingIndex", "0"), ("RequestedCount", "100"), ("SortCriteria", "")];
     let xml = soap(host, CD, "Browse", &args)?;
     Ok(parse_favourites(&tag(&xml, "Result").unwrap_or_default()))
+}
+
+const DIDL: &str = r#"<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">"#;
+
+/// Radio stations matching `query`, from the open radio-browser.info directory.
+fn search_radio(query: &str) -> Result<Vec<Favourite>, String> {
+    let path = format!("/json/stations/search?name={}&limit=40&hidebroken=true&order=clickcount&reverse=true", percent_encode(query));
+    let res = request("https://all.api.radio-browser.info", "GET", &path, &[("Accept", "application/json")], None)?;
+    if res.status != 200 {
+        return Err(format!("radio search failed (HTTP {})", res.status));
+    }
+    let list: Vec<Value> = serde_json::from_slice(&res.body).map_err(|e| format!("radio search: {e}"))?;
+    Ok(parse_stations(&list))
+}
+
+fn parse_stations(list: &[Value]) -> Vec<Favourite> {
+    let mut out: Vec<Favourite> = Vec::new();
+    for s in list {
+        let (Some(url), Some(name), Some(uuid)) = (s["url_resolved"].as_str(), s["name"].as_str(), s["stationuuid"].as_str()) else { continue };
+        let codec = s["codec"].as_str().unwrap_or("");
+        // Sonos plays these as radio streams; the directory lists many others.
+        if !(url.starts_with("http://") || url.starts_with("https://")) || !matches!(codec, "MP3" | "AAC" | "AAC+") {
+            continue;
+        }
+        let title = name.trim().to_string();
+        // The directory holds many copies of popular stations: keep the most played.
+        if title.is_empty() || out.iter().any(|f| f.title.eq_ignore_ascii_case(&title)) {
+            continue;
+        }
+        let meta = format!(
+            r#"{DIDL}<item id="R:0/0/0" parentID="R:0/0" restricted="true"><dc:title>{}</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON65031_</desc></item></DIDL-Lite>"#,
+            escape_xml(&title)
+        );
+        let sub = [s["country"].as_str().unwrap_or(""), s["tags"].as_str().unwrap_or("").split(',').next().unwrap_or("")]
+            .iter().filter(|x| !x.is_empty()).cloned().collect::<Vec<_>>().join(" · ");
+        out.push(Favourite { id: format!("radio:{uuid}"), title, uri: format!("x-rincon-mp3radio://{url}"), meta, sub });
+    }
+    out.truncate(20);
+    out
+}
+
+/// A Sonos favourite for `f`, as CreateObject wants it in FV:2.
+fn favourite_didl(f: &Favourite) -> String {
+    let scheme = f.uri.split(':').next().unwrap_or("");
+    format!(
+        r#"{DIDL}<item id="" restricted="false" parentID="FV:2"><dc:title>{}</dc:title><upnp:class>object.itemobject.item.sonos-favorite</upnp:class><r:ordinal>-1</r:ordinal><res protocolInfo="{scheme}:*:*:*">{}</res><r:type>instantPlay</r:type><r:description>Radio</r:description><r:resMD>{}</r:resMD></item></DIDL-Lite>"#,
+        escape_xml(&f.title), escape_xml(&f.uri), escape_xml(&f.meta)
+    )
 }
 
 struct Now {
@@ -198,6 +248,7 @@ fn entity(room: &Room, now: &Now, favs: &[Favourite]) -> Entity {
     caps.insert("speaker_artist".to_string(), ro(json!(now.subtitle)));
     caps.insert("favourites".to_string(), ro(json!(favs.iter().map(|f| json!({ "id": f.id, "title": f.title })).collect::<Vec<_>>())));
     caps.insert("play_favourite".to_string(), Capability::new(Value::Null, true));
+    caps.insert("add_favourite".to_string(), Capability::new(Value::Null, true));
     // The room whose group this one plays with; itself when it plays alone or leads.
     caps.insert("speaker_group".to_string(), Capability::new(json!(room.coordinator_uuid), true));
     Entity { id: room.uuid.clone(), name: room.name.clone(), zone: room.name.clone(), class: "speaker".into(), capabilities: caps }
@@ -338,6 +389,7 @@ struct Sonos {
     stopped: Arc<AtomicBool>,
     poke: Arc<AtomicBool>,
     regroup: Arc<AtomicUsize>,
+    found: Mutex<Vec<Favourite>>, // recent search results, playable and saveable by id
 }
 
 /// Speakers to ask for the topology: every room we know of, then the admin's seeds.
@@ -437,7 +489,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             }
         }
     });
-    Ok(Box::new(Sonos { state, stopped, poke, regroup }))
+    Ok(Box::new(Sonos { state, stopped, poke, regroup, found: Mutex::new(vec![]) }))
 }
 
 impl Instance for Sonos {
@@ -445,11 +497,23 @@ impl Instance for Sonos {
         self.state.lock().unwrap().entities.clone()
     }
 
+    fn search(&self, entity: &str, query: &str) -> Result<Vec<Value>, String> {
+        if !self.state.lock().unwrap().rooms.iter().any(|r| r.uuid == entity) {
+            return Err("no such room".into());
+        }
+        let results = search_radio(query)?;
+        let mut found = self.found.lock().unwrap();
+        found.retain(|f| !results.iter().any(|r| r.id == f.id));
+        found.splice(0..0, results.iter().cloned());
+        found.truncate(200);
+        Ok(results.iter().map(|f| json!({ "id": f.id, "title": f.title, "sub": f.sub, "kind": "radio" })).collect())
+    }
+
     fn set(&self, entity: &str, capability: &str, value: &Value) -> Result<(), String> {
         let (room, fav) = {
             let s = self.state.lock().unwrap();
             let room = s.rooms.iter().find(|r| r.uuid == entity).cloned().ok_or("no such room")?;
-            let fav = value.as_str().and_then(|id| s.favs.iter().find(|f| f.id == id).cloned());
+            let fav = value.as_str().and_then(|id| s.favs.iter().chain(self.found.lock().unwrap().iter()).find(|f| f.id == id).cloned());
             (room, fav)
         };
         match capability {
@@ -477,6 +541,11 @@ impl Instance for Sonos {
                     soap(c, AV, "SetAVTransportURI", &[("InstanceID", "0"), ("CurrentURI", &fav.uri), ("CurrentURIMetaData", &fav.meta)])?;
                 }
                 soap(c, AV, "Play", &[("InstanceID", "0"), ("Speed", "1")])?;
+            }
+            "add_favourite" => {
+                let f = fav.ok_or("no such station")?;
+                soap(&room.host, CD, "CreateObject", &[("ContainerID", "FV:2"), ("Elements", &favourite_didl(&f))])?;
+                self.regroup.store(1, Ordering::Relaxed); // the next full refresh reads the new list
             }
             "speaker_group" => {
                 let target = value.as_str().ok_or("expected a room")?;
@@ -531,6 +600,24 @@ mod tests {
         assert_eq!(parse_ssdp(sonos).as_deref(), Some("192.168.1.44"));
         let tv = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.9:8080/desc.xml\r\nST: upnp:rootdevice\r\nSERVER: SomeTV\r\n\r\n";
         assert_eq!(parse_ssdp(tv), None);
+    }
+
+    #[test]
+    fn reads_radio_stations() {
+        let list: Vec<Value> = serde_json::from_str(r#"[
+            {"stationuuid":"a","name":"NRK P1 ","url_resolved":"https://cdn.example/p1_mp3_h","codec":"MP3","country":"Norway","tags":"news,talk"},
+            {"stationuuid":"b","name":"nrk p1","url_resolved":"https://mirror.example/p1","codec":"MP3"},
+            {"stationuuid":"c","name":"Video","url_resolved":"https://x.example/v.m3u8","codec":"UNKNOWN"},
+            {"stationuuid":"d","name":"Rock & <Roll>","url_resolved":"http://r.example/s","codec":"AAC+"}
+        ]"#).unwrap();
+        let s = parse_stations(&list);
+        assert_eq!(s.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), vec!["radio:a", "radio:d"]);
+        assert_eq!((s[0].title.as_str(), s[0].sub.as_str(), s[0].uri.as_str()), ("NRK P1", "Norway · news", "x-rincon-mp3radio://https://cdn.example/p1_mp3_h"));
+        assert!(s[1].meta.contains("<dc:title>Rock &amp; &lt;Roll&gt;</dc:title>"));
+        // The favourite's metadata is escaped once more inside it, as Sonos stores it.
+        let didl = favourite_didl(&s[1]);
+        assert!(didl.contains(r#"<res protocolInfo="x-rincon-mp3radio:*:*:*">x-rincon-mp3radio://http://r.example/s</res>"#));
+        assert!(didl.contains("&lt;dc:title&gt;Rock &amp;amp; &amp;lt;Roll&amp;gt;&lt;/dc:title&gt;"));
     }
 
     #[test]

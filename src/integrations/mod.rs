@@ -84,6 +84,11 @@ pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
 pub trait Instance: Send + Sync {
     fn entities(&self) -> Vec<Entity>;
     fn set(&self, entity: &str, capability: &str, value: &Value) -> Result<(), String>;
+    /// Things to play on `entity` matching `query`: `[{id, title, sub, kind}]`. The ids
+    /// work with `play_favourite` and `add_favourite`.
+    fn search(&self, _entity: &str, _query: &str) -> Result<Vec<Value>, String> {
+        Err("search is not supported here".into())
+    }
     /// Stop background work. Called before the instance is dropped.
     fn stop(&self);
 }
@@ -293,6 +298,11 @@ impl Registry {
         }
         // The lock is not held here: `set` talks to the network.
         inst.set(eid, capability, value)
+    }
+
+    pub fn search(&self, full_id: &str, query: &str) -> Result<Vec<Value>, String> {
+        let (iid, eid) = full_id.split_once(':').ok_or("bad entity id")?;
+        self.instance(iid).ok_or("integration is not running")?.search(eid, query)
     }
 }
 

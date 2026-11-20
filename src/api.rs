@@ -92,6 +92,18 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     })))
                 }
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
+                ("POST", ["tablet", "search"]) => {
+                    let body = req.json()?;
+                    let id = body["id"].as_str().unwrap_or("");
+                    let query = body["query"].as_str().unwrap_or("").trim();
+                    if !device.allowed().contains(id) {
+                        return Err(Response::error(403, "Not configured for this screen"));
+                    }
+                    if query.is_empty() || query.chars().count() > 100 {
+                        return Err(Response::error(400, "Search for 1 to 100 characters"));
+                    }
+                    app.registry.search(id, query).map(|r| Response::ok(json!({ "results": r }))).map_err(|e| Response::error(502, &e))
+                }
                 ("POST", ["tablet", "set"]) => {
                     let body = req.json()?;
                     let id = body["id"].as_str().unwrap_or("");
