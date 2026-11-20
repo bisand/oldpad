@@ -359,105 +359,322 @@ async function pairView(code) {
   );
 }
 
+// ---------------------------------------------------------------- screen editor
+// Pages on the left, the selected page laid out as the screen shows it in the
+// middle, and the devices to add on the right (a sheet on phones).
+
+// The screen's built-in pages: each shows every device of its kind on the screen.
+const MENU_PAGES = [
+  ['music', 'Music', ['speaker'], 'speakers'],
+  ['lights', 'Lights', ['light', 'socket'], 'lights and sockets'],
+  ['climate', 'Climate', ['thermostat', 'heater', 'sensor'], 'thermostats, heaters and sensors'],
+  ['flows', 'Flows', ['button'], 'buttons and Flows'],
+];
+const CARDS = [['card:clock', 'Clock'], ['card:climate', 'Indoor / outdoor'], ['card:forecast', 'Forecast'], ['card:music', 'Music']];
+const PAGE_ICONS = ['home', 'music', 'bulb', 'thermo', 'bolt', 'cloud', 'sun', 'moon', 'chart', 'radio', 'flame', 'plug'];
+const KINDS = [['all', 'All', null], ['lights', 'Lights', ['light', 'socket']], ['climate', 'Climate', ['thermostat', 'heater', 'sensor']], ['buttons', 'Buttons', ['button']], ['speakers', 'Speakers', ['speaker']]];
+const HOME_TILES = 6; // what fits in the screen's tile row
+
+// Leaving the editor with unsaved changes asks first (see the hashchange handler).
+let leaveGuard = null;
+let ignoreHash = false;
+
+function moveItem(list, from, to) {
+  const [x] = list.splice(from, 1);
+  list.splice(Math.max(0, Math.min(to, list.length)), 0, x);
+}
+
 async function deviceView(id) {
   const [devices, entities] = await Promise.all([api('GET', '/devices'), api('GET', '/entities')]);
   const device = devices.find((d) => d.id === id);
   if (!device) return render(errorBox(new Error('No such screen.')));
-  const tiles = [...device.tiles];
-  const more = new Set(device.more);
-  const panels = { ...device.panels };
-  const has = (e, cap) => e.capabilities && cap in e.capabilities;
+  main.classList.add('wide');
+  const ent = new Map(entities.map((e) => [e.id, e]));
+  const s = { name: device.name, tiles: [...device.tiles], more: [...device.more], panels: { ...device.panels }, pages: structuredClone(device.pages || []) };
+  const here = location.hash;
+  let dirty = false;
+  let current = 'home';
+  let query = '';
+  let kind = 'all';
+  let note = null;
+  let dragging = null; // { from: index } inside the page, or { id } from the library
 
-  // Which entities fit each home panel.
-  const panelDefs = [
-    ['indoor', 'Indoor', (e) => has(e, 'measure_temperature') && e.class !== 'weather'],
-    ['outdoor', 'Outdoor', (e) => has(e, 'measure_temperature') && e.class !== 'weather'],
-    ['wind', 'Wind (optional, if outdoor has none)', (e) => has(e, 'measure_wind_strength')],
-    ['weather', 'Forecast', (e) => e.class === 'weather'],
-    ['speaker', 'Music: this screen\'s room', (e) => e.class === 'speaker'],
-  ];
-  const selects = panelDefs.map(([key, label, fits]) => {
-    const options = entities.filter(fits);
-    const sel = h('select', { id: `p-${key}`, onchange: () => { panels[key] = sel.value || null; } },
+  const has = (e, cap) => !!(e && e.capabilities && cap in e.capabilities);
+  const nameOf = (item) => CARDS.find(([c]) => c === item)?.[1] ?? ent.get(item)?.name ?? 'Unavailable';
+  const menuOf = (key) => MENU_PAGES.find((p) => p[0] === key);
+  const ownOf = (key) => s.pages.find((p) => `own:${p.id}` === key);
+  const fitsMenu = (m, item) => m[2].includes(ent.get(item)?.class);
+  const pageName = (key) => key === 'home' ? 'Home' : key === 'settings' ? 'Settings' : menuOf(key)?.[1] ?? ownOf(key)?.name ?? '';
+
+  // Where a device shows on this screen, for the library's tags.
+  const usage = (item) => {
+    const out = [];
+    if (s.tiles.includes(item)) out.push('Home');
+    const m = MENU_PAGES.find((p) => fitsMenu(p, item));
+    if (m && (s.more.includes(item) || s.tiles.includes(item) || s.pages.some((p) => p.items.includes(item)))) out.push(m[1]);
+    for (const p of s.pages) if (p.items.includes(item)) out.push(p.name || 'Page');
+    return [...new Set(out)];
+  };
+
+  // The current page's own list, the one adding, removing and moving work on.
+  const list = () => {
+    if (current === 'home') return s.tiles;
+    const m = menuOf(current);
+    if (m) return s.more.filter((i) => fitsMenu(m, i));
+    return ownOf(current)?.items ?? [];
+  };
+  const setList = (next) => {
+    if (current === 'home') s.tiles = next;
+    else if (menuOf(current)) {
+      // Write the menu page's devices back into their places among the others.
+      const m = menuOf(current);
+      let k = 0;
+      s.more = s.more.filter((i) => !fitsMenu(m, i) || next.includes(i)).map((i) => (fitsMenu(m, i) ? next[k++] : i));
+      for (; k < next.length; k++) s.more.push(next[k]);
+    } else if (ownOf(current)) ownOf(current).items = next;
+  };
+  const onPage = (item) => list().includes(item);
+  const add = (item, at) => {
+    const l = list();
+    if (l.includes(item)) return;
+    l.splice(at ?? l.length, 0, item);
+    setList(l);
+    changed();
+  };
+  const remove = (item) => { setList(list().filter((i) => i !== item)); changed(); };
+  const move = (from, to) => { const l = list(); moveItem(l, from, to); setList(l); changed(); };
+
+  const changed = () => { dirty = true; note = null; draw(); };
+  const fresh = () => { draw(); };
+
+  // Drag and drop: rows in the page reorder; library rows drop in.
+  const dropOn = (el, at) => {
+    el.addEventListener('dragover', (e) => { if (dragging) { e.preventDefault(); el.classList.add('over'); } });
+    el.addEventListener('dragleave', () => el.classList.remove('over'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('over');
+      const d = dragging;
+      dragging = null;
+      if (!d) return;
+      const to = at ?? list().length;
+      if (d.id) add(d.id, to);
+      else if (d.from !== to) move(d.from, d.from < to ? to - 1 : to);
+    });
+  };
+  const dragFrom = (el, d) => {
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', (e) => { dragging = d; e.dataTransfer.effectAllowed = d.id ? 'copy' : 'move'; e.dataTransfer.setData('text/plain', d.id || String(d.from)); el.classList.add('dragging'); });
+    el.addEventListener('dragend', () => { dragging = null; el.classList.remove('dragging'); });
+  };
+
+  const editor = h('div', { class: 'editor' });
+  const top = h('div', { class: 'ed-top' });
+  const nav = h('nav', { class: 'ed-pages', 'aria-label': 'Pages on this screen' });
+  const canvas = h('section', { class: 'ed-canvas' });
+  const search = h('input', { type: 'search', placeholder: 'Search devices', 'aria-label': 'Search devices', oninput: () => { query = search.value.trim().toLowerCase(); drawLibrary(); } });
+  const kinds = h('div', { class: 'kinds-row' });
+  const libHead = h('div', { class: 'lib-head' });
+  const libList = h('div', { class: 'lib-list' });
+  const lib = h('aside', { class: 'lib card', 'aria-label': 'Devices' }, libHead, search, kinds, libList);
+  editor.append(nav, canvas, lib);
+  const openLibrary = () => { editor.classList.add('adding'); if (matchMedia('(min-width: 901px)').matches) search.focus(); };
+
+  const save = async () => {
+    try {
+      if (!s.name.trim()) throw new Error('Give the screen a name in Settings.');
+      if (s.pages.some((p) => !p.name.trim())) throw new Error('Every page needs a name.');
+      await api('PUT', `/devices/${id}`, { name: s.name.trim(), tiles: s.tiles, more: s.more, panels: s.panels, pages: s.pages });
+      dirty = false;
+      note = h('span', { class: 'ok small' }, 'Saved. The screen reloads by itself.');
+    } catch (e) { note = h('span', { class: 'bad small' }, e.message); }
+    drawTop();
+  };
+
+  function drawTop() {
+    top.replaceChildren(
+      h('div', { class: 'ed-title' }, h('h1', {}, s.name || 'Screen'), dirty ? h('span', { class: 'unsaved small' }, 'Unsaved changes') : note),
+      h('div', { class: 'row' },
+        h('a', { class: 'button', href: `/?preview=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', title: 'Opens the screen as last saved' }, 'Preview'),
+        h('button', { class: 'primary', onclick: save, title: 'Save (Ctrl+S)' }, 'Save'),
+        h('button', { onclick: () => (location.hash = '#/') }, 'Back')));
+  }
+
+  function drawNav() {
+    const btn = (key, label, count) => h('button', { class: current === key ? 'on' : '', 'aria-current': current === key ? 'page' : false, onclick: () => { current = key; editor.classList.remove('adding'); fresh(); } },
+      h('span', {}, label), count != null ? h('span', { class: 'count' }, String(count)) : null);
+    const shown = (m) => [...new Set([...s.tiles, ...s.more, ...s.pages.flatMap((p) => p.items)])].filter((i) => fitsMenu(m, i)).length;
+    nav.replaceChildren(...[
+      btn('home', 'Home', Math.min(s.tiles.length, HOME_TILES)),
+      h('div', { class: 'nav-label' }, 'Menu pages'),
+      MENU_PAGES.map((m) => btn(m[0], m[1], shown(m))),
+      h('div', { class: 'nav-label' }, 'Your pages'),
+      s.pages.map((p) => btn(`own:${p.id}`, p.name || 'Unnamed', p.items.length)),
+      h('button', { class: 'add', onclick: () => {
+        if (s.pages.length >= 12) return alert('A screen has room for 12 pages.');
+        const pg = { id: Math.random().toString(36).slice(2, 10), name: 'New page', icon: 'home', items: [] };
+        s.pages.push(pg);
+        current = `own:${pg.id}`;
+        changed();
+      } }, '+ Add page'),
+      h('div', { class: 'nav-label' }),
+      btn('settings', 'Settings'),
+    ].flat());
+  }
+
+  // One row or tile in the page: drag it, or use the buttons (touch, keyboard).
+  function itemEl(item, i, n, { grid = false, extra = false } = {}) {
+    const e = ent.get(item);
+    const sub = item.startsWith('card:') ? 'Card' : e ? [e.zone, e.class].filter(Boolean).join(' · ') : 'Not found. Removed from its integration?';
+    const el = h('div', { class: `${grid ? 'tile' : 'item'}${extra ? ' extra' : ''}${e || item.startsWith('card:') ? '' : ' gone'}` },
+      h('span', { class: 'grip', 'aria-hidden': 'true' }, '⋮⋮'),
+      h('span', { class: 'grow' }, h('span', { class: 't-name' }, nameOf(item)), h('span', { class: 't-sub' }, extra ? 'Not shown: 6 fit' : sub)),
+      h('span', { class: 'tools' },
+        h('button', { class: 'chip', 'aria-label': `Move ${nameOf(item)} earlier`, onclick: () => i > 0 && move(i, i - 1) }, grid ? '←' : '↑'),
+        h('button', { class: 'chip', 'aria-label': `Move ${nameOf(item)} later`, onclick: () => i < n - 1 && move(i, i + 1) }, grid ? '→' : '↓'),
+        h('button', { class: 'chip danger', 'aria-label': `Remove ${nameOf(item)}`, onclick: () => remove(item) }, '✕')));
+    dragFrom(el, { from: i });
+    dropOn(el, i);
+    return el;
+  }
+
+  // A fixed row: on this page because it is elsewhere on the screen.
+  function fixedEl(item, where) {
+    return h('div', { class: 'item fixed' }, h('span', { class: 'grow' }, h('span', { class: 't-name' }, nameOf(item)), h('span', { class: 't-sub' }, `From ${where}. Change it there.`)));
+  }
+
+  function itemsEl(items) {
+    const box = h('div', { class: 'items' }, items.map((item, i) => itemEl(item, i, items.length)));
+    dropOn(box, null);
+    return box;
+  }
+
+  const addButton = (label) => h('button', { class: 'only-mobile', onclick: openLibrary }, label);
+
+  function panelSlot(key, title, fits, hint) {
+    const groups = new Map();
+    for (const e of entities.filter(fits)) groups.set(e.zone || 'No room', [...(groups.get(e.zone || 'No room') || []), e]);
+    const sel = h('select', { 'aria-label': title, onchange: () => { s.panels[key] = sel.value || null; changed(); } },
       h('option', { value: '' }, '— none —'),
-      options.map((e) => h('option', { value: e.id, selected: panels[key] === e.id }, `${e.name}${e.zone && e.zone !== e.name ? ` (${e.zone})` : ''}`)));
-    return [h('label', { for: `p-${key}` }, label), sel];
-  });
+      [...groups].map(([zone, list]) => h('optgroup', { label: zone }, list.map((e) => h('option', { value: e.id, selected: s.panels[key] === e.id }, e.name)))));
+    return h('div', { class: 'slot' }, h('div', { class: 'slot-title' }, title), sel, hint ? h('div', { class: 't-sub' }, hint) : null);
+  }
 
-  const list = h('div');
-  const draw = () => {
-    let zone = null;
-    list.replaceChildren(...entities.filter((e) => e.class !== 'weather').flatMap((e) => {
-      const i = tiles.indexOf(e.id);
-      const home = h('button', { class: i >= 0 ? 'chip on' : 'chip', onclick: () => {
-        i >= 0 ? tiles.splice(i, 1) : tiles.push(e.id);
-        draw();
-      } }, i >= 0 ? `Home ${i + 1}` : 'Home');
-      const menu = h('button', { class: more.has(e.id) ? 'chip on' : 'chip', onclick: () => {
-        more.has(e.id) ? more.delete(e.id) : more.add(e.id);
-        draw();
-      } }, 'Menu');
-      const row = h('div', { class: 'pick' }, h('span', { class: 'grow' }, e.name, h('span', { class: 'small muted' }, ` · ${e.class}`)), home, menu);
+  function homeCanvas() {
+    const temp = (e) => has(e, 'measure_temperature') && e.class !== 'weather';
+    const tiles = s.tiles;
+    const grid = h('div', { class: 'tiles' },
+      tiles.map((item, i) => itemEl(item, i, tiles.length, { grid: true, extra: i >= HOME_TILES })),
+      Array.from({ length: Math.max(0, HOME_TILES - tiles.length) }, (_, k) => {
+        const el = h('button', { class: 'tile empty', 'aria-label': 'Add a tile', onclick: openLibrary }, '+');
+        dropOn(el, tiles.length + k);
+        return el;
+      }));
+    dropOn(grid, null);
+    return [
+      h('p', { class: 'muted small' }, 'Laid out as the screen shows it. Pick what each box shows; drag tiles to reorder them.'),
+      h('div', { class: 'home-top' },
+        h('div', { class: 'slot clock' }, h('div', { class: 'slot-title' }, 'Clock'), h('div', { class: 'big-time' }, '12:30'), h('div', { class: 't-sub' }, 'Always shown')),
+        h('div', { class: 'slot climate' },
+          panelSlot('indoor', 'Indoor', temp),
+          panelSlot('outdoor', 'Outdoor', temp),
+          panelSlot('wind', 'Wind', (e) => has(e, 'measure_wind_strength'), 'Only if Outdoor has no wind'))),
+      panelSlot('weather', 'Forecast', (e) => e.class === 'weather'),
+      panelSlot('speaker', 'Music', (e) => e.class === 'speaker', h('span', {}, 'This screen\'s room. Favourites: ', h('a', { href: '#/integrations' }, 'Integrations → Favourites'), '.')),
+      h('div', { class: 'section-label' }, `Tiles · ${Math.min(tiles.length, HOME_TILES)} of ${HOME_TILES}`),
+      grid,
+      addButton('+ Add tiles'),
+    ];
+  }
+
+  function menuCanvas(m) {
+    const mine = list();
+    const elsewhere = [];
+    for (const item of s.tiles) if (fitsMenu(m, item)) elsewhere.push([item, 'Home']);
+    for (const p of s.pages) for (const item of p.items) if (fitsMenu(m, item) && !s.tiles.includes(item) && !elsewhere.some(([i]) => i === item)) elsewhere.push([item, p.name]);
+    const extra = elsewhere.filter(([i]) => !mine.includes(i));
+    return [
+      h('p', { class: 'muted small' }, `Shows every one of the ${m[3]} on this screen: the ones added here, and those on Home and your pages. The screen hides the page while it is empty.`),
+      extra.length ? [h('div', { class: 'section-label' }, 'Already on the screen'), extra.map(([i, where]) => fixedEl(i, where))] : null,
+      h('div', { class: 'section-label' }, 'Added here'),
+      mine.length ? null : h('p', { class: 'muted small' }, 'Nothing added here yet.'),
+      itemsEl(mine),
+      addButton(`+ Add ${m[1].toLowerCase()}`),
+    ];
+  }
+
+  function ownCanvas(pg) {
+    const name = h('input', { type: 'text', value: pg.name, maxlength: '32', 'aria-label': 'Page name', oninput: () => { pg.name = name.value; dirty = true; drawTop(); drawNav(); } });
+    const icon = h('select', { 'aria-label': 'Icon', onchange: () => { pg.icon = icon.value; changed(); } }, PAGE_ICONS.map((i) => h('option', { value: i, selected: pg.icon === i }, i)));
+    const cards = CARDS.filter(([c]) => !pg.items.includes(c));
+    return [
+      h('div', { class: 'row page-head' }, name, icon,
+        h('button', { class: 'danger', onclick: () => { if (confirm(`Delete the page “${pg.name}”?`)) { s.pages = s.pages.filter((p) => p !== pg); current = 'home'; changed(); } } }, 'Delete page')),
+      cards.length ? h('div', { class: 'row cards-row' }, h('span', { class: 'small muted' }, 'Add a card:'), cards.map(([c, l]) => h('button', { class: 'chip', onclick: () => add(c) }, `+ ${l}`))) : null,
+      pg.items.length ? null : h('p', { class: 'muted small' }, 'An empty page. Add cards above, or devices from the list.'),
+      itemsEl(pg.items),
+      addButton('+ Add devices'),
+    ];
+  }
+
+  function settingsCanvas() {
+    const name = h('input', { type: 'text', id: 'd-name', value: s.name, maxlength: '64', oninput: () => { s.name = name.value; dirty = true; drawTop(); } });
+    return [
+      h('label', { for: 'd-name' }, 'Screen name'), name,
+      h('p', { class: 'help' }, 'Light or dark, and the size of the clock, are chosen on the screen itself: the cog at the bottom of its menu.'),
+    ];
+  }
+
+  function drawCanvas() {
+    const m = menuOf(current);
+    const pg = ownOf(current);
+    if (!m && !pg && !['home', 'settings'].includes(current)) current = 'home';
+    canvas.replaceChildren(
+      h('h2', {}, pageName(current)),
+      ...[current === 'home' ? homeCanvas() : current === 'settings' ? settingsCanvas() : m ? menuCanvas(m) : ownCanvas(pg)].flat(Infinity).filter(Boolean));
+    lib.classList.toggle('hidden', current === 'settings');
+  }
+
+  function drawLibrary() {
+    const m = menuOf(current);
+    const fits = (e) => e.class !== 'weather' && (!m || m[2].includes(e.class));
+    const k = KINDS.find((x) => x[0] === kind);
+    const shown = entities.filter((e) => fits(e) && (m || !k[2] || k[2].includes(e.class)) && (!query || `${e.name} ${e.zone} ${e.class}`.toLowerCase().includes(query)));
+    libHead.replaceChildren(h('strong', {}, `Add to ${pageName(current)}`), h('button', { class: 'only-mobile chip', onclick: () => editor.classList.remove('adding') }, 'Done'));
+    kinds.replaceChildren(...(m ? [] : KINDS.map(([key, label]) => h('button', { class: `chip${kind === key ? ' on' : ''}`, onclick: () => { kind = key; drawLibrary(); } }, label))));
+    let zone;
+    libList.replaceChildren(...(shown.length ? shown.flatMap((e) => {
+      const on = onPage(e.id);
+      const tags = usage(e.id);
+      // A menu page already shows what is elsewhere on the screen.
+      const via = m && !on && (s.tiles.includes(e.id) || s.pages.some((p) => p.items.includes(e.id)));
+      const row = h('div', { class: 'lib-row' },
+        h('span', { class: 'grow' }, h('span', { class: 't-name' }, e.name), h('span', { class: 't-sub' }, e.class, tags.map((t) => h('span', { class: 'tag' }, t)))),
+        via ? h('span', { class: 'small muted', title: 'Already on this page, through Home or one of your pages' }, 'Shown') : h('button', { class: `chip${on ? ' on' : ''}`, 'aria-label': `${on ? 'Remove' : 'Add'} ${e.name}`, title: on ? `Remove from ${pageName(current)}` : `Add to ${pageName(current)}`, onclick: () => (on ? remove(e.id) : add(e.id)) }, on ? '✓' : '+'));
+      if (!on && !via) dragFrom(row, { id: e.id });
       const header = e.zone !== zone ? h('div', { class: 'zone' }, (zone = e.zone) || 'No room') : null;
       return header ? [header, row] : [row];
-    }));
+    }) : [h('p', { class: 'muted small' }, entities.length ? 'No devices match.' : 'No devices yet. Add an integration first.')]));
+  }
+
+  function draw() {
+    drawTop();
+    drawNav();
+    drawCanvas();
+    drawLibrary();
+  }
+
+  leaveGuard = () => {
+    if (!dirty || confirm('Leave without saving your changes?')) return true;
+    ignoreHash = true;
+    location.hash = here;
+    return false;
   };
+  window.onbeforeunload = () => (dirty ? true : undefined);
+  editor.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); } });
   draw();
-
-  // Own pages: a name, an icon and an ordered list of cards and entities.
-  const pages = structuredClone(device.pages || []);
-  const cards = [['card:clock', 'Clock'], ['card:climate', 'Indoor / outdoor'], ['card:forecast', 'Forecast'], ['card:music', 'Music']];
-  const icons = ['home', 'music', 'bulb', 'thermo', 'bolt', 'cloud', 'sun', 'moon', 'chart', 'radio', 'flame', 'plug'];
-  const label = (item) => cards.find(([id]) => id === item)?.[1] ?? (entities.find((e) => e.id === item)?.name || 'Unavailable');
-  const pageList = h('div');
-  const drawPages = () => {
-    pageList.replaceChildren(...pages.map((pg, n) => {
-      const pname = h('input', { type: 'text', value: pg.name, maxlength: '32', 'aria-label': 'Page name', oninput: () => { pg.name = pname.value; } });
-      const picon = h('select', { 'aria-label': 'Icon', onchange: () => { pg.icon = picon.value; } }, icons.map((i) => h('option', { value: i, selected: pg.icon === i }, i)));
-      const add = h('select', { 'aria-label': 'Add to page', onchange: () => { if (add.value) { pg.items.push(add.value); drawPages(); } } },
-        h('option', { value: '' }, '+ Add…'),
-        h('optgroup', { label: 'Cards' }, cards.filter(([id]) => !pg.items.includes(id)).map(([id, l]) => h('option', { value: id }, l))),
-        h('optgroup', { label: 'Devices' }, entities.filter((e) => e.class !== 'weather' && !pg.items.includes(e.id)).map((e) => h('option', { value: e.id }, `${e.name}${e.zone && e.zone !== e.name ? ` (${e.zone})` : ''}`))));
-      const move = (i, d) => { const [x] = pg.items.splice(i, 1); pg.items.splice(i + d, 0, x); drawPages(); };
-      return h('div', { class: 'card' },
-        h('div', { class: 'row' }, pname, picon,
-          h('button', { class: 'danger', onclick: () => { if (confirm(`Delete the page “${pg.name}”?`)) { pages.splice(n, 1); drawPages(); } } }, 'Delete')),
-        pg.items.map((item, i) => h('div', { class: 'pick' }, h('span', { class: 'grow' }, label(item)),
-          h('button', { class: 'chip', disabled: i === 0, onclick: () => move(i, -1), 'aria-label': 'Up' }, '↑'),
-          h('button', { class: 'chip', disabled: i === pg.items.length - 1, onclick: () => move(i, 1), 'aria-label': 'Down' }, '↓'),
-          h('button', { class: 'chip', onclick: () => { pg.items.splice(i, 1); drawPages(); }, 'aria-label': 'Remove' }, '×'))),
-        add);
-    }), h('button', { onclick: () => { pages.push({ id: Math.random().toString(36).slice(2, 10), name: 'New page', icon: 'home', items: [] }); drawPages(); } }, 'Add page'));
-  };
-  drawPages();
-
-  const out = h('div');
-  const name = h('input', { type: 'text', id: 'd-name', value: device.name, maxlength: '64' });
-  render(
-    h('h1', {}, device.name),
-    h('label', { for: 'd-name' }, 'Name'),
-    name,
-    h('h2', {}, 'Home panels'),
-    selects,
-    h('h2', {}, 'Tiles and menu pages'),
-    h('p', { class: 'muted' }, '“Home” puts it in the tile row, in the order you tap (six fit). “Menu” shows it on the lights, climate, Flows or music page.'),
-    entities.length ? list : h('p', { class: 'notice' }, 'Nothing to show yet. Add an integration first.'),
-    h('h2', {}, 'Own pages'),
-    h('p', { class: 'muted' }, 'Extra pages in the screen\'s side rail, for what doesn\'t fit on the home page. Devices on a page can be controlled from it.'),
-    pageList,
-    h('div', { class: 'actions' },
-      h('button', { class: 'primary', onclick: async () => {
-        try {
-          const n = name.value.trim();
-          if (!n) throw new Error('Give the screen a name.');
-          if (pages.some((pg) => !pg.name.trim())) throw new Error('Every page needs a name.');
-          await api('PUT', `/devices/${id}`, { name: n, tiles, more: [...more], panels, pages });
-          location.hash = '#/';
-        } catch (e) { out.replaceChildren(errorBox(e)); }
-      } }, 'Save'),
-      h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')),
-    out,
-  );
+  render(top, editor);
 }
 
 // What an integration brings: its status, its devices with their current values,
@@ -621,6 +838,9 @@ function integrationForm(kind, existing) {
 // ------------------------------------------------------------- router
 
 async function route() {
+  leaveGuard = null;
+  window.onbeforeunload = null;
+  main.classList.remove('wide');
   try {
     const status = await api('GET', '/status');
     document.getElementById('who').textContent = status.admin ? status.admin.name : '';
@@ -647,5 +867,9 @@ async function route() {
   }
 }
 
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => {
+  if (ignoreHash) { ignoreHash = false; return; }
+  if (leaveGuard && !leaveGuard()) return;
+  route();
+});
 route();
