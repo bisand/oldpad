@@ -63,6 +63,7 @@ vocabulary the tablet understands:
 | `measure_humidity`, `measure_co2`, `measure_wind_strength` (km/h) | number | climate panel |
 | `speaker_playing`, `volume_set` (0–1) | bool, number | music card controls |
 | `speaker_track`, `speaker_artist` | string | music card text |
+| `speaker_art` | image key for `image()` | cover or station logo on the music card, fetched through `/api/image/<integration>/<key>` |
 | `favourites` / `play_favourite` | `[{id,title}]` / write-only id | favourite buttons |
 | `add_favourite` | write-only id of a search result | ☆ on a search result saves it as a favourite |
 | `speaker_group` | id of the room this one plays with (itself when alone or leading) | music page: tick rooms in or out of a group. Set it to another room's id to join that room's group, or to the room's own id to leave. A screen may only group rooms it controls. |

@@ -8,6 +8,7 @@
   'use strict';
 
   var TOKEN_KEY = 'oldpad.token';
+  var THEME_KEY = 'oldpad.theme';
   // ?preview=<screen id>: an admin looking at a screen from the admin page. Read only.
   var PREVIEW = (/[?&]preview=([A-Za-z0-9]+)/.exec(window.location.search) || [])[1] || null;
 
@@ -21,14 +22,14 @@
     indoor: 'Inne', outdoor: 'Ute', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -83,7 +84,8 @@
     pause: 'M7 5h3v14H7zM14 5h3v14h-3z',
     flame: 'M12 22a6 6 0 0 0 6-6c0-4-3-6-4-10-2 2-3 4-3 6-1-1-2-2-2-4-2 2-3 5-3 8a6 6 0 0 0 6 6z',
     plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
-    door: 'M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M15 12h.01'
+    door: 'M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M15 12h.01',
+    cog: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.7 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.7 1-.5 2.4h-3.4l-.5-2.4-1.7-1-2.3.8-1.7-2.9 1.8-1.6v-2L4.1 8.5l1.7-2.9 2.3.8 1.7-1z'
   };
 
   function icon(name, filled) {
@@ -229,7 +231,7 @@
         }
       }
       var i, k;
-      layout = { tiles: [], more: [], panels: {}, pages: [] };
+      layout = { tiles: [], more: [], panels: {}, pages: [], name: data.device ? data.device.name : '' };
       for (i = 0; i < data.tiles.length; i++) { layout.tiles.push(keep(data.tiles[i])); }
       for (i = 0; i < data.more.length; i++) { layout.more.push(keep(data.more[i])); }
       for (k in data.panels) { if (data.panels.hasOwnProperty(k)) { layout.panels[k] = keep(data.panels[k]); } }
@@ -409,7 +411,9 @@
     if (!room) { return ''; }
     var lead = leader(room), playing = val(lead, 'speaker_playing') === true;
     var title = val(lead, 'speaker_track') || T.nothing, sub = val(lead, 'speaker_artist') || '';
-    return '<div class="card music' + (favCount ? '' : ' short') + '"><div class="art">' + icon('radio') + '</div>' +
+    var art = val(lead, 'speaker_art');
+    var artHtml = art ? '<img src="/api/image/' + esc(lead.id.slice(0, lead.id.indexOf(':'))) + '/' + esc(art) + '" alt="">' : icon('radio');
+    return '<div class="card music' + (favCount ? '' : ' short') + '"><div class="art">' + artHtml + '</div>' +
       '<div class="now-playing"><div class="sub">' + esc(groupName(groupOf(room))) + '</div><div class="np-title">' + esc(title) + '</div><div class="np-sub sub">' + esc(sub) + '</div></div>' +
       '<span class="play" data-act="play" data-id="' + esc(lead.id) + '">' + icon(playing ? 'pause' : 'play', true) + '</span>' +
       (withVol ? '<div class="vol">' + volHtml(room) + '</div>' : '') +
@@ -534,6 +538,19 @@
     });
   }
 
+  // This screen's own choices, kept on the screen itself.
+  function myTheme() { return load(THEME_KEY) || 'auto'; }
+
+  function settingsPage() {
+    var opts = [['auto', T.themeAuto], ['day', T.themeDay], ['night', T.themeNight]], html = '', i;
+    for (i = 0; i < opts.length; i++) {
+      html += '<span class="fav' + (myTheme() === opts[i][0] ? ' on' : '') + '" data-act="theme" data-theme="' + opts[i][0] + '">' + opts[i][1] + '</span>';
+    }
+    return '<div class="card"><span class="label-s">' + T.theme + '</span><div class="choices">' + html + '</div></div>' +
+      '<div class="card"><span class="label-s">' + T.thisScreen + '</span><p class="big-s">' + esc(layout.name || '') + '</p>' +
+      '<span class="fav" data-act="reload">' + T.reload + '</span></div>';
+  }
+
   function weatherPage() {
     var s = series(), now = new Date().getTime() / 1000, hours = '', days = '', n = 0, i, d, st;
     for (i = 0; i < s.length && n < 12; i++) {
@@ -579,6 +596,7 @@
     if (page === 'climate') { return '<div class="row">' + climateCard('w100') + '</div>' + tilesHtml(byClass(['thermostat', 'heater', 'sensor']), true); }
     if (page === 'flows') { return tilesHtml(byClass(['button']), true); }
     if (page === 'weather') { return weatherPage(); }
+    if (page === 'settings') { return settingsPage(); }
     return homePage();
   }
 
@@ -597,6 +615,7 @@
       p = layout.pages[i];
       rail += '<a data-act="page" data-page="' + esc(p.id) + '" class="own' + (p.id === page ? ' on' : '') + '">' + icon(p.icon) + '<span class="rail-name">' + esc(p.name) + '</span></a>';
     }
+    rail += '<a data-act="page" data-page="settings" class="cog' + (page === 'settings' ? ' on' : '') + '">' + icon('cog') + '</a>';
     $('rail').innerHTML = rail;
     $('page').innerHTML = pageHtml();
     tick();
@@ -665,6 +684,11 @@
       c.value = !prev;
       render();
       set(e, 'speaker_playing', c.value, prev);
+    } else if (act === 'theme') {
+      save(THEME_KEY, el.getAttribute('data-theme'));
+      render();
+    } else if (act === 'reload') {
+      window.location.reload();
     } else if (act === 'clear') {
       results = null;
       query = '';
@@ -728,7 +752,9 @@
     // The admin's hours; a window may wrap past midnight (e.g. 22 to 6).
     var h = d.getHours(), a = SETTINGS.day_start, b = SETTINGS.day_end;
     var inWindow = a <= b ? h >= a && h < b : h >= a || h < b;
-    var day = SETTINGS.theme === 'day' || (SETTINGS.theme === 'auto' && inWindow);
+    // This screen's own choice wins over the household's.
+    var theme = load(THEME_KEY) && load(THEME_KEY) !== 'auto' ? load(THEME_KEY) : SETTINGS.theme;
+    var day = theme === 'day' || (theme === 'auto' && inWindow);
     document.body.className = day ? 'day' : 'night';
   }
 

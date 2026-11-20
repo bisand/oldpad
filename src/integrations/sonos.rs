@@ -249,6 +249,7 @@ struct Now {
     volume: f64,
     title: String,
     subtitle: String,
+    art: String, // absolute image URL, or empty
 }
 
 /// What is playing, from the room's coordinator, and the room's own volume.
@@ -269,7 +270,16 @@ fn now_playing(room: &Room) -> Result<Now, String> {
     } else {
         (tag(&track, "dc:title").unwrap_or_default(), tag(&track, "dc:creator").unwrap_or_default())
     };
-    Ok(Now { playing: matches!(state.as_str(), "PLAYING" | "TRANSITIONING"), volume: volume / 100.0, title, subtitle })
+    // The track's cover, else the station's logo; speakers give their own as a path.
+    let art = [tag(&track, "upnp:albumArtURI"), tag(&media, "upnp:albumArtURI")].into_iter().flatten().find(|u| !u.is_empty()).unwrap_or_default();
+    let art = if art.starts_with('/') { format!("http://{}:1400{art}", room.coordinator) } else { art };
+    let art = if art.starts_with("http://") || art.starts_with("https://") { art } else { String::new() };
+    Ok(Now { playing: matches!(state.as_str(), "PLAYING" | "TRANSITIONING"), volume: volume / 100.0, title, subtitle, art })
+}
+
+/// An opaque name for an image URL: the screen asks for this, never for a URL.
+fn art_key(url: &str) -> String {
+    if url.is_empty() { String::new() } else { crate::util::sha256_hex(url)[..16].to_string() }
 }
 
 fn entity(room: &Room, now: &Now, favs: &[Favourite]) -> Entity {
@@ -281,6 +291,7 @@ fn entity(room: &Room, now: &Now, favs: &[Favourite]) -> Entity {
     caps.insert("speaker_artist".to_string(), ro(json!(now.subtitle)));
     caps.insert("favourites".to_string(), ro(json!(favs.iter().map(|f| json!({ "id": f.id, "title": f.title })).collect::<Vec<_>>())));
     caps.insert("play_favourite".to_string(), Capability::new(Value::Null, true));
+    caps.insert("speaker_art".to_string(), ro(json!(art_key(&now.art))));
     caps.insert("add_favourite".to_string(), Capability::new(Value::Null, true));
     // The room whose group this one plays with; itself when it plays alone or leads.
     caps.insert("speaker_group".to_string(), Capability::new(json!(room.coordinator_uuid), true));
@@ -415,6 +426,8 @@ struct State {
     rooms: Vec<Room>,
     favs: Vec<Favourite>,
     entities: Vec<Entity>,
+    /// Images the screens may fetch through oldpad: key → URL. Recent ones only.
+    art: Vec<(String, String)>,
 }
 
 struct Sonos {
@@ -448,11 +461,15 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
         let s = state.lock().unwrap();
         (s.rooms.clone(), s.favs.clone())
     };
+    let mut arts = Vec::new();
     let mut fresh = Vec::new();
     let mut all_answered = true;
     for room in &rooms {
         match now_playing(room) {
-            Ok(now) => fresh.push(entity(room, &now, &favs)),
+            Ok(now) => {
+                arts.push((art_key(&now.art), now.art.clone()));
+                fresh.push(entity(room, &now, &favs))
+            }
             Err(e) => {
                 all_answered = false;
                 eprintln!("sonos: {}: {e}", room.name);
@@ -474,7 +491,13 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
         }
     }
     let reshaped = s.entities.len() != fresh.len();
-    *s = State { rooms, favs, entities: fresh };
+    let mut art = arts.into_iter().filter(|(k, _)| !k.is_empty()).collect::<Vec<_>>();
+    for old in std::mem::take(&mut s.art) {
+        if art.len() < 50 && !art.iter().any(|(k, _)| *k == old.0) {
+            art.push(old);
+        }
+    }
+    *s = State { rooms, favs, entities: fresh, art };
     drop(s);
     for (entity, capability, value) in changes {
         sink(Event::Changed { entity, capability, value });
@@ -487,7 +510,7 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
 
 fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
     let seeds = seeds(config)?;
-    let state = Arc::new(Mutex::new(State { rooms: vec![], favs: vec![], entities: vec![] }));
+    let state = Arc::new(Mutex::new(State { rooms: vec![], favs: vec![], entities: vec![], art: vec![] }));
     refresh(&seeds, &state, &(Arc::new(|_| {}) as Sink), true)?;
     let rooms: Vec<String> = state.lock().unwrap().rooms.iter().map(|r| format!("{} {}", r.name, r.host)).collect();
     eprintln!("sonos: {} rooms: {}", rooms.len(), rooms.join(", "));
@@ -583,6 +606,16 @@ impl Instance for Sonos {
         found.splice(0..0, results.iter().map(|(f, _)| f.clone()));
         found.truncate(300);
         Ok(results.iter().map(|(f, kind)| json!({ "id": f.id, "title": f.title, "sub": f.sub, "kind": kind })).collect())
+    }
+
+    fn image(&self, key: &str) -> Result<(String, Vec<u8>), String> {
+        let url = self.state.lock().unwrap().art.iter().find(|(k, _)| k == key).map(|(_, u)| u.clone()).ok_or("no such image")?;
+        let res = request(&url, "GET", "", &[("Accept", "image/*")], None)?;
+        let kind = res.headers.get("content-type").cloned().unwrap_or_default();
+        if res.status != 200 || !kind.starts_with("image/") || res.body.len() > 2_000_000 {
+            return Err(format!("image not available (HTTP {})", res.status));
+        }
+        Ok((kind, res.body))
     }
 
     fn accounts(&self) -> Vec<Value> {

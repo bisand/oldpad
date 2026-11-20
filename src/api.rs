@@ -38,6 +38,12 @@ pub fn handle(app: &Arc<App>, req: &Request) -> Response {
         ("GET", ["admin.js"]) => asset("text/javascript; charset=utf-8", ADMIN_JS),
         ("GET", ["admin.css"]) => asset("text/css; charset=utf-8", ADMIN_CSS),
         ("GET", ["healthz"]) => Response::new(200, "text/plain", "ok"),
+        // Album art and the like, by a key the integration put in a capability. No sign-in:
+        // img tags can't send one, and only images an integration is showing can be fetched.
+        ("GET", ["api", "image", iid, key]) => match app.registry.image(iid, key) {
+            Ok((kind, bytes)) => Response::new(200, &kind, bytes).header("Cache-Control", "max-age=86400"),
+            Err(e) => Response::error(404, &e),
+        },
         (_, ["api", "admin", rest @ ..]) => admin(app, req, m, rest).unwrap_or_else(|e| e),
         (_, ["api", rest @ ..]) => tablet(app, req, m, rest).unwrap_or_else(|e| e),
         _ => Response::error(404, "Not found"),

@@ -180,3 +180,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 
 /* iOS only reports taps on elements that look clickable. */
 [data-act] { cursor: pointer; }
+
+/* ---------- album art, settings cog, on-screen settings ---------- */
+.art { overflow: hidden; }
+.art img { display: block; width: 64px; height: 64px; }
+.rail a.cog { position: absolute; left: 12px; bottom: 14px; margin: 0; }
+.choices { font-size: 0; margin-top: 10px; }
+.choices .fav { width: 32%; margin-right: 2%; font-size: 17px; padding: 14px 4px; }
+.choices .fav:last-child { margin-right: 0; }
+.big-s { font-size: 22px; margin: 6px 0 14px; }

@@ -94,6 +94,10 @@ pub trait Instance: Send + Sync {
     fn search(&self, _entity: &str, _query: &str) -> Result<Vec<Value>, String> {
         Err("search is not supported here".into())
     }
+    /// An image the instance named in a capability (album art): `(content type, bytes)`.
+    fn image(&self, _key: &str) -> Result<(String, Vec<u8>), String> {
+        Err("no images here".into())
+    }
     /// Accounts the admin can connect, e.g. music services: `[{id, name, connected}]`.
     fn accounts(&self) -> Vec<Value> {
         vec![]
@@ -317,6 +321,10 @@ impl Registry {
         }
         // The lock is not held here: `set` talks to the network.
         inst.set(eid, capability, value)
+    }
+
+    pub fn image(&self, id: &str, key: &str) -> Result<(String, Vec<u8>), String> {
+        self.instance(id).ok_or("integration is not running")?.image(key)
     }
 
     pub fn accounts(&self, id: &str) -> Vec<Value> {
