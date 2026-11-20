@@ -733,6 +733,20 @@
   }
 
   document.addEventListener('click', onTap, false);
+  // Old iOS sends no click for taps on plain elements, and waits 300 ms when it does:
+  // treat a touch that ends where it began as the tap. A moved finger is a scroll.
+  var touchAt = null;
+  document.addEventListener('touchstart', function (ev) {
+    var t = ev.touches[0];
+    touchAt = ev.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+  }, false);
+  document.addEventListener('touchend', function (ev) {
+    var t = ev.changedTouches[0];
+    if (!touchAt || !actionOf(ev.target) || Math.abs(t.clientX - touchAt.x) > 10 || Math.abs(t.clientY - touchAt.y) > 10) { return; }
+    touchAt = null;
+    ev.preventDefault(); // or the browser sends its own click after this
+    onTap(ev);
+  }, false);
   document.addEventListener('submit', function (ev) { ev.preventDefault(); runSearch(); }, false);
   document.addEventListener('focus', function (ev) { if (ev.target && ev.target.id === 'q') { typing = true; } }, true);
   document.addEventListener('blur', function (ev) {
