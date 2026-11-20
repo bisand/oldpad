@@ -15,7 +15,8 @@ function h(tag, attrs = {}, ...children) {
 }
 
 function render(...nodes) {
-  main.replaceChildren(...nodes);
+  // Same rules as h(): nested arrays flatten, null/false render nothing.
+  main.replaceChildren(...nodes.flat(Infinity).filter((n) => n != null && n !== false));
   window.scrollTo(0, 0);
 }
 
@@ -208,7 +209,7 @@ async function deviceView(id) {
         draw();
       } }, h('span', { class: 'n' }, i >= 0 ? String(i + 1) : ''), h('span', {}, e.name, h('span', { class: 'small muted' }, ` · ${e.class}`)));
       const header = e.zone !== zone ? h('div', { class: 'zone' }, (zone = e.zone) || 'No room') : null;
-      return [header, row];
+      return header ? [header, row] : [row];
     }));
   };
   draw();
