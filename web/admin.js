@@ -110,12 +110,14 @@ function setupView() {
       route();
     } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
   } }, 'Create passkey');
+  const pairing = location.hash.startsWith('#/pair/');
   render(
     h('h1', {}, 'Welcome to oldpad'),
+    pairing ? h('p', { class: 'notice' }, 'Before you can approve this screen, create the admin account. You will come straight back to the pairing afterwards.') : null,
     h('p', {}, 'Create the first admin. You will sign in with a passkey (Face ID, Touch ID or your device PIN) — there is no password.'),
     h('label', { for: 'name' }, 'Your name'), name,
     h('label', { for: 'code' }, 'Setup code'), code,
-    h('p', { class: 'help' }, 'Printed in the server log when oldpad starts for the first time.'),
+    h('p', { class: 'help' }, 'Printed in the server log when oldpad starts for the first time (kubectl logs, docker logs). This is not the code shown on the screen you are pairing.'),
     h('div', { class: 'actions' }, go), out,
   );
 }
