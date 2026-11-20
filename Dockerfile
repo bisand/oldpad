@@ -1,0 +1,15 @@
+# Static musl binary on an empty base image: no shell, no package manager,
+# nothing to patch but oldpad itself.
+FROM rust:1.98-alpine AS build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src src
+COPY web web
+RUN cargo build --release --locked
+
+FROM scratch
+COPY --from=build /src/target/release/oldpad /oldpad
+ENV OLDPAD_BIND=0.0.0.0:8080 OLDPAD_DATA_DIR=/data
+USER 65534:65534
+EXPOSE 8080
+ENTRYPOINT ["/oldpad"]
