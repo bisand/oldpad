@@ -137,14 +137,24 @@ fn load(api: &Api) -> Result<Vec<Entity>, String> {
         .into_iter()
         .filter_map(|d| map_device(d, &zones))
         .collect();
-    // Flows are optional: a key without the Flow permissions still gives devices.
+    out.extend(load_flows(api));
+    Ok(out)
+}
+
+/// The Flows that can be started. Optional: a key without the Flow permissions still gives devices.
+fn load_flows(api: &Api) -> Vec<Entity> {
+    let mut out = Vec::new();
     if let Ok(flows) = api.call("GET", "/api/manager/flow/flow", None) {
         out.extend(items(&flows).into_iter().filter_map(|f| map_flow(f, "flow-")));
     }
     if let Ok(flows) = api.call("GET", "/api/manager/flow/advancedflow", None) {
         out.extend(items(&flows).into_iter().filter_map(|f| map_flow(f, "aflow-")));
     }
-    Ok(out)
+    out
+}
+
+fn is_flow(e: &Entity) -> bool {
+    e.id.starts_with("flow-") || e.id.starts_with("aflow-")
 }
 
 struct Homey {
@@ -261,8 +271,9 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
     wait_for(&mut ws, deadline(), |p| p.kind == '0' && p.nsp == nsp)?;
 
     // Subscribe to the devices manager (for added/removed devices) and each device.
-    let ids: Vec<String> = entities.lock().unwrap().iter().filter(|e| !e.id.contains("flow-")).map(|e| e.id.clone()).collect();
-    let mut uris = vec!["homey:manager:devices".to_string()];
+    let ids: Vec<String> = entities.lock().unwrap().iter().filter(|e| !is_flow(e)).map(|e| e.id.clone()).collect();
+    // The Flow manager too, so a Flow made or renamed in Homey shows up without a restart.
+    let mut uris = vec!["homey:manager:devices".to_string(), "homey:manager:flow".to_string()];
     uris.extend(ids.iter().map(|id| format!("homey:device:{id}")));
     for (i, uri) in uris.iter().enumerate() {
         ws.send(&emit(&nsp, 10 + i as u64, json!(["subscribe", uri])))?;
@@ -297,6 +308,18 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
                 c.value = value.clone();
                 drop(list);
                 sink(Event::Changed { entity: id.to_string(), capability: cap.to_string(), value });
+            }
+        } else if uri == "homey:manager:flow" && event.contains("flow.") {
+            // Flows also report every run; reload only when the startable list really changed.
+            let fresh = load_flows(api);
+            let mut list = entities.lock().unwrap();
+            let names = |l: &mut dyn Iterator<Item = &Entity>| l.map(|e| (e.id.clone(), e.name.clone())).collect::<Vec<_>>();
+            if names(&mut list.iter().filter(|e| is_flow(e))) != names(&mut fresh.iter()) {
+                list.retain(|e| !is_flow(e));
+                list.extend(fresh);
+                drop(list);
+                eprintln!("homey: flows changed");
+                sink(Event::Reloaded);
             }
         } else if uri == "homey:manager:devices" && matches!(event, "device.create" | "device.delete") {
             // A new or removed device: reconnect, which reloads and resubscribes.
