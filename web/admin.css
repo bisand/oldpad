@@ -43,3 +43,4 @@ select { width: 100%; padding: 10px 12px; font: inherit; border-radius: 8px; bor
 .notice { padding: 10px 12px; border-radius: 8px; background: var(--warm); margin: 12px 0; }
 .notice.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .notice.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.account { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line, #8883); font-size: 15px; }

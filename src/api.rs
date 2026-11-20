@@ -332,7 +332,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .iter()
                 .filter_map(|i| {
                     let kind = app.registry.kind(&i.kind)?;
-                    Some(json!({ "id": i.id, "type": i.kind, "typeName": kind.name, "name": i.name, "config": redact(kind, &i.config), "status": app.registry.status(&i.id) }))
+                    Some(json!({ "id": i.id, "type": i.kind, "typeName": kind.name, "name": i.name, "config": redact(kind, &i.config), "status": app.registry.status(&i.id), "accounts": app.registry.accounts(&i.id) }))
                 })
                 .collect::<Vec<_>>())))
         }
@@ -343,6 +343,11 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 Ok(msg) => json!({ "ok": true, "message": msg }),
                 Err(e) => json!({ "ok": false, "message": e }),
             }))
+        }
+        ("POST", ["integrations", id, "connect"]) => {
+            let body = req.json()?;
+            let url = app.registry.connect(id, body["account"].as_str().unwrap_or("")).map_err(|e| Response::error(502, &e))?;
+            Ok(Response::ok(json!({ "url": url })))
         }
         ("POST", ["integrations"]) | ("PUT", ["integrations", _]) => {
             let body = req.json()?;

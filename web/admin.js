@@ -132,6 +132,32 @@ function loginView() {
   render(h('h1', {}, 'Sign in'), h('div', { class: 'actions' }, go), out);
 }
 
+// A music service or similar the integration can sign in to. The sign-in page opens
+// in a new tab; the server collects the token itself, so we only wait and refresh.
+function accountRow(i, a) {
+  const status = h('span', { class: a.connected ? 'ok' : 'muted' }, a.connected ? 'Connected' : 'Not connected');
+  const go = h('button', { onclick: async () => {
+    const tab = window.open('about:blank', '_blank'); // before awaiting, or it counts as a popup
+    go.disabled = true;
+    try {
+      const { url } = await api('POST', `/integrations/${i.id}/connect`, { account: a.id });
+      if (tab) tab.location = url; else location.href = url;
+      status.textContent = 'Waiting for you to sign in…';
+      for (let n = 0; n < 100; n++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const now = (await api('GET', '/integrations')).find((x) => x.id === i.id);
+        if (now?.accounts?.find((x) => x.id === a.id)?.connected) { route(); return; }
+      }
+      status.textContent = 'Sign-in timed out. Try again.';
+    } catch (e) {
+      tab?.close();
+      status.textContent = e.message;
+    }
+    go.disabled = false;
+  } }, a.connected ? 'Reconnect' : 'Connect');
+  return h('div', { class: 'row account' }, h('div', {}, a.name, ' · ', status), go);
+}
+
 async function homeView() {
   const [devices, integrations] = await Promise.all([api('GET', '/devices'), api('GET', '/integrations')]);
   render(
@@ -157,7 +183,8 @@ async function homeView() {
           h('button', { class: 'danger', onclick: async () => {
             if (!confirm(`Remove ${i.name}? Its tiles will show as unavailable.`)) return;
             await api('DELETE', `/integrations/${i.id}`); route();
-          } }, 'Remove'))))),
+          } }, 'Remove'))),
+      (i.accounts || []).map((a) => accountRow(i, a)))),
     h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/integration/new') }, 'Add integration')),
     h('h2', {}, 'Account'),
     h('div', { class: 'actions' },

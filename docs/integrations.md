@@ -37,7 +37,9 @@ trait Instance: Send + Sync {
 }
 ```
 
-An instance may also implement `search(entity, query)`, returning `[{id, title, sub, kind}]` whose ids work with `play_favourite` and `add_favourite`. The tablet's music page shows a search box for it. Sonos searches the open radio-browser.info directory.
+An instance may also implement `search(entity, query)`, returning `[{id, title, sub, kind}]` whose ids work with `play_favourite` and `add_favourite`. The tablet's music page shows a search box for it. Sonos searches the open radio-browser.info directory, and Spotify once connected.
+
+**Accounts.** An instance can offer accounts to sign in to (`accounts()` returns `[{id, name, connected}]`); the admin page shows a Connect button for each. `connect(account)` returns the URL where the admin signs in and finishes in the background. Keep what it earns (a token) with `Event::Remember { key, value }`: the key must start with `_`. Such keys are stored with the integration's config, handed to `start` on the next start, kept when the admin edits the fields, and never sent to the browser. Sonos connects Spotify this way, through Sonos's own music-service sign-in (`src/integrations/smapi.rs`).
 
 `start` may block (it runs on its own thread) and should fail with a clear
 message the admin can act on. Push live changes through the `Sink`:

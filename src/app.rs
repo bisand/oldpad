@@ -116,6 +116,18 @@ impl App {
                     app.send_where(|c| c.tiles.contains(&id), &msg);
                 }
                 Event::Reloaded => app.send_where(|_| true, &sse("reload", &json!({}))),
+                Event::Remember { key, value } => {
+                    if !key.starts_with('_') {
+                        return;
+                    }
+                    let mut store = app.store.lock().unwrap();
+                    if let Some(i) = store.data.integrations.iter_mut().find(|i| i.id == integration_id) {
+                        i.config.insert(key, value);
+                        if let Err(e) = store.save() {
+                            eprintln!("integration {integration_id}: could not save: {e}");
+                        }
+                    }
+                }
             }
         })
     }

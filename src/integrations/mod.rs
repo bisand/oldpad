@@ -12,6 +12,7 @@ pub mod demo;
 pub mod homey;
 pub mod influx;
 pub mod met;
+pub mod smapi;
 pub mod sonos;
 
 use serde::Serialize;
@@ -77,6 +78,10 @@ pub enum Event {
     Changed { entity: String, capability: String, value: Value },
     /// The entity list changed shape (added, removed, renamed).
     Reloaded,
+    /// Keep `value` in this integration's stored config under `key`, which must
+    /// start with `_`: state the integration earned (a service token), never
+    /// shown to the browser and kept when the admin edits the fields.
+    Remember { key: String, value: Value },
 }
 
 pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
@@ -88,6 +93,15 @@ pub trait Instance: Send + Sync {
     /// work with `play_favourite` and `add_favourite`.
     fn search(&self, _entity: &str, _query: &str) -> Result<Vec<Value>, String> {
         Err("search is not supported here".into())
+    }
+    /// Accounts the admin can connect, e.g. music services: `[{id, name, connected}]`.
+    fn accounts(&self) -> Vec<Value> {
+        vec![]
+    }
+    /// Starts connecting `account` and returns the URL where the admin signs in.
+    /// The instance finishes in the background and keeps the result with `Event::Remember`.
+    fn connect(&self, _account: &str) -> Result<String, String> {
+        Err("nothing to connect".into())
     }
     /// Stop background work. Called before the instance is dropped.
     fn stop(&self);
@@ -153,12 +167,17 @@ pub fn validate(kind: &Kind, input: &Map<String, Value>, previous: Option<&Map<S
             out.insert(f.key.to_string(), v);
         }
     }
+    // State the integration remembered survives edits of the fields.
+    for (k, v) in previous.into_iter().flatten().filter(|(k, _)| k.starts_with('_')) {
+        out.insert(k.clone(), v.clone());
+    }
     Ok(out)
 }
 
 /// The config as the admin UI may see it: secrets replaced by a flag.
 pub fn redact(kind: &Kind, config: &Map<String, Value>) -> Map<String, Value> {
     let mut out = config.clone();
+    out.retain(|k, _| !k.starts_with('_'));
     for f in kind.fields.iter().filter(|f| f.kind == FieldKind::Secret) {
         if out.contains_key(f.key) {
             out.insert(f.key.to_string(), Value::Bool(true));
@@ -300,6 +319,14 @@ impl Registry {
         inst.set(eid, capability, value)
     }
 
+    pub fn accounts(&self, id: &str) -> Vec<Value> {
+        self.instance(id).map(|i| i.accounts()).unwrap_or_default()
+    }
+
+    pub fn connect(&self, id: &str, account: &str) -> Result<String, String> {
+        self.instance(id).ok_or("integration is not running")?.connect(account)
+    }
+
     pub fn search(&self, full_id: &str, query: &str) -> Result<Vec<Value>, String> {
         let (iid, eid) = full_id.split_once(':').ok_or("bad entity id")?;
         self.instance(iid).ok_or("integration is not running")?.search(eid, query)
@@ -362,6 +389,12 @@ mod tests {
         let edited = validate(&k, &map(json!({"url": "http://h2", "key": ""})), Some(&ok)).unwrap();
         assert_eq!(edited["key"], "s3");
         assert_eq!(redact(&k, &edited)["key"], true);
+        // Remembered state (a service token) survives edits, can't be set from the form, and never leaves.
+        let mut stored = edited.clone();
+        stored.insert("_token".into(), json!({"t": "secret"}));
+        let again = validate(&k, &map(json!({"url": "http://h3", "key": "", "_token": "forged", "_other": 1})), Some(&stored)).unwrap();
+        assert_eq!((again["_token"].clone(), again.get("_other")), (json!({"t": "secret"}), None));
+        assert!(!redact(&k, &again).contains_key("_token"));
         assert!(validate(&k, &map(json!({"url": "ftp://h", "key": "x"})), None).is_err());
         assert!(validate(&k, &map(json!({"key": "x"})), None).is_err());
         assert!(validate(&k, &map(json!({"url": "http://h", "key": "x", "n": "two"})), None).is_err());

@@ -2,6 +2,7 @@
 //! room: play/pause, volume, what is playing, and the household's Sonos
 //! favourites. Polled every few seconds; no cloud, no account.
 
+use super::smapi::{self, Account, SPOTIFY_URL};
 use super::{Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
 use crate::client::request;
 use crate::util::{escape_xml, percent_encode, unescape_xml};
@@ -34,6 +35,8 @@ const AV: (&str, &str) = ("/MediaRenderer/AVTransport/Control", "AVTransport");
 const RC: (&str, &str) = ("/MediaRenderer/RenderingControl/Control", "RenderingControl");
 const CD: (&str, &str) = ("/MediaServer/ContentDirectory/Control", "ContentDirectory");
 const ZT: (&str, &str) = ("/ZoneGroupTopology/Control", "ZoneGroupTopology");
+const DP: (&str, &str) = ("/DeviceProperties/Control", "DeviceProperties");
+const SP: (&str, &str) = ("/SystemProperties/Control", "SystemProperties");
 
 fn base(host: &str) -> String {
     format!("http://{host}:1400")
@@ -57,7 +60,7 @@ fn soap(host: &str, (path, service): (&str, &str), action: &str, args: &[(&str, 
 }
 
 /// Text of the first `<name>…</name>` (or `<name attr…>…</name>`), XML-unescaped.
-fn tag(xml: &str, name: &str) -> Option<String> {
+pub(super) fn tag(xml: &str, name: &str) -> Option<String> {
     let open = format!("<{name}");
     let mut from = 0;
     while let Some(i) = xml[from..].find(&open) {
@@ -202,12 +205,42 @@ fn parse_stations(list: &[Value]) -> Vec<Favourite> {
     out
 }
 
+/// Which of the household's Spotify accounts plays (`sn=` in its favourites); the most used one.
+fn spotify_sn(favs: &[Favourite]) -> String {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for f in favs.iter().filter(|f| f.uri.contains("sid=9&")) {
+        let Some(sn) = f.uri.split("sn=").nth(1).map(|v| v.split('&').next().unwrap_or("").to_string()) else { continue };
+        match counts.iter_mut().find(|(s, _)| *s == sn) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((sn, 1)),
+        }
+    }
+    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    // shortcut: with no Spotify favourite yet, guess the first account; add one in the Sonos app if playing fails.
+    counts.into_iter().next().map_or("1".into(), |(sn, _)| sn)
+}
+
+/// A Spotify search result as something Sonos can play, the way its own favourites are written.
+fn spotify_item(item: &smapi::Item, sn: &str) -> Favourite {
+    let enc = item.id.replace(':', "%3a");
+    let (uri, item_id, class) = match item.kind {
+        "track" => (format!("x-sonos-spotify:{enc}?sid=9&flags=8224&sn={sn}"), format!("00032020{enc}"), "object.item.audioItem.musicTrack"),
+        "album" => (format!("x-rincon-cpcontainer:1004206c{enc}?sid=9&flags=8300&sn={sn}"), format!("1004206c{enc}"), "object.container.album.musicAlbum"),
+        _ => (format!("x-rincon-cpcontainer:1006206c{enc}?sid=9&flags=8300&sn={sn}"), format!("1006206c{enc}"), "object.container.playlistContainer"),
+    };
+    let meta = format!(
+        r#"{DIDL}<item id="{item_id}" parentID="" restricted="true"><dc:title>{}</dc:title><upnp:class>{class}</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON2311_X_#Svc2311-0-Token</desc></item></DIDL-Lite>"#,
+        escape_xml(&item.title)
+    );
+    Favourite { id: item.id.clone(), title: item.title.clone(), uri, meta, sub: item.sub.clone() }
+}
+
 /// A Sonos favourite for `f`, as CreateObject wants it in FV:2.
 fn favourite_didl(f: &Favourite) -> String {
     let scheme = f.uri.split(':').next().unwrap_or("");
     format!(
-        r#"{DIDL}<item id="" restricted="false" parentID="FV:2"><dc:title>{}</dc:title><upnp:class>object.itemobject.item.sonos-favorite</upnp:class><r:ordinal>-1</r:ordinal><res protocolInfo="{scheme}:*:*:*">{}</res><r:type>instantPlay</r:type><r:description>Radio</r:description><r:resMD>{}</r:resMD></item></DIDL-Lite>"#,
-        escape_xml(&f.title), escape_xml(&f.uri), escape_xml(&f.meta)
+        r#"{DIDL}<item id="" restricted="false" parentID="FV:2"><dc:title>{}</dc:title><upnp:class>object.itemobject.item.sonos-favorite</upnp:class><r:ordinal>-1</r:ordinal><res protocolInfo="{scheme}:*:*:*">{}</res><r:type>instantPlay</r:type><r:description>{}</r:description><r:resMD>{}</r:resMD></item></DIDL-Lite>"#,
+        escape_xml(&f.title), escape_xml(&f.uri), if f.uri.contains("sid=9&") { "Spotify" } else { "Radio" }, escape_xml(&f.meta)
     )
 }
 
@@ -390,6 +423,8 @@ struct Sonos {
     poke: Arc<AtomicBool>,
     regroup: Arc<AtomicUsize>,
     found: Mutex<Vec<Favourite>>, // recent search results, playable and saveable by id
+    spotify: Arc<Mutex<Option<Account>>>,
+    sink: Sink,
 }
 
 /// Speakers to ask for the topology: every room we know of, then the admin's seeds.
@@ -458,7 +493,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
     eprintln!("sonos: {} rooms: {}", rooms.len(), rooms.join(", "));
     let (stopped, poke) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
     let regroup = Arc::new(AtomicUsize::new(0));
-    let (st, stop, pk, rg) = (state.clone(), stopped.clone(), poke.clone(), regroup.clone());
+    let (st, stop, pk, rg, sk) = (state.clone(), stopped.clone(), poke.clone(), regroup.clone(), sink.clone());
     std::thread::spawn(move || {
         let mut last_full = Instant::now();
         let mut lost = false;
@@ -475,7 +510,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             // After a regrouping, re-read it for a few polls: Sonos takes a moment to settle.
             let settling = rg.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1)).is_ok();
             let full = lost || settling || last_full.elapsed() > Duration::from_secs(300);
-            match refresh(&seeds, &st, &sink, full) {
+            match refresh(&seeds, &st, &sk, full) {
                 Ok(all) => {
                     if full {
                         last_full = Instant::now();
@@ -489,7 +524,8 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             }
         }
     });
-    Ok(Box::new(Sonos { state, stopped, poke, regroup, found: Mutex::new(vec![]) }))
+    let spotify = config.get("_spotify").and_then(|v| serde_json::from_value::<Account>(v.clone()).ok());
+    Ok(Box::new(Sonos { state, stopped, poke, regroup, found: Mutex::new(vec![]), spotify: Arc::new(Mutex::new(spotify)), sink }))
 }
 
 impl Instance for Sonos {
@@ -498,15 +534,91 @@ impl Instance for Sonos {
     }
 
     fn search(&self, entity: &str, query: &str) -> Result<Vec<Value>, String> {
-        if !self.state.lock().unwrap().rooms.iter().any(|r| r.uuid == entity) {
-            return Err("no such room".into());
+        let sn = {
+            let s = self.state.lock().unwrap();
+            if !s.rooms.iter().any(|r| r.uuid == entity) {
+                return Err("no such room".into());
+            }
+            spotify_sn(&s.favs)
+        };
+        let account = self.spotify.lock().unwrap().clone();
+        // Radio and each Spotify category at once: one slow answer shouldn't stack up.
+        let (radio, music, account_after) = std::thread::scope(|scope| {
+            let radio = scope.spawn(|| search_radio(query));
+            let music = account.clone().map(|mut acc| {
+                scope.spawn(move || {
+                    let mut items = Vec::new();
+                    let mut errors = Vec::new();
+                    for category in ["track", "playlist", "album"] {
+                        match smapi::search(SPOTIFY_URL, &mut acc, category, query, 6) {
+                            Ok(found) => items.extend(found),
+                            Err(e) => errors.push(e),
+                        }
+                    }
+                    (items, errors, acc)
+                })
+            });
+            let radio = radio.join().unwrap_or_else(|_| Err("radio search failed".into()));
+            let (items, errors, acc) = music.map(|h| h.join().unwrap_or_else(|_| (vec![], vec!["Spotify search failed".into()], account.clone().unwrap()))).map_or((vec![], vec![], None), |(i, e, a)| (i, e, Some(a)));
+            (radio, (items, errors), acc)
+        });
+        // Spotify may have handed out a fresh token on the way: keep it.
+        if account_after.is_some() && account_after != account {
+            *self.spotify.lock().unwrap() = account_after.clone();
+            (self.sink)(Event::Remember { key: "_spotify".into(), value: json!(account_after) });
         }
-        let results = search_radio(query)?;
+        let (items, errors) = music;
+        for e in &errors {
+            eprintln!("sonos: {e}");
+        }
+        if items.is_empty() {
+            if let Err(e) = &radio {
+                return Err(errors.into_iter().next().unwrap_or_else(|| e.clone()));
+            }
+        }
+        let mut results: Vec<(Favourite, &str)> = items.iter().map(|i| (spotify_item(i, &sn), i.kind)).collect();
+        results.extend(radio.unwrap_or_default().into_iter().map(|f| (f, "radio")));
         let mut found = self.found.lock().unwrap();
-        found.retain(|f| !results.iter().any(|r| r.id == f.id));
-        found.splice(0..0, results.iter().cloned());
-        found.truncate(200);
-        Ok(results.iter().map(|f| json!({ "id": f.id, "title": f.title, "sub": f.sub, "kind": "radio" })).collect())
+        found.retain(|f| !results.iter().any(|(r, _)| r.id == f.id));
+        found.splice(0..0, results.iter().map(|(f, _)| f.clone()));
+        found.truncate(300);
+        Ok(results.iter().map(|(f, kind)| json!({ "id": f.id, "title": f.title, "sub": f.sub, "kind": kind })).collect())
+    }
+
+    fn accounts(&self) -> Vec<Value> {
+        vec![json!({ "id": "spotify", "name": "Spotify", "connected": self.spotify.lock().unwrap().is_some() })]
+    }
+
+    fn connect(&self, account: &str) -> Result<String, String> {
+        if account != "spotify" {
+            return Err("only Spotify can be connected so far".into());
+        }
+        let host = self.state.lock().unwrap().rooms.first().map(|r| r.host.clone()).ok_or("no speakers found")?;
+        let household = tag(&soap(&host, DP, "GetHouseholdID", &[])?, "CurrentHouseholdID").ok_or("the speaker did not say which household it is in")?;
+        let device = tag(&soap(&host, SP, "GetString", &[("VariableName", "R_TrialZPSerial")])?, "StringValue").ok_or("the speaker did not give its serial number")?;
+        let (url, code) = smapi::app_link(SPOTIFY_URL, &device, &household)?;
+        let (slot, sink) = (self.spotify.clone(), self.sink.clone());
+        std::thread::spawn(move || {
+            // The admin has a few minutes to sign in.
+            for _ in 0..120 {
+                std::thread::sleep(Duration::from_secs(5));
+                match smapi::device_token(SPOTIFY_URL, &device, &household, &code) {
+                    Ok(Some(acc)) => {
+                        eprintln!("sonos: Spotify connected");
+                        *slot.lock().unwrap() = Some(acc.clone());
+                        sink(Event::Remember { key: "_spotify".into(), value: json!(acc) });
+                        return;
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        eprintln!("sonos: Spotify sign-in: {e}");
+                        return;
+                    }
+                }
+            }
+            eprintln!("sonos: Spotify sign-in timed out");
+        });
+        Ok(url)
     }
 
     fn set(&self, entity: &str, capability: &str, value: &Value) -> Result<(), String> {
@@ -530,7 +642,7 @@ impl Instance for Sonos {
             "play_favourite" => {
                 let fav = fav.ok_or("no such favourite")?;
                 let c = &room.coordinator;
-                if fav.uri.starts_with("x-rincon-cpcontainer:") {
+                if fav.uri.starts_with("x-rincon-cpcontainer:") || fav.uri.starts_with("x-sonos-spotify:") {
                     // Playlists and albums go through the queue; only streams can be set directly.
                     soap(c, AV, "RemoveAllTracksFromQueue", &[("InstanceID", "0")])?;
                     let args = [("InstanceID", "0"), ("EnqueuedURI", fav.uri.as_str()), ("EnqueuedURIMetaData", fav.meta.as_str()), ("DesiredFirstTrackNumberEnqueued", "0"), ("EnqueueAsNext", "0")];
@@ -618,6 +730,20 @@ mod tests {
         let didl = favourite_didl(&s[1]);
         assert!(didl.contains(r#"<res protocolInfo="x-rincon-mp3radio:*:*:*">x-rincon-mp3radio://http://r.example/s</res>"#));
         assert!(didl.contains("&lt;dc:title&gt;Rock &amp;amp; &amp;lt;Roll&amp;gt;&lt;/dc:title&gt;"));
+    }
+
+    #[test]
+    fn plays_spotify_results_like_its_favourites() {
+        let fav = |uri: &str| Favourite { id: "x".into(), title: "x".into(), uri: uri.into(), meta: String::new(), sub: String::new() };
+        let favs = [fav("x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a1?sid=9&flags=8300&sn=4"), fav("x-sonos-spotify:spotify%3atrack%3a1?sid=9&flags=8224&sn=2"), fav("x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a2?sid=9&flags=8300&sn=2"), fav("x-rincon-mp3radio://x?sn=7")];
+        assert_eq!(spotify_sn(&favs), "2");
+        assert_eq!(spotify_sn(&[]), "1");
+        let track = spotify_item(&smapi::Item { id: "spotify:track:2Wf".into(), title: "Take <on> Me".into(), sub: "a-ha".into(), kind: "track" }, "2");
+        assert_eq!(track.uri, "x-sonos-spotify:spotify%3atrack%3a2Wf?sid=9&flags=8224&sn=2");
+        assert!(track.meta.contains(r#"<item id="00032020spotify%3atrack%3a2Wf""#) && track.meta.contains("<dc:title>Take &lt;on&gt; Me</dc:title>"));
+        let list = spotify_item(&smapi::Item { id: "spotify:playlist:37i".into(), title: "Mix".into(), sub: String::new(), kind: "playlist" }, "2");
+        assert_eq!(list.uri, "x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i?sid=9&flags=8300&sn=2");
+        assert!(favourite_didl(&list).contains("<r:description>Spotify</r:description>"));
     }
 
     #[test]

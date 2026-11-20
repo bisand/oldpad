@@ -170,3 +170,5 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 .star { position: absolute; right: 0; top: 4px; width: 46px; height: 46px; line-height: 46px; text-align: center; font-size: 26px; color: #8b8f98; }
 .star.on { color: #f0b54a; }
 .search input::-webkit-search-cancel-button, .search input::-webkit-search-decoration { -webkit-appearance: none; }
+.label-s.kind { margin: 14px 0 4px; }
+.search + .label-s.kind { margin-top: 0; }

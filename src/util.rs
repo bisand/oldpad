@@ -145,7 +145,33 @@ pub fn percent_encode(s: &str) -> String {
 }
 
 pub fn unescape_xml(s: &str) -> String {
-    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&")
+    // Numeric references first: `&amp;#65;` must stay the literal text `&#65;`.
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find("&#") {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 2..];
+        let decoded = after.find(';').filter(|&end| end <= 8).and_then(|end| {
+            let n = &after[..end];
+            let code = match n.strip_prefix('x').or_else(|| n.strip_prefix('X')) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok(),
+                None => n.parse().ok(),
+            };
+            code.and_then(char::from_u32).map(|c| (c, end))
+        });
+        match decoded {
+            Some((c, end)) => {
+                out.push(c);
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push_str("&#");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&")
 }
 
 pub fn escape_xml(s: &str) -> String {
@@ -189,6 +215,7 @@ mod tests {
         assert_eq!(percent_encode("SELECT \"a\" = 'b&c'"), "SELECT%20%22a%22%20%3D%20%27b%26c%27");
         assert_eq!(unescape_xml("&lt;a href=&quot;x&amp;y&quot;&gt;"), "<a href=\"x&y\">");
         assert_eq!(unescape_xml(&escape_xml("<&\">")), "<&\">");
+        assert_eq!(unescape_xml("Dinner &#127837;&#x1F377; &amp;#65; &#bad; &#"), "Dinner 🍝🍷 &#65; &#bad; &#");
     }
 
     #[test]
