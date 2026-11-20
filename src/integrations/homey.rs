@@ -129,16 +129,32 @@ fn map_flow(f: &Value, prefix: &str) -> Option<Entity> {
 }
 
 fn load(api: &Api) -> Result<Vec<Entity>, String> {
-    let zones: HashMap<String, String> = items(&api.call("GET", "/api/manager/zones/zone", None)?)
-        .into_iter()
-        .filter_map(|z| Some((z["id"].as_str()?.to_string(), z["name"].as_str()?.to_string())))
-        .collect();
+    let zones = load_zones(api)?;
     let mut out: Vec<Entity> = items(&api.call("GET", "/api/manager/devices/device", None)?)
         .into_iter()
         .filter_map(|d| map_device(d, &zones))
         .collect();
     out.extend(load_flows(api));
     Ok(out)
+}
+
+/// Zone id → name.
+fn load_zones(api: &Api) -> Result<HashMap<String, String>, String> {
+    Ok(items(&api.call("GET", "/api/manager/zones/zone", None)?)
+        .into_iter()
+        .filter_map(|z| Some((z["id"].as_str()?.to_string(), z["name"].as_str()?.to_string())))
+        .collect())
+}
+
+/// Takes a renamed or moved device's new name, room and kind; true if any changed.
+fn apply_update(list: &mut [Entity], device: &Value, zones: &HashMap<String, String>) -> bool {
+    let Some(new) = map_device(device, zones) else { return false };
+    let Some(e) = list.iter_mut().find(|e| e.id == new.id) else { return false };
+    if (&e.name, &e.zone, &e.class) == (&new.name, &new.zone, &new.class) {
+        return false;
+    }
+    (e.name, e.zone, e.class) = (new.name, new.zone, new.class);
+    true
 }
 
 /// The Flows that can be started. Optional: a key without the Flow permissions still gives devices.
@@ -272,8 +288,9 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
 
     // Subscribe to the devices manager (for added/removed devices) and each device.
     let ids: Vec<String> = entities.lock().unwrap().iter().filter(|e| !is_flow(e)).map(|e| e.id.clone()).collect();
-    // The Flow manager too, so a Flow made or renamed in Homey shows up without a restart.
-    let mut uris = vec!["homey:manager:devices".to_string(), "homey:manager:flow".to_string()];
+    // The Flow and zone managers too, so new Flows and renamed rooms show up without a restart.
+    let mut uris = vec!["homey:manager:devices".to_string(), "homey:manager:flow".to_string(), "homey:manager:zones".to_string()];
+    let zones = load_zones(api)?;
     uris.extend(ids.iter().map(|id| format!("homey:device:{id}")));
     for (i, uri) in uris.iter().enumerate() {
         ws.send(&emit(&nsp, 10 + i as u64, json!(["subscribe", uri])))?;
@@ -321,6 +338,15 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
                 eprintln!("homey: flows changed");
                 sink(Event::Reloaded);
             }
+        } else if uri == "homey:manager:devices" && event == "device.update" {
+            // Sent on renames and moves, not on value changes; also when a device comes and goes.
+            if apply_update(&mut entities.lock().unwrap(), data, &zones) {
+                eprintln!("homey: {} renamed or moved", data["name"]);
+                sink(Event::Reloaded);
+            }
+        } else if uri == "homey:manager:zones" && event.starts_with("zone.") {
+            // A renamed or new room: reconnect, which reloads names and rooms.
+            return Err("zones changed".into());
         } else if uri == "homey:manager:devices" && matches!(event, "device.create" | "device.delete") {
             // A new or removed device: reconnect, which reloads and resubscribes.
             return Err("device list changed".into());
@@ -390,6 +416,14 @@ mod tests {
         assert_eq!((e.capabilities["dim"].title.as_deref(), e.capabilities["dim"].step), (Some("Dimme"), Some(0.01)));
         assert_eq!(e.capabilities["thermostat_mode"].title.as_deref(), Some("Mode"));
         assert_eq!(e.capabilities["thermostat_mode"].values, Some(json!([{"id": "heat", "title": "Varme"}, {"id": "off", "title": "Off"}])));
+
+        let mut list = vec![e];
+        assert!(!apply_update(&mut list, &d, &zones), "nothing changed");
+        let moved = json!({"id": "d1", "name": "Taklampe stue", "zone": "z2", "class": "light", "capabilitiesObj": {}});
+        let zones = HashMap::from([("z2".to_string(), "Kjøkken".to_string())]);
+        assert!(apply_update(&mut list, &moved, &zones));
+        assert_eq!((list[0].name.as_str(), list[0].zone.as_str()), ("Taklampe stue", "Kjøkken"));
+        assert_eq!(list[0].capabilities.len(), 3, "keeps its capabilities and values");
 
         assert!(map_flow(&json!({"id": "f1", "name": "God natt", "triggerable": true}), "flow-").is_some());
         assert!(map_flow(&json!({"id": "f2", "name": "Auto", "triggerable": false}), "flow-").is_none());
