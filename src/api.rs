@@ -78,7 +78,12 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
             Ok(Response::stream(rx))
         }
         _ => {
-            let device = app.device_from(req).ok_or_else(|| Response::error(401, "Not paired"))?;
+            // An admin may look at a screen as it is (read only): `?preview=<screen id>`.
+            let preview = req.query.get("preview").filter(|_| app.admin_from(req).is_some()).and_then(|id| app.store.lock().unwrap().data.devices.iter().find(|d| d.id == *id).cloned());
+            if preview.is_some() && m != "GET" {
+                return Err(Response::error(403, "Preview is read only"));
+            }
+            let device = preview.or_else(|| app.device_from(req)).ok_or_else(|| Response::error(401, "Not paired"))?;
             match (m, s) {
                 ("GET", ["tablet"]) => {
                     let get = |id: &String| app.registry.entity(id).map(|e| json!(e)).unwrap_or_else(|| json!({ "id": id, "missing": true }));
@@ -277,7 +282,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .data
                 .devices
                 .iter()
-                .map(|d| json!({ "id": d.id, "name": d.name, "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
@@ -329,6 +334,13 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             app.update_client_tiles(&device);
             app.notify_device(&device.id, "reload");
             Ok(Response::ok(json!({ "ok": true })))
+        }
+        ("POST", ["devices", id, "reload"]) => {
+            if !app.store.lock().unwrap().data.devices.iter().any(|d| d.id == *id) {
+                return Err(Response::error(404, "No such device"));
+            }
+            app.notify_device(id, "refresh");
+            Ok(Response::ok(json!({ "ok": app.online(id) })))
         }
         ("DELETE", ["devices", id]) => {
             let mut store = app.store.lock().unwrap();

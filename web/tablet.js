@@ -8,6 +8,8 @@
   'use strict';
 
   var TOKEN_KEY = 'oldpad.token';
+  // ?preview=<screen id>: an admin looking at a screen from the admin page. Read only.
+  var PREVIEW = (/[?&]preview=([A-Za-z0-9]+)/.exec(window.location.search) || [])[1] || null;
 
   // ------------------------------------------------------------- language
 
@@ -19,14 +21,14 @@
     indoor: 'Inne', outdoor: 'Ute', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   } : {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   };
   var DECIMAL = (function () { try { return (1.5).toLocaleString().charAt(1) === ',' || NB ? ',' : '.'; } catch (e) { return '.'; } }());
 
@@ -208,7 +210,7 @@
   }
 
   function loadState() {
-    request('GET', '/api/tablet', null, {}, function (status, data) {
+    request('GET', '/api/tablet' + (PREVIEW ? '?preview=' + PREVIEW : ''), null, {}, function (status, data) {
       if (status !== 200 || !data) {
         toast(T.offline);
         setTimeout(loadState, 10000);
@@ -233,6 +235,7 @@
   }
 
   function connectEvents() {
+    if (PREVIEW) { setTimeout(loadState, 10000); return; } // no live stream for a preview: refresh instead
     if (events) { events.close(); events = null; }
     if (!window.EventSource) { setTimeout(loadState, 60000); return; } // no live updates: refresh instead
     request('POST', '/api/tablet/ticket', {}, {}, function (status, data) {
@@ -249,6 +252,7 @@
       }, false);
       es.addEventListener('reload', function () { loadState(); }, false);
       es.addEventListener('revoked', function () { unpair(); }, false);
+      es.addEventListener('refresh', function () { window.location.reload(); }, false);
       // The ticket is single use, so let the browser's own retry fail and get a new one.
       es.onerror = function () {
         es.close();
@@ -590,6 +594,7 @@
   // ------------------------------------------------------------- actions
 
   function set(e, capability, value, previous) {
+    if (PREVIEW) { toast(T.preview); if (previous !== undefined && cap(e, capability)) { cap(e, capability).value = previous; render(); } return; }
     request('POST', '/api/tablet/set', { id: e.id, capability: capability, value: value }, {}, function (status, data) {
       if (status !== 200) {
         if (previous !== undefined && cap(e, capability)) { cap(e, capability).value = previous; render(); }
@@ -729,6 +734,6 @@
   setTimeout(function () { window.location.reload(); }, 24 * 3600 * 1000);
 
   tick();
-  token = load(TOKEN_KEY);
-  if (token) { loadState(); } else { startPairing(); }
+  token = PREVIEW ? null : load(TOKEN_KEY);
+  if (token || PREVIEW) { loadState(); } else { startPairing(); }
 }());

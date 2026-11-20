@@ -165,8 +165,16 @@ async function homeView() {
     devices.length
       ? devices.map((d) => h('div', { class: 'card' },
           h('div', { class: 'row' },
-            h('div', {}, h('strong', {}, d.name), h('div', { class: 'small muted' }, `Seen ${ago(d.lastSeen)} · ${d.tiles.length} tiles`)),
+            h('div', {}, h('strong', {}, d.name), h('div', { class: 'small muted' },
+              h('span', { class: d.online ? 'ok' : '' }, d.online ? '● Online' : `Offline · seen ${ago(d.lastSeen)}`),
+              ` · ${d.tiles.length} tiles${d.pages?.length ? ` · ${d.pages.length} own page${d.pages.length > 1 ? 's' : ''}` : ''}`)),
             h('div', { class: 'row' },
+              h('a', { class: 'button', href: `/?preview=${encodeURIComponent(d.id)}`, target: '_blank' }, 'Preview'),
+              h('button', { disabled: !d.online, title: 'Reload the page on the screen', onclick: async (ev) => {
+                ev.target.disabled = true;
+                await api('POST', `/devices/${d.id}/reload`, {});
+                setTimeout(route, 4000);
+              } }, 'Reload'),
               h('button', { onclick: () => (location.hash = `#/device/${d.id}`) }, 'Layout'),
               h('button', { class: 'danger', onclick: async () => {
                 if (!confirm(`Remove ${d.name}? It will have to be paired again.`)) return;

@@ -165,6 +165,17 @@ fn phone_and_tablet_end_to_end() {
     let room = state["more"].as_array().unwrap().iter().find(|e| e["id"] == kitchen.as_str()).unwrap().clone();
     assert_eq!(room["capabilities"]["speaker_group"]["value"], "speaker");
 
+    // --- an admin can look at the screen (read only); nobody else can
+    let (s, seen) = phone.call("GET", &format!("/api/tablet?preview={device_id}"), None);
+    assert_eq!((s, seen["device"]["name"].as_str()), (200, Some("Kitchen")));
+    assert_eq!(phone.call("POST", &format!("/api/tablet/set?preview={device_id}"), Some(json!({ "id": lamp, "capability": "onoff", "value": true }))).0, 403);
+    let mut stranger = Client { base: base.clone(), cookie: None, bearer: None };
+    assert_eq!(stranger.call("GET", &format!("/api/tablet?preview={device_id}"), None).0, 401);
+    let (_, list) = phone.call("GET", "/api/admin/devices", None);
+    assert_eq!(list[0]["online"], true); // the event stream above is still open
+    assert_eq!(phone.call("POST", &format!("/api/admin/devices/{device_id}/reload"), Some(json!({}))).0, 200);
+    assert!(lines.by_ref().map(Result::unwrap).any(|l| l == "event: refresh"));
+
     // --- removing the screen revokes its token
     assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{device_id}"), None).0, 200);
     assert_eq!(tablet.call("GET", "/api/tablet", None).0, 401);

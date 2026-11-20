@@ -137,6 +137,11 @@ impl App {
         self.clients.lock().unwrap().retain(|c| !pred(c) || c.tx.send(msg.to_string()).is_ok());
     }
 
+    /// Whether the screen has its live connection open right now.
+    pub fn online(&self, device_id: &str) -> bool {
+        self.clients.lock().unwrap().iter().any(|c| c.device_id == device_id)
+    }
+
     pub fn notify_device(&self, device_id: &str, event: &str) {
         self.send_where(|c| c.device_id == device_id, &sse(event, &json!({})));
     }
