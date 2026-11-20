@@ -7,6 +7,7 @@ use crate::client::request;
 use crate::util::{escape_xml, unescape_xml};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
+use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -22,7 +23,7 @@ pub fn kind() -> Kind {
             kind: FieldKind::Text,
             required: false,
             placeholder: "found automatically",
-            help: "Leave empty and oldpad finds your speakers on the network. If it cannot (some Docker and Kubernetes setups block discovery), enter one or more speaker IPs from Sonos app → Settings → System → About My System. From one speaker oldpad learns all rooms, and keeps up when their addresses change.",
+            help: "Leave empty and oldpad finds your speakers on the network. It asks the network, then scans it for speakers. If neither works (in Docker's default network, for one), enter one or more speaker IPs from Sonos app → Settings → System → About My System. From one speaker oldpad learns all rooms, and keeps up when their addresses change.",
         }],
         test,
         start,
@@ -229,6 +230,39 @@ fn discover(wait: Duration) -> Vec<String> {
     found
 }
 
+/// The /24 to scan: around OLDPAD_LAN_IP if set (in Kubernetes, the node's
+/// address), else around this machine's own address. Private networks only.
+fn scan_base(lan_ip: Option<&str>, own: Option<Ipv4Addr>) -> Option<[u8; 3]> {
+    let ip = lan_ip.and_then(|s| s.trim().parse::<Ipv4Addr>().ok()).or(own)?;
+    let o = ip.octets();
+    ip.is_private().then_some([o[0], o[1], o[2]])
+}
+
+/// Discovery without multicast: every address in the /24 that accepts a
+/// connection on Sonos's port 1400. The caller confirms each one is a speaker.
+fn scan() -> Vec<String> {
+    use std::net::{SocketAddr, TcpStream, UdpSocket};
+    // Connecting a UDP socket sends nothing; it only picks the outgoing address.
+    let own = UdpSocket::bind("0.0.0.0:0").ok().and_then(|s| s.connect("192.0.2.1:9").ok().and(s.local_addr().ok())).and_then(|a| match a.ip() {
+        std::net::IpAddr::V4(v4) => Some(v4),
+        _ => None,
+    });
+    let Some([a, b, c]) = scan_base(std::env::var("OLDPAD_LAN_IP").ok().as_deref(), own) else { return vec![] };
+    let found = Mutex::new(Vec::new());
+    std::thread::scope(|s| {
+        for d in 1..=254u8 {
+            let found = &found;
+            let _ = std::thread::Builder::new().stack_size(64 * 1024).spawn_scoped(s, move || {
+                let addr = SocketAddr::from(([a, b, c, d], 1400));
+                if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
+                    found.lock().unwrap().push(addr.ip().to_string());
+                }
+            });
+        }
+    });
+    found.into_inner().unwrap()
+}
+
 /// The speaker's host from an SSDP reply, if the reply is from a Sonos player.
 fn parse_ssdp(reply: &str) -> Option<String> {
     let mut location = None;
@@ -252,7 +286,9 @@ fn find_topology(known: &[String]) -> Result<(Vec<Room>, bool), String> {
             return Ok((rooms, false));
         }
     }
-    for host in discover(Duration::from_secs(3)) {
+    let discovered = discover(Duration::from_secs(3));
+    let hosts = if discovered.is_empty() { scan() } else { discovered };
+    for host in hosts {
         if let Ok(rooms) = topology(&host) {
             return Ok((rooms, true));
         }
@@ -476,6 +512,16 @@ mod tests {
         assert_eq!(parse_ssdp(sonos).as_deref(), Some("192.168.1.44"));
         let tv = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.9:8080/desc.xml\r\nST: upnp:rootdevice\r\nSERVER: SomeTV\r\n\r\n";
         assert_eq!(parse_ssdp(tv), None);
+    }
+
+    #[test]
+    fn scan_network() {
+        let own = Some(Ipv4Addr::new(10, 42, 0, 105));
+        assert_eq!(scan_base(Some("192.168.174.21"), own), Some([192, 168, 174]));
+        assert_eq!(scan_base(None, own), Some([10, 42, 0]));
+        assert_eq!(scan_base(Some("nonsense"), own), Some([10, 42, 0]));
+        assert_eq!(scan_base(Some("8.8.8.8"), own), None); // never sweep a public network
+        assert_eq!(scan_base(None, None), None);
     }
 
     #[test]
