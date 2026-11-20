@@ -172,7 +172,8 @@ async function homeView() {
                 if (!confirm(`Remove ${d.name}? It will have to be paired again.`)) return;
                 await api('DELETE', `/devices/${d.id}`); route();
               } }, 'Remove')))))
-      : h('p', { class: 'muted' }, 'No screens yet. Open this server\'s address on a tablet and scan its code.'),
+      : h('p', { class: 'muted' }, 'No screens yet.'),
+    h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/add-screen') }, 'Add screen')),
     h('h2', {}, 'Integrations'),
     integrations.map((i) => h('div', { class: 'card' },
       h('div', { class: 'row' },
@@ -192,6 +193,24 @@ async function homeView() {
         try { await register({}); alert('Passkey added.'); } catch (e) { alert(e.message); }
       } }, 'Add another passkey'),
       h('button', { onclick: async () => { await api('POST', '/logout', {}); route(); } }, 'Sign out')),
+  );
+}
+
+// Pairing starts on the new screen; this explains how and takes the code it shows.
+function addScreenView() {
+  const code = h('input', { type: 'text', id: 'p-code', maxlength: '8', autocapitalize: 'characters', autocomplete: 'off', placeholder: 'ABCD2345' });
+  const go = () => { const c = code.value.trim().toUpperCase(); if (c) location.hash = `#/pair/${encodeURIComponent(c)}`; };
+  code.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  render(
+    h('h1', {}, 'Add screen'),
+    h('ol', {},
+      h('li', {}, 'On the tablet, open ', h('strong', {}, location.origin.replace('https://', 'http://')), '.'),
+      h('li', {}, 'It shows a QR code. Scan it with this phone — or type the code shown under it here:')),
+    h('label', { for: 'p-code' }, 'Code from the screen'),
+    code,
+    h('div', { class: 'actions' },
+      h('button', { class: 'primary', onclick: go }, 'Continue'),
+      h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')),
   );
 }
 
@@ -364,6 +383,7 @@ async function route() {
     if (!status.admin) return loginView();
     const [, view, arg] = (location.hash || '#/').split('/');
     if (view === 'pair' && arg) return await pairView(arg);
+    if (view === 'add-screen') return addScreenView();
     if (view === 'device' && arg) return await deviceView(arg);
     if (view === 'integration' && arg) return await integrationView(arg);
     return await homeView();
