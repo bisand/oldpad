@@ -267,7 +267,8 @@ fn apply(ships: &mut HashMap<u32, Ship>, msg: Msg, now: Instant) -> bool {
 }
 
 /// Ships only say their name every six minutes; remember the ones heard, so a restart
-/// doesn't leave the screen full of numbers. The most recently seen 500 (about 15 kB).
+/// doesn't leave the screen full of numbers. The most recently seen 500 (about 15 kB),
+/// saved two minutes after a new one is heard.
 fn names(ships: &HashMap<u32, Ship>) -> Value {
     let mut known: Vec<(&u32, &Ship)> = ships.iter().filter(|(_, s)| s.name.is_some() || s.kind.is_some()).collect();
     known.sort_by_key(|(_, s)| std::cmp::Reverse(s.seen));
@@ -410,7 +411,8 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
                     break;
                 }
             }
-            if learned && saved.elapsed() >= Duration::from_secs(600) {
+            // Soon, so a restart (a deploy, a power cut) loses little; at most every 2 minutes.
+            if learned && saved.elapsed() >= Duration::from_secs(120) {
                 (learned, saved) = (false, Instant::now());
                 sink(Event::Remember { key: "_names".into(), value: names(&ships) });
             }
@@ -426,7 +428,12 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
                 }
             }
         }
-        std::thread::sleep(backoff);
+        if !stopped.load(Ordering::Relaxed) {
+            std::thread::sleep(backoff);
+        }
+    }
+    if learned {
+        sink(Event::Remember { key: "_names".into(), value: names(&ships) }); // stopped or restarted from the admin
     }
 }
 
