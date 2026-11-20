@@ -295,8 +295,9 @@ struct Ais {
 
 // ------------------------------------------------------------------ map tiles
 
-/// Kartverket's open map tiles (CC BY 4.0): the nautical chart, and a grey map for night.
-const LAYERS: [&str; 3] = ["sjokartraster", "topograatone", "topo"];
+/// Kartverket's open maps (CC BY 4.0): the nautical chart as tiles, and Norges grunnkart
+/// (calm on land) from their map server, cut to the same tiles.
+const LAYERS: [&str; 2] = ["sjokartraster", "grunnkart"];
 
 /// Web Mercator tile coordinates (fractional) of a place at zoom `z`.
 fn tile_of((lat, lon): (f64, f64), z: u32) -> (f64, f64) {
@@ -305,9 +306,9 @@ fn tile_of((lat, lon): (f64, f64), z: u32) -> (f64, f64) {
     ((lon + 180.0) / 360.0 * n, (1.0 - (lat.tan() + 1.0 / lat.cos()).ln() / std::f64::consts::PI) / 2.0 * n)
 }
 
-/// `layer-z-y-x` → the tile's path, if it is one the map around home would show.
+/// `layer-z-y-x` → where to get the tile, if it is one the map around home would show.
 /// Anything else is refused: this is not an open map proxy.
-fn tile_path(key: &str, home: (f64, f64), radius_km: f64) -> Option<String> {
+fn tile_url(key: &str, home: (f64, f64), radius_km: f64) -> Option<(&'static str, String)> {
     let mut p = key.splitn(4, '-');
     let (layer, z, y, x) = (p.next()?, p.next()?.parse::<u32>().ok()?, p.next()?.parse::<u32>().ok()?, p.next()?.parse::<u32>().ok()?);
     if !LAYERS.contains(&layer) || !(6..=15).contains(&z) {
@@ -316,7 +317,17 @@ fn tile_path(key: &str, home: (f64, f64), radius_km: f64) -> Option<String> {
     let (hx, hy) = tile_of(home, z);
     let tile_km = 40_075.0 * home.0.to_radians().cos() / f64::from(1u32 << z);
     let reach = (radius_km * 3.0 / tile_km).ceil() + 2.0;
-    ((f64::from(x) - hx).abs() <= reach && (f64::from(y) - hy).abs() <= reach).then(|| format!("/v1/wmts/1.0.0/{layer}/default/webmercator/{z}/{y}/{x}.png"))
+    if (f64::from(x) - hx).abs() > reach || (f64::from(y) - hy).abs() > reach {
+        return None;
+    }
+    if layer == "grunnkart" {
+        // The tile's corners in Web Mercator metres.
+        let size = 40_075_016.685_578_5 / f64::from(1u32 << z);
+        let (x0, y1) = (-20_037_508.342_789_2 + f64::from(x) * size, 20_037_508.342_789_2 - f64::from(y) * size);
+        let bbox = format!("{x0:.2},{:.2},{:.2},{y1:.2}", y1 - size, x0 + size);
+        return Some(("https://wms.geonorge.no", format!("/skwms1/wms.norges_grunnkart?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=Norges_grunnkart&STYLES=&FORMAT=image/png&CRS=EPSG:3857&BBOX={bbox}&WIDTH=256&HEIGHT=256")));
+    }
+    Some(("https://cache.kartverket.no", format!("/v1/wmts/1.0.0/{layer}/default/webmercator/{z}/{y}/{x}.png")))
 }
 
 fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
@@ -401,8 +412,8 @@ impl Instance for Ais {
     }
 
     fn image(&self, key: &str) -> Result<(String, Vec<u8>), String> {
-        let path = tile_path(key, self.home, self.radius).ok_or("not a map tile near home")?;
-        let res = crate::client::request("https://cache.kartverket.no", "GET", &path, &[], None)?;
+        let (base, path) = tile_url(key, self.home, self.radius).ok_or("not a map tile near home")?;
+        let res = crate::client::request(base, "GET", &path, &[], None)?;
         if res.status != 200 {
             return Err(format!("Kartverket answered HTTP {}", res.status));
         }
@@ -449,11 +460,13 @@ mod tests {
         let (x, y) = tile_of(home, 11);
         assert_eq!((x as u32, y as u32), (1085, 595));
         let (x, y) = (x as u32, y as u32);
-        assert_eq!(tile_path(&format!("sjokartraster-11-{y}-{x}"), home, 25.0), Some(format!("/v1/wmts/1.0.0/sjokartraster/default/webmercator/11/{y}/{x}.png")));
-        assert!(tile_path(&format!("sjokartraster-11-{y}-{}", x + 200), home, 25.0).is_none(), "far away");
-        assert!(tile_path(&format!("osm-11-{y}-{x}"), home, 25.0).is_none(), "unknown layer");
-        assert!(tile_path("topo-18-0-0", home, 25.0).is_none(), "zoom out of range");
-        assert!(tile_path(&format!("topo-11-{y}-{x}/../x"), home, 25.0).is_none());
+        assert_eq!(tile_url(&format!("sjokartraster-11-{y}-{x}"), home, 25.0).map(|u| u.1), Some(format!("/v1/wmts/1.0.0/sjokartraster/default/webmercator/11/{y}/{x}.png")));
+        let wms = tile_url(&format!("grunnkart-11-{y}-{x}"), home, 25.0).unwrap().1;
+        assert!(wms.contains("BBOX=1193640.63,8375052.32,1213208.51,8394620.19&"), "{wms}");
+        assert!(tile_url(&format!("sjokartraster-11-{y}-{}", x + 200), home, 25.0).is_none(), "far away");
+        assert!(tile_url(&format!("osm-11-{y}-{x}"), home, 25.0).is_none(), "unknown layer");
+        assert!(tile_url("grunnkart-18-0-0", home, 25.0).is_none(), "zoom out of range");
+        assert!(tile_url(&format!("grunnkart-11-{y}-{x}/../x"), home, 25.0).is_none());
     }
 
     #[test]

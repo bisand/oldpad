@@ -54,7 +54,7 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 }
 
 /// "2026-11-20T00:00:00+01:00" → seconds since the epoch.
-fn parse_time(s: &str) -> Option<i64> {
+pub(super) fn parse_time(s: &str) -> Option<i64> {
     let n = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
     let local = super::met::days_from_civil(n(0..4)?, n(5..7)?, n(8..10)?) * 86_400 + n(11..13)? * 3600 + n(14..16)? * 60 + n(17..19)?;
     let offset = match s.get(19..)? {

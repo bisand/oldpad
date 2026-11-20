@@ -24,14 +24,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -464,6 +464,7 @@
     if (c === 'garagedoor' || c === 'door' || c === 'lock') { return 'door'; }
     if (c === 'ais') { return 'boat'; }
     if (c === 'price') { return 'bolt'; }
+    if (c === 'departures') { return 'clock'; }
     return 'bolt';
   }
 
@@ -489,6 +490,9 @@
       body = '<div class="value sub">' + T.run + '</div>';
     } else if (measure) {
       body = '<div class="value">' + num(measure.value, 1) + '°</div>';
+    } else if (cap(e, 'departures')) {
+      var dep = nextDeps(e)[0];
+      body = dep ? '<div class="value up">' + depWhen(dep) + '<div class="sub">' + esc(dep.line + ' ' + dep.to) + '</div></div>' : '<div class="value sub">' + T.noDeps + '</div>';
     } else if (cap(e, 'prices')) {
       var pn = val(e, 'price');
       body = '<div class="value ' + priceLevel(e, pn) + '">' + (typeof pn === 'number' ? num(pn, 2) : '–') + '<span class="unit"> kr</span></div>';
@@ -567,11 +571,41 @@
 
   function sheetHtml() {
     var e = sheet && entities[sheet], list = controls(e), html = '', i;
-    if (e && e['class'] === 'price') { return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + priceCard(e) + '</div></div>'; }
+    if (e && (e['class'] === 'price' || e['class'] === 'departures')) {
+      return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + (e['class'] === 'price' ? priceCard(e) : departuresCard(e)) + '</div></div>';
+    }
     if (!list.length) { return ''; }
     for (i = 0; i < list.length; i++) { html += controlHtml(e, list[i]); }
     return '<div class="sheet-bg" data-act="close"><div class="sheet" data-act="none">' +
       '<span class="x" data-act="close">✕</span><div class="sheet-h">' + esc(e.name) + '</div><div class="sub">' + esc(e.zone) + '</div>' + html + '</div></div>';
+  }
+
+  // ------------------------------------------------------------- departures
+
+  function nextDeps(e) {
+    var all = val(e, 'departures') || [], now = new Date().getTime() / 1000 - 30, out = [], i;
+    for (i = 0; i < all.length; i++) { if (all[i].at > now) { out.push(all[i]); } }
+    return out;
+  }
+  // "Now", "4 min", then the clock once it's a while off.
+  function depWhen(d) {
+    var m = Math.floor((d.at - new Date().getTime() / 1000) / 60);
+    if (m < 1) { return T.nowDep; }
+    if (m < 15) { return m + ' ' + T.min; }
+    return pad(new Date(d.at * 1000).getHours()) + ':' + pad(new Date(d.at * 1000).getMinutes());
+  }
+  function hm(sec) { var d = new Date(sec * 1000); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+  function departuresCard(e) {
+    var list = nextDeps(e), rows = '', i, d, late;
+    for (i = 0; i < list.length; i++) {
+      d = list[i];
+      late = d.aimed && d.at - d.aimed >= 120;
+      rows += '<div class="dep' + (d.gone ? ' gone' : '') + '"><span class="badge m-' + esc(d.mode) + '"' + (d.bg ? ' data-bg="' + esc(d.bg) + '" data-fg="' + esc(d.fg || '#fff') + '"' : '') + '>' + esc(d.line) + '</span>' +
+        '<span class="dt">' + esc(d.to) + '<span class="sub">' + (d.quay ? T.platform + ' ' + esc(d.quay) : '') + (late ? ' <s>' + hm(d.aimed) + '</s>' : '') + '</span></span>' +
+        '<span class="dw' + (d.rt ? ' rt' : '') + '">' + (d.gone ? T.cancelled : depWhen(d)) + '</span></div>';
+    }
+    return '<div class="card departures"><div class="sub">' + esc(e.name) + '</div>' + (rows || '<p class="muted">' + T.noDeps + '</p>') + '</div>';
   }
 
   // ------------------------------------------------------------- electricity price
@@ -642,11 +676,12 @@
   // The page's CSP allows no inline styles: positions ride on data attributes and place() sets them.
   function rot(deg) { return ' data-rot="' + Math.round(deg) + '"'; }
   function place(root) {
-    var els = root.querySelectorAll('[data-l],[data-rot],[data-w]'), i, el, r;
+    var els = root.querySelectorAll('[data-l],[data-rot],[data-w],[data-bg]'), i, el, r;
     for (i = 0; i < els.length; i++) {
       el = els[i];
       if (el.getAttribute('data-w')) { el.style.height = el.getAttribute('data-w'); }
       if (el.getAttribute('data-l')) { el.style.left = el.getAttribute('data-l'); el.style.top = el.getAttribute('data-t'); }
+      if (el.getAttribute('data-bg')) { el.style.background = el.getAttribute('data-bg'); el.style.color = el.getAttribute('data-fg') || '#fff'; }
       r = el.getAttribute('data-rot');
       if (r) { el.style.webkitTransform = el.style.transform = 'rotate(' + r + 'deg)'; }
     }
@@ -676,7 +711,7 @@
     var view = load(SHIPVIEW_KEY) || 'radar';
     var head = '<div class="ships-head"><span class="sub">' + T.ships + '</span>' + choices('shipview', view, [['radar', T.radar], ['chart', T.chart], ['map', T.map]]) + '</div>';
     if (view !== 'radar' && val(e, 'home')) {
-      return '<div class="card ships">' + head + mapHtml(e, list, r, view === 'chart' ? 'sjokartraster' : 'topo') + '</div>';
+      return '<div class="card ships">' + head + mapHtml(e, list, r, view === 'chart' ? 'sjokartraster' : 'grunnkart') + '</div>';
     }
     return '<div class="card ships">' + head + '<div class="ships-in">' +
       '<div class="radar"><span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>' +
@@ -861,7 +896,7 @@
         if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], favRows(), true); }
       } else {
         it = typeof it === 'string' ? entities[it] || { missing: true } : it;
-        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else { run.push(it); }
+        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else if (it['class'] === 'departures') { flush(); html += departuresCard(it); } else { run.push(it); }
       }
     }
     flush();
@@ -954,7 +989,7 @@
       c.value = next;
       render();
       set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
-    } else if (act === 'tile' && e && cap(e, 'prices')) {
+    } else if (act === 'tile' && e && (cap(e, 'prices') || cap(e, 'departures'))) {
       sheet = id;
       render();
     } else if (act === 'tile' && e && cap(e, 'ships')) {
