@@ -18,11 +18,11 @@ pub fn kind() -> Kind {
         description: "Play and pause, volume, what is playing and your Sonos favourites (radio stations, playlists) for each room.",
         fields: vec![Field {
             key: "host",
-            label: "Address of any Sonos speaker",
+            label: "Address of a Sonos speaker (optional)",
             kind: FieldKind::Text,
-            required: true,
-            placeholder: "192.168.1.40",
-            help: "Sonos app → Settings → System → About My System shows each speaker's IP. oldpad finds the other rooms from it.",
+            required: false,
+            placeholder: "found automatically",
+            help: "Leave empty and oldpad finds your speakers on the network. If it cannot (some Docker and Kubernetes setups block discovery), enter one or more speaker IPs from Sonos app → Settings → System → About My System. From one speaker oldpad learns all rooms, and keeps up when their addresses change.",
         }],
         test,
         start,
@@ -199,19 +199,93 @@ fn entity(room: &Room, now: &Now, favs: &[Favourite]) -> Entity {
     Entity { id: room.uuid.clone(), name: room.name.clone(), zone: room.name.clone(), class: "speaker".into(), capabilities: caps }
 }
 
-fn test(config: &Map<String, Value>) -> Result<String, String> {
-    let host = host_field(config)?;
-    let rooms = topology(&host)?;
-    let favs = favourites(&host).map(|f| f.len()).unwrap_or(0);
-    Ok(format!("Found {} rooms ({}) and {favs} favourites.", rooms.len(), rooms.iter().map(|r| r.name.as_str()).collect::<Vec<_>>().join(", ")))
+/// Asks the network for Sonos speakers the way the Sonos app does (SSDP
+/// multicast) and returns the addresses that answered. Empty where multicast
+/// does not reach, such as a Kubernetes pod network.
+fn discover(wait: Duration) -> Vec<String> {
+    use std::net::UdpSocket;
+    let Ok(sock) = UdpSocket::bind("0.0.0.0:0") else { return vec![] };
+    let _ = sock.set_multicast_ttl_v4(2);
+    let _ = sock.set_read_timeout(Some(Duration::from_millis(200)));
+    let msg = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\nST: urn:schemas-upnp-org:device:ZonePlayer:1\r\n\r\n";
+    let mut found = Vec::new();
+    let until = Instant::now() + wait;
+    let mut next_send = Instant::now();
+    let mut buf = [0u8; 2048];
+    while Instant::now() < until {
+        if Instant::now() >= next_send {
+            // UDP is lossy: ask three times during the window.
+            let _ = sock.send_to(msg.as_bytes(), "239.255.255.250:1900");
+            next_send = Instant::now() + wait / 3;
+        }
+        if let Ok((n, _)) = sock.recv_from(&mut buf) {
+            if let Some(host) = parse_ssdp(&String::from_utf8_lossy(&buf[..n])) {
+                if !found.contains(&host) {
+                    found.push(host);
+                }
+            }
+        }
+    }
+    found
 }
 
-fn host_field(config: &Map<String, Value>) -> Result<String, String> {
-    let host = super::get_str(config, "host").trim().trim_start_matches("http://").trim_end_matches('/').trim_end_matches(":1400").to_string();
-    if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || ".-".contains(c)) {
-        return Err("enter the speaker's IP address or host name".into());
+/// The speaker's host from an SSDP reply, if the reply is from a Sonos player.
+fn parse_ssdp(reply: &str) -> Option<String> {
+    let mut location = None;
+    let mut sonos = false;
+    for line in reply.lines() {
+        let Some((k, v)) = line.split_once(':') else { continue };
+        match k.trim().to_ascii_lowercase().as_str() {
+            "location" => location = host_of(v.trim()),
+            "st" | "server" if v.contains("ZonePlayer") || v.contains("Sonos") => sonos = true,
+            _ => {}
+        }
     }
-    Ok(host)
+    location.filter(|_| sonos)
+}
+
+/// The household's current rooms, from the first known speaker that answers,
+/// or from discovery when none does.
+fn find_topology(known: &[String]) -> Result<(Vec<Room>, bool), String> {
+    for host in known {
+        if let Ok(rooms) = topology(host) {
+            return Ok((rooms, false));
+        }
+    }
+    for host in discover(Duration::from_secs(3)) {
+        if let Ok(rooms) = topology(&host) {
+            return Ok((rooms, true));
+        }
+    }
+    Err(if known.is_empty() {
+        "no Sonos speakers answered on the network. Enter a speaker's IP address instead.".into()
+    } else {
+        format!("none of the known speakers ({}) answered, and discovery found none", known.join(", "))
+    })
+}
+
+fn test(config: &Map<String, Value>) -> Result<String, String> {
+    let seeds = seeds(config)?;
+    let (rooms, discovered) = find_topology(&seeds)?;
+    let favs = favourites(&rooms[0].host).map(|f| f.len()).unwrap_or(0);
+    let how = if discovered { " (found automatically)" } else { "" };
+    Ok(format!("Found {} rooms{how}: {}. {favs} favourites.", rooms.len(), rooms.iter().map(|r| r.name.as_str()).collect::<Vec<_>>().join(", ")))
+}
+
+/// The admin's speaker addresses: none, one, or several separated by commas.
+fn seeds(config: &Map<String, Value>) -> Result<Vec<String>, String> {
+    super::get_str(config, "host")
+        .split([',', ' '])
+        .map(|h| h.trim().trim_start_matches("http://").trim_end_matches('/').trim_end_matches(":1400"))
+        .filter(|h| !h.is_empty())
+        .map(|h| {
+            if h.chars().all(|c| c.is_ascii_alphanumeric() || ".-".contains(c)) {
+                Ok(h.to_string())
+            } else {
+                Err(format!("\"{h}\" is not an IP address or host name"))
+            }
+        })
+        .collect()
 }
 
 struct State {
@@ -226,18 +300,40 @@ struct Sonos {
     poke: Arc<AtomicBool>,
 }
 
-fn refresh(host: &str, state: &Mutex<State>, sink: &Sink, full: bool) -> Result<(), String> {
+/// Speakers to ask for the topology: every room we know of, then the admin's seeds.
+fn known_hosts(state: &Mutex<State>, seeds: &[String]) -> Vec<String> {
+    let mut hosts: Vec<String> = state.lock().unwrap().rooms.iter().map(|r| r.host.clone()).collect();
+    for s in seeds {
+        if !hosts.contains(s) {
+            hosts.push(s.clone());
+        }
+    }
+    hosts
+}
+
+/// Returns whether every room answered; a room that did not may have moved.
+fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> Result<bool, String> {
     let (rooms, favs) = if full {
-        (topology(host)?, favourites(host).unwrap_or_default())
+        let (rooms, _) = find_topology(&known_hosts(state, seeds))?;
+        let favs = favourites(&rooms[0].host).unwrap_or_else(|_| state.lock().unwrap().favs.clone());
+        (rooms, favs)
     } else {
         let s = state.lock().unwrap();
         (s.rooms.clone(), s.favs.clone())
     };
     let mut fresh = Vec::new();
+    let mut all_answered = true;
     for room in &rooms {
         match now_playing(room) {
             Ok(now) => fresh.push(entity(room, &now, &favs)),
-            Err(e) => eprintln!("sonos: {}: {e}", room.name),
+            Err(e) => {
+                all_answered = false;
+                eprintln!("sonos: {}: {e}", room.name);
+                // Keep showing the last known state rather than dropping the room.
+                if let Some(old) = state.lock().unwrap().entities.iter().find(|e| e.id == room.uuid) {
+                    fresh.push(old.clone());
+                }
+            }
         }
     }
     let mut s = state.lock().unwrap();
@@ -259,17 +355,18 @@ fn refresh(host: &str, state: &Mutex<State>, sink: &Sink, full: bool) -> Result<
     if reshaped {
         sink(Event::Reloaded);
     }
-    Ok(())
+    Ok(all_answered)
 }
 
 fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
-    let host = host_field(config)?;
+    let seeds = seeds(config)?;
     let state = Arc::new(Mutex::new(State { rooms: vec![], favs: vec![], entities: vec![] }));
-    refresh(&host, &state, &(Arc::new(|_| {}) as Sink), true)?;
+    refresh(&seeds, &state, &(Arc::new(|_| {}) as Sink), true)?;
     let (stopped, poke) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
     let (st, stop, pk) = (state.clone(), stopped.clone(), poke.clone());
     std::thread::spawn(move || {
         let mut last_full = Instant::now();
+        let mut lost = false;
         while !stop.load(Ordering::Relaxed) {
             // Poll every 4 s, or right away after a command so the screen catches up.
             for _ in 0..40 {
@@ -278,11 +375,20 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
                 }
                 std::thread::sleep(Duration::from_millis(100));
             }
-            let full = last_full.elapsed() > Duration::from_secs(300);
-            match refresh(&host, &st, &sink, full) {
-                Ok(()) if full => last_full = Instant::now(),
-                Ok(()) => {}
-                Err(e) => eprintln!("sonos: {e}"),
+            // Re-read the topology every 5 minutes, and at once when a room stops
+            // answering: that is how a speaker's new address is learned.
+            let full = lost || last_full.elapsed() > Duration::from_secs(300);
+            match refresh(&seeds, &st, &sink, full) {
+                Ok(all) => {
+                    if full {
+                        last_full = Instant::now();
+                    }
+                    lost = !all && !full;
+                }
+                Err(e) => {
+                    eprintln!("sonos: {e}");
+                    lost = false; // the 5-minute timer retries; don't hammer
+                }
             }
         }
     });
@@ -363,6 +469,22 @@ mod tests {
     }
 
     #[test]
+    fn reads_ssdp_replies() {
+        let sonos = "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age = 1800\r\nLOCATION: http://192.168.1.44:1400/xml/device_description.xml\r\nSERVER: Linux UPnP/1.0 Sonos/80.1-55014 (ZPS27)\r\nST: urn:schemas-upnp-org:device:ZonePlayer:1\r\n\r\n";
+        assert_eq!(parse_ssdp(sonos).as_deref(), Some("192.168.1.44"));
+        let tv = "HTTP/1.1 200 OK\r\nLOCATION: http://192.168.1.9:8080/desc.xml\r\nST: upnp:rootdevice\r\nSERVER: SomeTV\r\n\r\n";
+        assert_eq!(parse_ssdp(tv), None);
+    }
+
+    #[test]
+    fn seed_addresses() {
+        let c = |h: &str| json!({ "host": h }).as_object().unwrap().clone();
+        assert_eq!(seeds(&c("")).unwrap(), Vec::<String>::new());
+        assert_eq!(seeds(&c("192.168.1.4, http://192.168.1.5:1400/")).unwrap(), vec!["192.168.1.4", "192.168.1.5"]);
+        assert!(seeds(&c("1.2.3.4/evil")).is_err());
+    }
+
+    #[test]
     fn tag_does_not_match_longer_names() {
         assert_eq!(tag("<dc:titleX>no</dc:titleX><dc:title>yes</dc:title>", "dc:title").as_deref(), Some("yes"));
         assert_eq!(tag("<a b=\"1\">x &amp; y</a>", "a").as_deref(), Some("x & y"));
@@ -375,8 +497,8 @@ mod tests {
         let c = json!({ "host": std::env::var("OLDPAD_TEST_SONOS").unwrap() });
         let c = c.as_object().unwrap();
         println!("{}", test(c).unwrap());
-        let host = host_field(c).unwrap();
-        for r in topology(&host).unwrap() {
+        let (rooms, _) = find_topology(&seeds(c).unwrap()).unwrap();
+        for r in rooms {
             let n = now_playing(&r).unwrap();
             println!("{}: playing={} vol={} {} / {}", r.name, n.playing, n.volume, n.title, n.subtitle);
         }

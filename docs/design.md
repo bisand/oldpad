@@ -66,7 +66,7 @@ fields each declares. See [integrations.md](integrations.md).
 | Source | How | Notes |
 | --- | --- | --- |
 | Homey Pro (2023) | Own HTTP + socket.io v2 client over WebSocket, see [homey-protocol.md](homey-protocol.md) | API key scopes: `homey.device.readonly`, `homey.device.control`, `homey.zone.readonly`, `homey.flow.readonly`, `homey.flow.start`. Control, but no admin (rename, delete, settings, users, apps). |
-| Sonos | Direct on the LAN, not through Homey | Favourites with artwork, volume, play/pause, now playing. Homey's Sonos support is too thin for this. |
+| Sonos | Direct on the LAN, not through Homey. Speakers are found by SSDP multicast like the Sonos app does; where multicast cannot reach (a Kubernetes pod) one known speaker address is enough, as every speaker reports the whole household's current addresses and oldpad re-reads them when a room stops answering. | Favourites with artwork, volume, play/pause, now playing. Homey's Sonos support is too thin for this. |
 | Indoor / outdoor | InfluxDB 1.x query | Configurable measurement, field and tag filter per reading. Today's min/max alongside the current value. |
 | Forecast | MET Norway Locationforecast + Sunrise | Next hours and tomorrow. Sunrise/sunset drives the day/night theme. |
 

@@ -169,7 +169,15 @@ pub fn get_str<'a>(config: &'a Map<String, Value>, key: &str) -> &'a str {
 struct Running {
     instance: Option<Arc<dyn Instance>>,
     status: String,
+    /// Bumped on every (re)start, so a stale start thread knows to give up.
+    generation: u64,
 }
+
+#[cfg(not(test))]
+const RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(30);
+#[cfg(test)]
+const RETRY_FIRST: std::time::Duration = std::time::Duration::from_millis(20);
+const RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// Running instances, keyed by integration id. Entity ids seen by the rest of
 /// oldpad are "<integration id>:<entity id>".
@@ -188,33 +196,48 @@ impl Registry {
     }
 
     /// Starts an instance in the background; `start` may block on the network.
+    /// Starts an instance in the background; `start` may block on the network.
+    /// A failed start is retried with backoff (30 s doubling to 10 min), so a
+    /// device that is offline when oldpad boots is picked up once it is back.
     pub fn start(self: &Arc<Self>, id: String, kind_id: String, config: Map<String, Value>, sink: Sink) {
         self.stop(&id);
-        self.running.lock().unwrap().insert(id.clone(), Running { instance: None, status: "starting".into() });
+        let generation = {
+            let mut running = self.running.lock().unwrap();
+            let generation = running.values().map(|r| r.generation).max().unwrap_or(0) + 1;
+            running.insert(id.clone(), Running { instance: None, status: "starting".into(), generation });
+            generation
+        };
         let reg = Arc::clone(self);
         std::thread::spawn(move || {
             let Some(kind) = reg.kind(&kind_id) else { return };
-            let result = (kind.start)(&config, sink.clone());
-            let mut running = reg.running.lock().unwrap();
-            // The integration may have been deleted or restarted while we connected.
-            let Some(slot) = running.get_mut(&id).filter(|s| s.instance.is_none() && s.status == "starting") else {
-                if let Ok(inst) = result {
-                    inst.stop();
+            let mut backoff = RETRY_FIRST;
+            loop {
+                let result = (kind.start)(&config, sink.clone());
+                let mut running = reg.running.lock().unwrap();
+                // The integration may have been deleted or restarted while we connected.
+                let Some(slot) = running.get_mut(&id).filter(|s| s.generation == generation) else {
+                    if let Ok(inst) = result {
+                        inst.stop();
+                    }
+                    return;
+                };
+                match result {
+                    Ok(inst) => {
+                        slot.instance = Some(Arc::from(inst));
+                        slot.status = "running".into();
+                        drop(running);
+                        sink(Event::Reloaded);
+                        return;
+                    }
+                    Err(e) => {
+                        eprintln!("integration {id}: {e} (retrying in {} s)", backoff.as_secs());
+                        slot.status = format!("error: {e}");
+                    }
                 }
-                return;
-            };
-            match result {
-                Ok(inst) => {
-                    slot.instance = Some(Arc::from(inst));
-                    slot.status = "running".into();
-                }
-                Err(e) => {
-                    eprintln!("integration {id}: {e}");
-                    slot.status = format!("error: {e}");
-                }
+                drop(running);
+                std::thread::sleep(backoff);
+                backoff = (backoff * 2).min(RETRY_MAX);
             }
-            drop(running);
-            sink(Event::Reloaded);
         });
     }
 
@@ -295,6 +318,29 @@ mod tests {
 
     fn map(v: Value) -> Map<String, Value> {
         v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn failed_starts_are_retried() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static TRIES: AtomicUsize = AtomicUsize::new(0);
+        let mut k = kind();
+        k.id = "flaky";
+        k.start = |c, s| {
+            if TRIES.fetch_add(1, Ordering::SeqCst) < 2 {
+                return Err("not yet".into());
+            }
+            (super::demo::kind().start)(c, s)
+        };
+        let reg = Arc::new(Registry { kinds: vec![k], running: Mutex::new(HashMap::new()) });
+        reg.start("x".into(), "flaky".into(), Map::new(), Arc::new(|_| {}));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while reg.status("x") != "running" {
+            assert!(std::time::Instant::now() < deadline, "never recovered: {}", reg.status("x"));
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(TRIES.load(Ordering::SeqCst), 3);
+        assert!(!reg.entities().is_empty());
     }
 
     #[test]
