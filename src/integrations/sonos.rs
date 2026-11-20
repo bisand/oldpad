@@ -110,7 +110,8 @@ fn parse_topology(state: &str) -> Vec<Room> {
                 continue;
             }
             let (Some(uuid), Some(name), Some(host)) = (attr(m, "UUID"), attr(m, "ZoneName"), attr(m, "Location").and_then(|l| host_of(&l))) else { continue };
-            if rooms.iter().any(|r| r.name == name) {
+            // Two rooms may share a name; only the same speaker twice is a duplicate.
+            if rooms.iter().any(|r| r.uuid == uuid) {
                 continue;
             }
             rooms.push(Room { uuid, name, coordinator: coord_host.clone().unwrap_or_else(|| host.clone()), coordinator_uuid: coord_uuid.clone(), host });
