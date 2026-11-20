@@ -6,7 +6,8 @@ oldpad is one small server binary plus a deliberately old-fashioned web page.
 The server does the heavy lifting — talking to [Homey](https://homey.app) and,
 later, other home automation systems — and the tablet only draws what it is
 sent. It is built for devices newer dashboards have left behind: the tablet
-page runs on **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
+page is written for **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
+In daily use on an iPad 2 with iOS 9.3.5; older versions are untested.
 
 > Status: early. Integrations: Homey Pro, Sonos,
 > InfluxDB, MET Norway weather, and a demo house. See [docs/design.md](docs/design.md).
