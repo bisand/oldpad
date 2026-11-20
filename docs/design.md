@@ -4,16 +4,45 @@ Decisions made so far, with the reason for each. Open questions are at the end.
 
 ## Target device
 
-iPad 2, iOS 9.3.5, Safari 9, 512 MB RAM, 1024×768. This sets the rules for the
-tablet page:
+First target: iPad 2, iOS 9.3.5, Safari 9, 512 MB RAM, 1024×768. The page is
+written to run on iOS 5 and later. This sets the rules for the tablet page:
 
-- **ES5 only**, `XMLHttpRequest` instead of `fetch`, no framework.
-- **Flexbox, no CSS grid** (grid arrived in Safari 10.1).
+- **ES5 only**, `XMLHttpRequest` instead of `fetch`, no framework. Enforced by
+  `tests/es5.rs`.
+- **Inline-block layout**: no flexbox (iOS 5 has only the 2009 syntax), no grid.
 - **Plain HTTP on the LAN.** iOS 9 does not trust ISRG Root X1, so Let's
   Encrypt certificates fail. The phone uses the normal HTTPS address.
 - Few repaints, no heavy animation.
 - Installed with *Add to Home Screen* (`apple-mobile-web-app-capable`) and
   locked with Guided Access.
+
+## Server
+
+Rust, standard library first. One thread per connection (capped at 128), one
+request per connection, `Content-Length` bodies only, 16 KB head and 64 KB body
+limits. SSE streams hold their thread for their lifetime, which is fine for a
+household of screens. State is one JSON file, rewritten atomically.
+
+**Dependency policy.** Protocols we can write and test ourselves are written
+here: HTTP server and client, WebSocket client, CBOR, base64, the WebAuthn
+parsing. Crates are allowed for JSON (`serde`, `serde_json`) and cryptography
+(`p256`, `sha2`, `getrandom`), which is never hand-rolled, plus `qrcodegen`
+(zero dependencies). No async runtime, no web framework.
+
+**Security model.**
+- Admins sign in with passkeys only (ES256, user verification required). The
+  first passkey needs a setup code printed in the server log.
+- Admin session: random token in an `HttpOnly; SameSite=Strict` cookie,
+  `Secure` when the public URL is https. Only its SHA-256 is stored.
+- Every non-GET request needs an `X-Oldpad: 1` header (forces a CORS preflight
+  cross-site, which is never answered), and admin writes with a foreign
+  `Origin` are refused.
+- Screens: random bearer token, stored hashed, sliding 90-day expiry, revocable.
+  A screen can read and control only its own tiles. Event streams use a
+  one-time 60-second ticket so the token never appears in a URL.
+- Pairing: 8-character code (no look-alike characters), 5-minute expiry, at
+  most 10 pending, token handed to the polling tablet exactly once.
+- Integration secrets are never returned to the browser.
 
 ## Architecture
 
@@ -31,9 +60,12 @@ since Safari 5). The tablet never polls.
 
 ## Integrations
 
+Compiled-in modules behind one trait; the admin wizard is generated from the
+fields each declares. See [integrations.md](integrations.md).
+
 | Source | How | Notes |
 | --- | --- | --- |
-| Homey Pro (2023) | `homey-api`, `HomeyAPI.createLocalAPI({ address, token })` | API key scopes: `homey.device.readonly`, `homey.device.control`, `homey.zone.readonly`, `homey.flow.readonly`, `homey.flow.start`. Control, but no admin (rename, delete, settings, users, apps). |
+| Homey Pro (2023) | Own HTTP + socket.io v2 client over WebSocket, see [homey-protocol.md](homey-protocol.md) | API key scopes: `homey.device.readonly`, `homey.device.control`, `homey.zone.readonly`, `homey.flow.readonly`, `homey.flow.start`. Control, but no admin (rename, delete, settings, users, apps). |
 | Sonos | Direct on the LAN, not through Homey | Favourites with artwork, volume, play/pause, now playing. Homey's Sonos support is too thin for this. |
 | Indoor / outdoor | InfluxDB 1.x query | Configurable measurement, field and tag filter per reading. Today's min/max alongside the current value. |
 | Forecast | MET Norway Locationforecast + Sunrise | Next hours and tomorrow. Sunrise/sunset drives the day/night theme. |
@@ -74,6 +106,9 @@ A dashboard has pages, a page has tiles. Tile types:
 
 ## Open questions
 
-- Server language and storage (Node is the natural fit for `homey-api`).
-- How the phone reaches the server for the first passkey registration.
+- Sonos, weather (MET Norway) and the InfluxDB indoor/outdoor panel: built as
+  integrations, which needs an HTTPS client for MET (rustls).
+- Day/night by sunrise and sunset instead of fixed 07–21.
 - Packaging: container image and an example Kubernetes manifest.
+- Out-of-process integrations (a program speaking JSON over stdio), so
+  integrations can be written in any language without a rebuild.

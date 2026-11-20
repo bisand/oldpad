@@ -1,0 +1,71 @@
+/* Old-browser safe: no flexbox, grid, variables or vw units. Inline-block layout
+   works back to iOS 5. Keep it that way: tests/es5 checks the JS, not this. */
+* { -webkit-box-sizing: border-box; box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  -webkit-touch-callout: none;
+  cursor: default;
+}
+body.day { background: #eef0f3; color: #1b1d21; }
+body.night { background: #000; color: #9a9da3; }
+.hidden { display: none; }
+.screen { padding: 24px 28px; }
+.muted { color: #7b8089; }
+.mono { font-family: Menlo, Courier, monospace; }
+
+#pair { text-align: center; padding-top: 40px; }
+#pair h1 { font-weight: 300; font-size: 36px; margin: 0 0 8px; }
+.lead { font-size: 18px; margin: 0 0 24px; }
+.qr { width: 300px; height: 300px; margin: 0 auto 16px; background: #fff; padding: 8px; }
+.qr svg { width: 284px; height: 284px; display: block; }
+.code { font-size: 22px; }
+.code .mono { font-size: 30px; letter-spacing: 4px; }
+
+.top { overflow: hidden; margin-bottom: 18px; }
+.clock { float: left; }
+#time { font-size: 72px; font-weight: 200; line-height: 1; letter-spacing: -2px; }
+.date { display: block; font-size: 20px; margin-top: 6px; }
+.name { float: right; font-size: 16px; padding-top: 8px; }
+
+.tiles { margin: 0 -8px; font-size: 0; }
+.tile {
+  display: inline-block; vertical-align: top;
+  width: 33.333%; padding: 8px; font-size: 18px;
+}
+.tile .in {
+  position: relative; height: 190px; padding: 18px 20px; border-radius: 14px;
+  background: #fff; border: 1px solid #d9dce1; overflow: hidden;
+}
+.night .tile .in { background: #111; border-color: #222; }
+.tile.on .in { background: #ffe9b0; border-color: #f0c85a; color: #5a4100; }
+.night .tile.on .in { background: #2b2410; border-color: #4a3d14; color: #d8c48a; }
+.tile.pressed .in { opacity: 0.6; }
+.tile.missing .in { opacity: 0.5; }
+.tile .label { font-size: 20px; font-weight: 500; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .zone { font-size: 14px; color: #7b8089; }
+.tile.on .zone { color: #8a6d1e; }
+.tile .value { position: absolute; left: 20px; bottom: 16px; font-size: 40px; font-weight: 300; }
+.tile .sub { font-size: 16px; color: #7b8089; }
+.tile .steps { position: absolute; right: 14px; bottom: 14px; }
+.step {
+  display: inline-block; width: 52px; height: 52px; margin-left: 8px; border-radius: 26px;
+  line-height: 50px; text-align: center; font-size: 30px; font-weight: 300;
+  border: 1px solid #c9ccd2; background: #f6f7f9;
+}
+.night .step { background: #1a1a1a; border-color: #333; }
+.empty { font-size: 20px; text-align: center; padding: 60px 0; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; width: 420px; margin-left: -210px;
+  padding: 14px 18px; border-radius: 10px; background: #b3261e; color: #fff;
+  font-size: 17px; text-align: center;
+}
+
+@media (max-width: 800px) {
+  .tile { width: 50%; }
+  #time { font-size: 56px; }
+}

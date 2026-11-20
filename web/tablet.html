@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="oldpad">
+<title>oldpad</title>
+<link rel="stylesheet" href="/tablet.css">
+</head>
+<body class="day">
+<div id="pair" class="screen hidden">
+  <h1>Pair this screen</h1>
+  <p class="lead">Scan the code with your phone and sign in with your passkey.</p>
+  <div id="qr" class="qr"></div>
+  <p>or open <span id="pair-url" class="mono"></span></p>
+  <p class="code">Code <span id="pair-code" class="mono"></span></p>
+  <p id="pair-status" class="muted"></p>
+</div>
+<div id="home" class="screen hidden">
+  <div class="top">
+    <div class="clock"><span id="time">--:--</span><span id="date" class="date"></span></div>
+    <div id="device-name" class="muted name"></div>
+  </div>
+  <div id="tiles" class="tiles"></div>
+  <p id="empty" class="empty hidden">No tiles yet. Choose them for this screen in the admin page on your phone.</p>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/tablet.js"></script>
+</body>
+</html>

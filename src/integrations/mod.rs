@@ -1,0 +1,310 @@
+//! Integrations connect oldpad to a home automation system.
+//!
+//! Each one is a `Kind`: a description of the fields it needs (which the admin
+//! wizard turns into a form), a `test` used by the wizard's "Test connection"
+//! step, and `start`, which returns a running instance. Instances report what
+//! they know as `Entity` values and push changes through a `Sink`.
+//!
+//! To add one: write a module with a `pub fn kind() -> Kind`, add it to
+//! `kinds()` below. See docs/integrations.md.
+
+pub mod demo;
+pub mod homey;
+
+use serde::Serialize;
+use serde_json::{Map, Value};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
+
+#[derive(Serialize, Clone, Copy, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+#[allow(dead_code)] // Number and Bool are offered to integrations; none uses them yet.
+pub enum FieldKind {
+    Text,
+    Url,
+    Secret,
+    Number,
+    Bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct Field {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub kind: FieldKind,
+    pub required: bool,
+    pub placeholder: &'static str,
+    pub help: &'static str,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct Capability {
+    pub value: Value,
+    pub settable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub units: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+}
+
+impl Capability {
+    pub fn new(value: Value, settable: bool) -> Self {
+        Capability { value, settable, units: None, min: None, max: None }
+    }
+}
+
+/// Something a tile can show or control: a light, a thermostat, a sensor, a flow.
+/// Capability names follow Homey's (`onoff`, `dim` 0..1, `target_temperature`,
+/// `measure_temperature`, …) so integrations map onto one shared vocabulary.
+/// `button` is a write-only capability: setting it runs the thing (a Flow, a scene).
+#[derive(Serialize, Clone, Debug)]
+pub struct Entity {
+    pub id: String, // unique within its integration instance
+    pub name: String,
+    pub zone: String,
+    /// light, socket, thermostat, sensor, button, speaker, other
+    pub class: String,
+    pub capabilities: BTreeMap<String, Capability>,
+}
+
+pub enum Event {
+    /// One capability changed value.
+    Changed { entity: String, capability: String, value: Value },
+    /// The entity list changed shape (added, removed, renamed).
+    Reloaded,
+}
+
+pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
+
+pub trait Instance: Send + Sync {
+    fn entities(&self) -> Vec<Entity>;
+    fn set(&self, entity: &str, capability: &str, value: &Value) -> Result<(), String>;
+    /// Stop background work. Called before the instance is dropped.
+    fn stop(&self);
+}
+
+pub struct Kind {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub fields: Vec<Field>,
+    pub test: fn(&Map<String, Value>) -> Result<String, String>,
+    pub start: fn(&Map<String, Value>, Sink) -> Result<Box<dyn Instance>, String>,
+}
+
+pub fn kinds() -> Vec<Kind> {
+    vec![homey::kind(), demo::kind()]
+}
+
+/// Checks a submitted config against the kind's fields and returns it cleaned:
+/// unknown keys dropped, types enforced. Secrets left empty keep `previous`.
+pub fn validate(kind: &Kind, input: &Map<String, Value>, previous: Option<&Map<String, Value>>) -> Result<Map<String, Value>, String> {
+    let mut out = Map::new();
+    for f in &kind.fields {
+        let mut v = input.get(f.key).cloned().unwrap_or(Value::Null);
+        if f.kind == FieldKind::Secret && v.as_str().is_none_or(str::is_empty) {
+            v = previous.and_then(|p| p.get(f.key)).cloned().unwrap_or(Value::Null);
+        }
+        let v = match (f.kind, v) {
+            (_, Value::Null) => Value::Null,
+            (FieldKind::Bool, Value::Bool(b)) => Value::Bool(b),
+            (FieldKind::Number, Value::Number(n)) => Value::Number(n),
+            (FieldKind::Number, Value::String(s)) if s.trim().is_empty() => Value::Null,
+            (FieldKind::Number, Value::String(s)) => s
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .and_then(serde_json::Number::from_f64)
+                .map(Value::Number)
+                .ok_or_else(|| format!("{} must be a number", f.label))?,
+            (FieldKind::Text | FieldKind::Secret, Value::String(s)) => {
+                if s.len() > 2048 {
+                    return Err(format!("{} is too long", f.label));
+                }
+                if s.trim().is_empty() { Value::Null } else { Value::String(s.trim().to_string()) }
+            }
+            (FieldKind::Url, Value::String(s)) => {
+                let s = s.trim().trim_end_matches('/').to_string();
+                if s.is_empty() {
+                    Value::Null
+                } else if !(s.starts_with("http://") || s.starts_with("https://")) || s.len() > 2048 {
+                    return Err(format!("{} must start with http:// or https://", f.label));
+                } else {
+                    Value::String(s)
+                }
+            }
+            _ => return Err(format!("{} has the wrong type", f.label)),
+        };
+        if v.is_null() {
+            if f.required {
+                return Err(format!("{} is required", f.label));
+            }
+        } else {
+            out.insert(f.key.to_string(), v);
+        }
+    }
+    Ok(out)
+}
+
+/// The config as the admin UI may see it: secrets replaced by a flag.
+pub fn redact(kind: &Kind, config: &Map<String, Value>) -> Map<String, Value> {
+    let mut out = config.clone();
+    for f in kind.fields.iter().filter(|f| f.kind == FieldKind::Secret) {
+        if out.contains_key(f.key) {
+            out.insert(f.key.to_string(), Value::Bool(true));
+        }
+    }
+    out
+}
+
+pub fn get_str<'a>(config: &'a Map<String, Value>, key: &str) -> &'a str {
+    config.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+struct Running {
+    instance: Option<Arc<dyn Instance>>,
+    status: String,
+}
+
+/// Running instances, keyed by integration id. Entity ids seen by the rest of
+/// oldpad are "<integration id>:<entity id>".
+pub struct Registry {
+    pub kinds: Vec<Kind>,
+    running: Mutex<HashMap<String, Running>>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Registry { kinds: kinds(), running: Mutex::new(HashMap::new()) }
+    }
+
+    pub fn kind(&self, id: &str) -> Option<&Kind> {
+        self.kinds.iter().find(|k| k.id == id)
+    }
+
+    /// Starts an instance in the background; `start` may block on the network.
+    pub fn start(self: &Arc<Self>, id: String, kind_id: String, config: Map<String, Value>, sink: Sink) {
+        self.stop(&id);
+        self.running.lock().unwrap().insert(id.clone(), Running { instance: None, status: "starting".into() });
+        let reg = Arc::clone(self);
+        std::thread::spawn(move || {
+            let Some(kind) = reg.kind(&kind_id) else { return };
+            let result = (kind.start)(&config, sink.clone());
+            let mut running = reg.running.lock().unwrap();
+            // The integration may have been deleted or restarted while we connected.
+            let Some(slot) = running.get_mut(&id).filter(|s| s.instance.is_none() && s.status == "starting") else {
+                if let Ok(inst) = result {
+                    inst.stop();
+                }
+                return;
+            };
+            match result {
+                Ok(inst) => {
+                    slot.instance = Some(Arc::from(inst));
+                    slot.status = "running".into();
+                }
+                Err(e) => {
+                    eprintln!("integration {id}: {e}");
+                    slot.status = format!("error: {e}");
+                }
+            }
+            drop(running);
+            sink(Event::Reloaded);
+        });
+    }
+
+    pub fn stop(&self, id: &str) {
+        if let Some(r) = self.running.lock().unwrap().remove(id)
+            && let Some(inst) = r.instance {
+                inst.stop();
+            }
+    }
+
+    pub fn status(&self, id: &str) -> String {
+        self.running.lock().unwrap().get(id).map(|r| r.status.clone()).unwrap_or_else(|| "stopped".into())
+    }
+
+    fn instance(&self, id: &str) -> Option<Arc<dyn Instance>> {
+        self.running.lock().unwrap().get(id).and_then(|r| r.instance.clone())
+    }
+
+    /// All entities, with ids prefixed by their integration id.
+    pub fn entities(&self) -> Vec<Entity> {
+        let instances: Vec<(String, Arc<dyn Instance>)> = self
+            .running
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(id, r)| r.instance.clone().map(|i| (id.clone(), i)))
+            .collect();
+        let mut out = Vec::new();
+        for (id, inst) in instances {
+            for mut e in inst.entities() {
+                e.id = format!("{id}:{}", e.id);
+                out.push(e);
+            }
+        }
+        out.sort_by(|a, b| (&a.zone, &a.name).cmp(&(&b.zone, &b.name)));
+        out
+    }
+
+    pub fn entity(&self, full_id: &str) -> Option<Entity> {
+        let (iid, eid) = full_id.split_once(':')?;
+        let mut e = self.instance(iid)?.entities().into_iter().find(|e| e.id == eid)?;
+        e.id = full_id.to_string();
+        Some(e)
+    }
+
+    pub fn set(&self, full_id: &str, capability: &str, value: &Value) -> Result<(), String> {
+        let (iid, eid) = full_id.split_once(':').ok_or("bad entity id")?;
+        let inst = self.instance(iid).ok_or("integration is not running")?;
+        let entity = inst.entities().into_iter().find(|e| e.id == eid).ok_or("no such entity")?;
+        let cap = entity.capabilities.get(capability).ok_or("no such capability")?;
+        if !cap.settable {
+            return Err("capability is read-only".into());
+        }
+        // The lock is not held here: `set` talks to the network.
+        inst.set(eid, capability, value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn kind() -> Kind {
+        Kind {
+            id: "t",
+            name: "T",
+            description: "",
+            fields: vec![
+                Field { key: "url", label: "Address", kind: FieldKind::Url, required: true, placeholder: "", help: "" },
+                Field { key: "key", label: "Key", kind: FieldKind::Secret, required: true, placeholder: "", help: "" },
+                Field { key: "n", label: "N", kind: FieldKind::Number, required: false, placeholder: "", help: "" },
+            ],
+            test: |_| Ok(String::new()),
+            start: |_, _| Err(String::new()),
+        }
+    }
+
+    fn map(v: Value) -> Map<String, Value> {
+        v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn validates_and_keeps_secrets() {
+        let k = kind();
+        let ok = validate(&k, &map(json!({"url": " http://h/ ", "key": "s3", "n": "2", "junk": 1})), None).unwrap();
+        assert_eq!(Value::Object(ok.clone()), json!({"url": "http://h", "key": "s3", "n": 2.0}));
+        // Editing without retyping the secret keeps the old one.
+        let edited = validate(&k, &map(json!({"url": "http://h2", "key": ""})), Some(&ok)).unwrap();
+        assert_eq!(edited["key"], "s3");
+        assert_eq!(redact(&k, &edited)["key"], true);
+        assert!(validate(&k, &map(json!({"url": "ftp://h", "key": "x"})), None).is_err());
+        assert!(validate(&k, &map(json!({"key": "x"})), None).is_err());
+        assert!(validate(&k, &map(json!({"url": "http://h", "key": "x", "n": "two"})), None).is_err());
+    }
+}
