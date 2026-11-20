@@ -15,21 +15,24 @@
 
   var LANG = (navigator.language || 'en').toLowerCase();
   var NB = LANG.indexOf('nb') === 0 || LANG.indexOf('no') === 0 || LANG.indexOf('nn') === 0;
-  var T = NB ? {
+  var TEXTS = { nb: {
     days: ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag'],
     months: ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des'],
     indoor: 'Inne', outdoor: 'Ute', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
     failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
-  } : {
+  }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
     failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
-  };
+  } };
+  var T = TEXTS[NB ? 'nb' : 'en'];
+  // Household settings from the server; these defaults hold until the first load.
+  var SETTINGS = { day_start: 7, day_end: 21, theme: 'auto', language: 'auto' };
   var DECIMAL = (function () { try { return (1.5).toLocaleString().charAt(1) === ',' || NB ? ',' : '.'; } catch (e) { return '.'; } }());
 
   // MET Norway symbol codes → icon and words.
@@ -217,6 +220,14 @@
         return;
       }
       entities = {};
+      if (data.settings) {
+        SETTINGS = data.settings;
+        if (SETTINGS.language !== 'auto' && TEXTS[SETTINGS.language]) {
+          NB = SETTINGS.language === 'nb';
+          T = TEXTS[SETTINGS.language];
+          DECIMAL = NB ? ',' : '.';
+        }
+      }
       var i, k;
       layout = { tiles: [], more: [], panels: {}, pages: [] };
       for (i = 0; i < data.tiles.length; i++) { layout.tiles.push(keep(data.tiles[i])); }
@@ -714,9 +725,11 @@
       el.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
       $('date').textContent = T.days[d.getDay()] + ' ' + d.getDate() + (NB ? '. ' : ' ') + T.months[d.getMonth()];
     }
-    // shortcut: fixed 07–21 day; switch to sunrise/sunset from the forecast integration later.
-    var h = d.getHours();
-    document.body.className = h >= 7 && h < 21 ? 'day' : 'night';
+    // The admin's hours; a window may wrap past midnight (e.g. 22 to 6).
+    var h = d.getHours(), a = SETTINGS.day_start, b = SETTINGS.day_end;
+    var inWindow = a <= b ? h >= a && h < b : h >= a || h < b;
+    var day = SETTINGS.theme === 'day' || (SETTINGS.theme === 'auto' && inWindow);
+    document.body.className = day ? 'day' : 'night';
   }
 
   document.addEventListener('click', onTap, false);

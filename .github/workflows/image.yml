@@ -28,6 +28,7 @@ jobs:
           docker build \
             --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
             --label org.opencontainers.image.licenses=MIT \
+            --build-arg OLDPAD_COMMIT="$sha" \
             -t "$image:sha-$sha" -t "$image:main" .
           docker push "$image:sha-$sha"
           docker push "$image:main"

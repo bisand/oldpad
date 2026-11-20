@@ -146,6 +146,10 @@ impl App {
         self.clients.lock().unwrap().iter().any(|c| c.device_id == device_id)
     }
 
+    pub fn notify_all(&self, event: &str) {
+        self.send_where(|_| true, &sse(event, &json!({})));
+    }
+
     pub fn notify_device(&self, device_id: &str, event: &str) {
         self.send_where(|c| c.device_id == device_id, &sse(event, &json!({})));
     }

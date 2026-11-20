@@ -198,6 +198,17 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(phone.call("POST", &format!("/api/admin/devices/{device_id}/reload"), Some(json!({}))).0, 200);
     assert!(lines.by_ref().map(Result::unwrap).any(|l| l == "event: refresh"));
 
+    // --- settings reach the screens; a backup restores what it holds
+    assert_eq!(phone.call("PUT", "/api/admin/settings", Some(json!({ "day_start": 25, "day_end": 21, "theme": "auto", "language": "auto" }))).0, 400);
+    assert_eq!(phone.call("PUT", "/api/admin/settings", Some(json!({ "day_start": 6, "day_end": 22, "theme": "night", "language": "nb" }))).0, 200);
+    assert_eq!(tablet.call("GET", "/api/tablet", None).1["settings"]["theme"], "night");
+    let (s, backup) = phone.call("GET", "/api/admin/backup", None);
+    assert_eq!((s, backup["devices"][0]["name"].as_str(), backup.get("sessions")), (200, Some("Kitchen"), None));
+    assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(json!({ "name": "Renamed" }))).0, 200);
+    assert_eq!(phone.call("POST", "/api/admin/restore", Some(json!({ "not": "a backup" }))).0, 400);
+    assert_eq!(phone.call("POST", "/api/admin/restore", Some(backup)).0, 200);
+    assert_eq!(tablet.call("GET", "/api/tablet", None).1["device"]["name"], "Kitchen", "restored, and still paired");
+
     // --- removing the screen revokes its token
     assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{device_id}"), None).0, 200);
     assert_eq!(tablet.call("GET", "/api/tablet", None).0, 401);

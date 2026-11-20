@@ -91,6 +91,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
                     Ok(Response::ok(json!({
                         "device": { "id": device.id, "name": device.name },
+                        "settings": app.store.lock().unwrap().data.settings,
                         "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
                         "more": device.more.iter().map(get).collect::<Vec<_>>(),
                         "pages": device.pages.iter().map(|p| json!({
@@ -408,6 +409,70 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             store.data.admins.retain(|a| a.id != *id);
             store.data.sessions.retain(|s| s.admin_id != *id);
             store.save().map_err(|e| Response::error(500, e))?;
+            Ok(Response::ok(json!({ "ok": true })))
+        }
+        ("GET", ["settings"]) => {
+            let store = app.store.lock().unwrap();
+            Ok(Response::ok(json!({
+                "settings": store.data.settings,
+                "version": env!("CARGO_PKG_VERSION"),
+                "commit": option_env!("OLDPAD_COMMIT").unwrap_or(""),
+                "publicUrl": app.cfg.public_url,
+                "counts": { "screens": store.data.devices.len(), "integrations": store.data.integrations.len(), "people": store.data.admins.len() },
+            })))
+        }
+        ("PUT", ["settings"]) => {
+            let settings: crate::store::Settings = serde_json::from_value(req.json()?).map_err(|_| Response::error(400, "Bad settings"))?;
+            if !settings.valid() {
+                return Err(Response::error(400, "Bad settings"));
+            }
+            let mut store = app.store.lock().unwrap();
+            store.data.settings = settings;
+            store.save().map_err(|e| Response::error(500, e))?;
+            drop(store);
+            // Language and theme are applied when a screen loads: have them all reload.
+            app.notify_all("refresh");
+            Ok(Response::ok(json!({ "ok": true })))
+        }
+        ("GET", ["backup"]) => {
+            let store = app.store.lock().unwrap();
+            let d = &store.data;
+            // Everything but sign-in sessions. It holds integration secrets: the admin is told so.
+            let backup = json!({ "oldpad": 1, "version": env!("CARGO_PKG_VERSION"), "exported": now(), "admins": d.admins, "devices": d.devices, "integrations": d.integrations, "settings": d.settings });
+            Ok(Response::ok(backup).header("Content-Disposition", "attachment; filename=\"oldpad-backup.json\""))
+        }
+        ("POST", ["restore"]) => {
+            // shortcut: request bodies are capped at 64 KB; raise http::MAX_BODY if a household outgrows it.
+            let b = req.json()?;
+            if b["oldpad"] != 1 {
+                return Err(Response::error(400, "This is not an oldpad backup"));
+            }
+            let parse = |k: &str| b[k].clone();
+            let admins: Vec<crate::store::Admin> = serde_json::from_value(parse("admins")).map_err(|_| Response::error(400, "Backup: bad admins"))?;
+            let devices: Vec<crate::store::Device> = serde_json::from_value(parse("devices")).map_err(|_| Response::error(400, "Backup: bad screens"))?;
+            let integrations: Vec<IntegrationConfig> = serde_json::from_value(parse("integrations")).map_err(|_| Response::error(400, "Backup: bad integrations"))?;
+            let settings: crate::store::Settings = serde_json::from_value(parse("settings")).unwrap_or_default();
+            if integrations.iter().any(|i| app.registry.kind(&i.kind).is_none()) || !settings.valid() {
+                return Err(Response::error(400, "Backup: unknown integration type or bad settings"));
+            }
+            let mut store = app.store.lock().unwrap();
+            let old: Vec<String> = store.data.integrations.iter().map(|i| i.id.clone()).collect();
+            // People in the backup are added; nobody signed in now is locked out.
+            for a in admins {
+                if !store.data.admins.iter().any(|x| x.id == a.id) {
+                    store.data.admins.push(a);
+                }
+            }
+            store.data.devices = devices;
+            store.data.integrations = integrations;
+            store.data.settings = settings;
+            store.save().map_err(|e| Response::error(500, e))?;
+            drop(store);
+            for id in old {
+                app.registry.stop(&id);
+            }
+            app.start_integrations();
+            app.notify_all("refresh");
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["kinds"]) => Ok(Response::ok(json!(app

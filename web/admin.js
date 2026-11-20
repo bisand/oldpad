@@ -198,7 +198,7 @@ async function inviteNewView() {
     h('div', { class: 'actions' },
       navigator.share ? h('button', { class: 'primary', onclick: () => navigator.share({ title: 'oldpad', url: inv.url }).catch(() => {}) }, 'Share link') : null,
       h('button', { onclick: async () => { await navigator.clipboard.writeText(inv.url); alert('Copied.'); } }, 'Copy link'),
-      h('button', { onclick: () => (location.hash = '#/') }, 'Done')),
+      h('button', { onclick: () => (location.hash = '#/people') }, 'Done')),
   );
 }
 
@@ -217,10 +217,10 @@ function inviteView(code) {
   );
 }
 
-async function homeView() {
-  const [devices, integrations, people] = await Promise.all([api('GET', '/devices'), api('GET', '/integrations'), api('GET', '/people')]);
+async function screensView() {
+  const devices = await api('GET', '/devices');
   render(
-    h('h2', {}, 'Screens'),
+    h('h1', {}, 'Screens'),
     devices.length
       ? devices.map((d) => h('div', { class: 'card' },
           h('div', { class: 'row' },
@@ -241,7 +241,13 @@ async function homeView() {
               } }, 'Remove')))))
       : h('p', { class: 'muted' }, 'No screens yet.'),
     h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/add-screen') }, 'Add screen')),
-    h('h2', {}, 'Integrations'),
+  );
+}
+
+async function integrationsView() {
+  const integrations = await api('GET', '/integrations');
+  render(
+    h('h1', {}, 'Integrations'),
     integrations.map((i) => h('div', { class: 'card' },
       h('div', { class: 'row' },
         h('div', {}, h('a', { href: `#/integration-info/${i.id}`, class: 'title' }, i.name), h('div', { class: 'small muted' }, i.typeName, ' · ',
@@ -254,7 +260,56 @@ async function homeView() {
           } }, 'Remove'))),
       (i.accounts || []).map((a) => accountRow(i, a)))),
     h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/integration/new') }, 'Add integration')),
-    peopleSection(people),
+  );
+}
+
+async function peopleView() {
+  render(peopleSection(await api('GET', '/people')));
+}
+
+async function settingsView() {
+  const info = await api('GET', '/settings');
+  const st = { ...info.settings };
+  const hours = (key) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = Number(e.target.value); } },
+    Array.from({ length: 24 }, (_, i) => h('option', { value: i, selected: st[key] === i }, `${String(i).padStart(2, '0')}:00`)));
+  const choice = (key, options) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = e.target.value; } },
+    options.map(([v, label]) => h('option', { value: v, selected: st[key] === v }, label)));
+  const out = h('div');
+  const file = h('input', { type: 'file', accept: 'application/json,.json', id: 'restore', class: 'hidden', onchange: async () => {
+    const f = file.files[0];
+    if (!f) return;
+    try {
+      const backup = JSON.parse(await f.text());
+      if (!confirm(`Restore this backup from ${backup.exported ? new Date(backup.exported * 1000).toLocaleString() : 'an unknown date'}? Screens, integrations and settings are replaced; people in it are added.`)) return;
+      await api('POST', '/restore', backup);
+      out.replaceChildren(h('p', { class: 'notice ok' }, 'Restored. Screens reload by themselves.'));
+    } catch (e) { out.replaceChildren(errorBox(e)); }
+    file.value = '';
+  } });
+  render(
+    h('h1', {}, 'Settings'),
+    h('h2', {}, 'Screens'),
+    h('label', { for: 's-theme' }, 'Theme'),
+    choice('theme', [['auto', 'Light by day, dark at night'], ['day', 'Always light'], ['night', 'Always dark']]),
+    h('div', { class: 'row' }, h('div', {}, h('label', { for: 's-day_start' }, 'Day starts'), hours('day_start')), h('div', {}, h('label', { for: 's-day_end' }, 'Night starts'), hours('day_end'))),
+    h('label', { for: 's-language' }, 'Language'),
+    choice('language', [['auto', 'Each screen\'s own language'], ['nb', 'Norsk'], ['en', 'English']]),
+    h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: async () => {
+      try { await api('PUT', '/settings', st); out.replaceChildren(h('p', { class: 'notice ok' }, 'Saved. Screens reload by themselves.')); } catch (e) { out.replaceChildren(errorBox(e)); }
+    } }, 'Save')),
+    h('h2', {}, 'Backup'),
+    h('p', { class: 'muted' }, 'Screens, their layouts, integrations, people and settings in one file. It includes integration secrets such as the Homey key and the Spotify sign-in, so keep it somewhere private.'),
+    h('div', { class: 'actions' },
+      h('button', { onclick: async () => {
+        const res = await fetch('/api/admin/backup', { credentials: 'same-origin' });
+        if (!res.ok) { out.replaceChildren(errorBox(new Error(`HTTP ${res.status}`))); return; }
+        const a = h('a', { href: URL.createObjectURL(await res.blob()), download: `oldpad-backup-${new Date().toISOString().slice(0, 10)}.json` });
+        document.body.append(a); a.click(); a.remove();
+      } }, 'Download backup'),
+      h('button', { onclick: () => file.click() }, 'Restore from backup…'), file),
+    out,
+    h('h2', {}, 'About'),
+    h('p', { class: 'small muted' }, `oldpad ${info.version}${info.commit ? ` (${info.commit})` : ''} · ${info.publicUrl} · ${info.counts.screens} screens, ${info.counts.integrations} integrations, ${info.counts.people} people`),
   );
 }
 
@@ -445,7 +500,7 @@ async function integrationInfoView(id) {
   render(
     h('h1', {}, i.name),
     h('p', { class: `notice ${i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : ''}` }, `${i.typeName}: ${i.status}`),
-    h('div', { class: 'actions' }, restart, h('button', { onclick: () => (location.hash = `#/integration/${id}`) }, 'Edit settings'), h('button', { onclick: () => (location.hash = '#/') }, 'Back')),
+    h('div', { class: 'actions' }, restart, h('button', { onclick: () => (location.hash = `#/integration/${id}`) }, 'Edit settings'), h('button', { onclick: () => (location.hash = '#/integrations') }, 'Back')),
     (i.accounts || []).length ? [h('h2', {}, 'Accounts'), h('div', { class: 'card' }, i.accounts.map((a) => accountRow(i, a)))] : null,
     h('h2', {}, 'Devices'),
     mine.length ? [filter, list] : h('p', { class: 'muted' }, i.status === 'running' ? 'This integration has no devices.' : 'Devices show up here once it is running.'),
@@ -502,7 +557,7 @@ function integrationForm(kind, existing) {
       const body = { type: kind.id, name: name.value, config: config() };
       if (existing) await api('PUT', `/integrations/${existing.id}`, body);
       else await api('POST', '/integrations', body);
-      location.hash = '#/';
+      location.hash = '#/integrations';
     } catch (e) { out.replaceChildren(errorBox(e)); save.disabled = false; }
   } }, 'Save');
   render(
@@ -511,7 +566,7 @@ function integrationForm(kind, existing) {
     h('p', {}, kind.description),
     h('label', { for: 'f-name' }, 'Name'), name,
     fields,
-    h('div', { class: 'actions' }, test, save, h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')),
+    h('div', { class: 'actions' }, test, save, h('button', { onclick: () => (location.hash = '#/integrations') }, 'Cancel')),
     out,
   );
 }
@@ -522,6 +577,9 @@ async function route() {
   try {
     const status = await api('GET', '/status');
     document.getElementById('who').textContent = status.admin ? status.admin.name : '';
+    const top = (location.hash.split('/')[1] || '').replace(/^(device|add-screen|pair)$/, '').replace(/^integration(-info)?$/, 'integrations').replace(/^invite-new$/, 'people');
+    document.getElementById('nav').replaceChildren(...(status.admin ? [['', 'Screens'], ['integrations', 'Integrations'], ['people', 'People'], ['settings', 'Settings']] : [])
+      .map(([v, label]) => h('a', { href: `#/${v}`, class: top === v ? 'on' : '' }, label)));
     if (status.setupNeeded) return setupView();
     const [, view, arg] = (location.hash || '#/').split('/');
     if (!status.admin) return view === 'invite' && arg ? inviteView(arg) : loginView();
@@ -532,7 +590,10 @@ async function route() {
     if (view === 'device' && arg) return await deviceView(arg);
     if (view === 'integration' && arg) return await integrationView(arg);
     if (view === 'integration-info' && arg) return await integrationInfoView(arg);
-    return await homeView();
+    if (view === 'integrations') return await integrationsView();
+    if (view === 'people') return await peopleView();
+    if (view === 'settings') return await settingsView();
+    return await screensView();
   } catch (e) {
     render(errorBox(e));
   }

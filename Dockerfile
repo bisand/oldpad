@@ -5,6 +5,9 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY src src
 COPY web web
+# Shown on the admin's settings page.
+ARG OLDPAD_COMMIT=""
+ENV OLDPAD_COMMIT=$OLDPAD_COMMIT
 RUN cargo build --release --locked
 
 FROM scratch

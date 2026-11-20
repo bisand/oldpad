@@ -49,3 +49,12 @@ select { width: 100%; padding: 10px 12px; font: inherit; border-radius: 8px; bor
 .qr { display: block; width: 220px; height: 220px; margin: 12px 0; background: #fff; border-radius: 8px; }
 button.chip.danger { color: var(--bad); }
 a.title { font-weight: 600; color: inherit; }
+header { gap: 12px; flex-wrap: wrap; }
+#nav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+#nav a { padding: 6px 10px; border-radius: 8px; color: var(--muted, inherit); text-decoration: none; white-space: nowrap; font-size: 15px; }
+#nav a.on { background: var(--accent); color: var(--accent-text); }
+.hidden { display: none; }
+@media (max-width: 600px) {
+  #nav { order: 3; flex-basis: 100%; justify-content: space-between; }
+  #nav a { padding: 6px 8px; }
+}

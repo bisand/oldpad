@@ -104,6 +104,33 @@ pub struct Data {
     pub devices: Vec<Device>,
     #[serde(default)]
     pub integrations: Vec<IntegrationConfig>,
+    #[serde(default)]
+    pub settings: Settings,
+}
+
+/// Household-wide choices the admin makes on the settings page.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Settings {
+    /// Hours (0–23) when screens switch to the light theme and back.
+    pub day_start: u8,
+    pub day_end: u8,
+    /// "auto" (by the hours above), "day" or "night".
+    pub theme: String,
+    /// "auto" (the screen's own language), "nb" or "en".
+    pub language: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings { day_start: 7, day_end: 21, theme: "auto".into(), language: "auto".into() }
+    }
+}
+
+impl Settings {
+    pub fn valid(&self) -> bool {
+        self.day_start < 24 && self.day_end < 24 && ["auto", "day", "night"].contains(&self.theme.as_str()) && ["auto", "nb", "en"].contains(&self.language.as_str())
+    }
 }
 
 /// One JSON file, rewritten atomically (temp file + rename) on every change.
