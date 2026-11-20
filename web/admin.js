@@ -245,7 +245,8 @@ async function screensView() {
 }
 
 async function integrationsView() {
-  const integrations = await api('GET', '/integrations');
+  const [integrations, entities] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities')]);
+  const hasFavs = (id) => entities.some((e) => e.id.startsWith(`${id}:`) && e.capabilities?.arrange_favourites);
   render(
     h('h1', {}, 'Integrations'),
     integrations.map((i) => h('div', { class: 'card' },
@@ -253,6 +254,7 @@ async function integrationsView() {
         h('div', {}, h('a', { href: `#/integration-info/${i.id}`, class: 'title' }, i.name), h('div', { class: 'small muted' }, i.typeName, ' · ',
           h('span', { class: i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : '' }, i.status))),
         h('div', { class: 'row' },
+          hasFavs(i.id) ? h('button', { onclick: () => (location.hash = `#/favourites/${i.id}`) }, 'Favourites') : null,
           h('button', { onclick: () => (location.hash = `#/integration/${i.id}`) }, 'Edit'),
           h('button', { class: 'danger', onclick: async () => {
             if (!confirm(`Remove ${i.name}? Its tiles will show as unavailable.`)) return;
@@ -544,6 +546,14 @@ function favouritesSection(iid, speaker) {
   ];
 }
 
+async function favouritesView(id) {
+  const [integrations, entities] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities')]);
+  const i = integrations.find((x) => x.id === id);
+  const speaker = entities.find((e) => e.id.startsWith(`${id}:`) && e.capabilities?.arrange_favourites);
+  if (!i || !speaker) return render(errorBox(new Error('No favourites here. Is the integration running?')));
+  render(h('h1', {}, `${i.name}: favourites`), favouritesSection(id, speaker).slice(1), h('div', { class: 'actions' }, h('button', { onclick: () => (location.hash = '#/integrations') }, 'Back')));
+}
+
 // The integration wizard: 1. pick a type, 2. fill in its fields, 3. test, 4. save.
 async function integrationView(id) {
   const kinds = await api('GET', '/kinds');
@@ -614,7 +624,7 @@ async function route() {
   try {
     const status = await api('GET', '/status');
     document.getElementById('who').textContent = status.admin ? status.admin.name : '';
-    const top = (location.hash.split('/')[1] || '').replace(/^(device|add-screen|pair)$/, '').replace(/^integration(-info)?$/, 'integrations').replace(/^invite-new$/, 'people');
+    const top = (location.hash.split('/')[1] || '').replace(/^(device|add-screen|pair)$/, '').replace(/^(integration(-info)?|favourites)$/, 'integrations').replace(/^invite-new$/, 'people');
     document.getElementById('nav').replaceChildren(...(status.admin ? [['', 'Screens'], ['integrations', 'Integrations'], ['people', 'People'], ['settings', 'Settings']] : [])
       .map(([v, label]) => h('a', { href: `#/${v}`, class: top === v ? 'on' : '' }, label)));
     if (status.setupNeeded) return setupView();
@@ -628,6 +638,7 @@ async function route() {
     if (view === 'integration' && arg) return await integrationView(arg);
     if (view === 'integration-info' && arg) return await integrationInfoView(arg);
     if (view === 'integrations') return await integrationsView();
+    if (view === 'favourites' && arg) return await favouritesView(arg);
     if (view === 'people') return await peopleView();
     if (view === 'settings') return await settingsView();
     return await screensView();

@@ -414,8 +414,8 @@
       f = favs[i];
       if (frontOnly && f.front === false) { continue; }
       n++;
-      html += '<span class="fav' + (f.art ? ' pic' : '') + (f.title === title ? ' on' : '') + '" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(f.id) + '">' +
-        (f.art ? '<img src="' + imgSrc(lead, f.art) + '" alt="">' : '') + esc(f.title) + '</span>';
+      html += '<span class="fav pic' + (f.title === title ? ' on' : '') + '" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(f.id) + '">' +
+        (f.art ? '<img src="' + imgSrc(lead, f.art) + '" alt="">' : '<span class="noimg">' + esc(f.title.charAt(0)) + '</span>') + esc(f.title) + '</span>';
     }
     return html;
   }
