@@ -266,8 +266,11 @@ async function deviceView(id) {
   };
   draw();
   const out = h('div');
+  const name = h('input', { type: 'text', id: 'd-name', value: device.name, maxlength: '64' });
   render(
     h('h1', {}, device.name),
+    h('label', { for: 'd-name' }, 'Name'),
+    name,
     h('h2', {}, 'Home panels'),
     selects,
     h('h2', {}, 'Tiles and menu pages'),
@@ -276,7 +279,9 @@ async function deviceView(id) {
     h('div', { class: 'actions' },
       h('button', { class: 'primary', onclick: async () => {
         try {
-          await api('PUT', `/devices/${id}`, { tiles, more: [...more], panels });
+          const n = name.value.trim();
+          if (!n) throw new Error('Give the screen a name.');
+          await api('PUT', `/devices/${id}`, { name: n, tiles, more: [...more], panels });
           location.hash = '#/';
         } catch (e) { out.replaceChildren(errorBox(e)); }
       } }, 'Save'),
