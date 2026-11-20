@@ -1,6 +1,12 @@
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// `OLDPAD_LOG` set: log every request and every event from integrations.
+pub fn verbose() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var_os("OLDPAD_LOG").is_some())
+}
+
 pub fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }

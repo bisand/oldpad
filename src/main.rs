@@ -66,7 +66,7 @@ pub fn serve(app: Arc<app::App>, listener: TcpListener) {
                 Ok(req) => {
                     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| api::handle(&app, &req)))
                         .unwrap_or_else(|_| http::Response::error(500, "Internal error"));
-                    if res.status >= 500 || std::env::var_os("OLDPAD_LOG").is_some() {
+                    if res.status >= 500 || util::verbose() {
                         eprintln!("{} {} {} -> {}", req.peer, req.method, req.path, res.status);
                     }
                     res

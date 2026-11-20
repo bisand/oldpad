@@ -42,7 +42,7 @@ on your phone, enter the code and create your passkey. Then open
 | `OLDPAD_DATA_DIR` | `data` | One JSON file with admins, screens and integrations. Keep it private. |
 | `OLDPAD_DEVICE_TTL_DAYS` | `90` | A screen unused this long must pair again. |
 | `OLDPAD_ADMIN_TTL_DAYS` | `30` | Phone sign-in lifetime. |
-| `OLDPAD_LOG` | unset | Set to log every request. |
+| `OLDPAD_LOG` | unset | Set to log every request and every event integrations receive (Homey's realtime messages included). Noisy; for troubleshooting. |
 
 **On the iPad:** open the page in Safari, *Share → Add to Home Screen*, start
 it from there (full screen), and lock it with *Settings → General →

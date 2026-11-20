@@ -266,6 +266,11 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
         }
         let Some(msg) = ws.recv()? else { continue };
         let Some(p) = parse_packet(&msg) else { continue };
+        if crate::util::verbose() {
+            // Event data can be large (whole device objects); the start says enough.
+            let shown: String = p.data.to_string().chars().take(300).collect();
+            eprintln!("homey: <- type {} {} {shown}", p.kind, p.nsp);
+        }
         if p.kind == '1' && p.nsp == nsp {
             return Err("Homey closed the namespace".into());
         }
