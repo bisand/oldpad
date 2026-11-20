@@ -96,11 +96,24 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     let body = req.json()?;
                     let id = body["id"].as_str().unwrap_or("");
                     // A screen controls what is configured for it and nothing else.
-                    if !device.allowed().contains(id) {
+                    let allowed = device.allowed();
+                    if !allowed.contains(id) {
                         return Err(Response::error(403, "Not configured for this screen"));
                     }
+                    let capability = body["capability"].as_str().unwrap_or("");
+                    let mut value = body["value"].clone();
+                    // Grouping names a second speaker: the screen must control that one too,
+                    // and it must belong to the same integration.
+                    if capability == "speaker_group" {
+                        let target = value.as_str().unwrap_or("");
+                        let same = matches!((id.split_once(':'), target.split_once(':')), (Some((a, _)), Some((b, _))) if a == b);
+                        if !same || !allowed.contains(target) {
+                            return Err(Response::error(403, "Not configured for this screen"));
+                        }
+                        value = json!(target.split_once(':').map_or("", |(_, e)| e));
+                    }
                     app.registry
-                        .set(id, body["capability"].as_str().unwrap_or(""), &body["value"])
+                        .set(id, capability, &value)
                         .map(|_| Response::ok(json!({ "ok": true })))
                         .map_err(|e| Response::error(502, &e))
                 }

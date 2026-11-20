@@ -19,14 +19,14 @@
     indoor: 'Inne', outdoor: 'Ute', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', next: 'Neste timer', days3: 'Neste dager'
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter'
   } : {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', next: 'Next hours', days3: 'Coming days'
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites'
   };
   var DECIMAL = (function () { try { return (1.5).toLocaleString().charAt(1) === ',' || NB ? ',' : '.'; } catch (e) { return '.'; } }());
 
@@ -93,6 +93,7 @@
   var entities = {};          // id → entity
   var layout = { tiles: [], more: [], panels: {} };
   var page = 'home';
+  var anchor = null;           // the speaker whose group the music page shows
   var events = null;
   var pairTimer = null;
   var toastTimer = null;
@@ -269,6 +270,29 @@
     return out;
   }
 
+  // Speakers: the panel's first, then the others this screen may control.
+  function speakers() {
+    var sp = panel('speaker'), out = sp ? [sp] : [], all = byClass(['speaker']), i;
+    for (i = 0; i < all.length; i++) { if (!sp || all[i].id !== sp.id) { out.push(all[i]); } }
+    return out;
+  }
+  function bare(id) { return id.slice(id.indexOf(':') + 1); }
+  // speaker_group holds the leading room's id within the same integration.
+  function leadOf(e) { var g = val(e, 'speaker_group'); return g ? e.id.slice(0, e.id.indexOf(':') + 1) + g : e.id; }
+  // What a group plays comes from its leader; a member reports the same when the leader is not on this screen.
+  function leader(e) { return entities[leadOf(e)] || e; }
+  function groupOf(e) {
+    var all = speakers(), out = [], i;
+    for (i = 0; i < all.length; i++) { if (leadOf(all[i]) === leadOf(e)) { out.push(all[i]); } }
+    return out.length ? out : [e];
+  }
+  function groupName(rooms) {
+    if (rooms.length === 1) { return rooms[0].name; }
+    if (rooms.length === 2) { return rooms[0].name + ' + ' + rooms[1].name; }
+    return rooms[0].name + ' + ' + (rooms.length - 1);
+  }
+  function anchorRoom() { return (anchor && entities[anchor]) || speakers()[0] || null; }
+
   // ------------------------------------------------------------- pieces
 
   function clockCard() {
@@ -337,21 +361,29 @@
 
   function tomorrow(s) { return dayStats(s, 1); }
 
-  function musicCard(withFavs) {
-    var sp = panel('speaker');
-    if (!sp) { return ''; }
-    var playing = val(sp, 'speaker_playing') === true;
-    var vol = Math.round((val(sp, 'volume_set') || 0) * 100);
-    var title = val(sp, 'speaker_track') || T.nothing, sub = val(sp, 'speaker_artist') || '';
-    var favs = val(sp, 'favourites') || [], html = '', i;
-    for (i = 0; i < favs.length && i < withFavs; i++) {
-      html += '<span class="fav' + (favs[i].title === title ? ' on' : '') + '" data-act="fav" data-fav="' + esc(favs[i].id) + '">' + esc(favs[i].title) + '</span>';
+  function favsHtml(lead, title, max) {
+    var favs = val(lead, 'favourites') || [], html = '', i;
+    for (i = 0; i < favs.length && i < max; i++) {
+      html += '<span class="fav' + (favs[i].title === title ? ' on' : '') + '" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(favs[i].id) + '">' + esc(favs[i].title) + '</span>';
     }
-    return '<div class="card music"><div class="art">' + icon('radio') + '</div>' +
-      '<div class="now-playing"><div class="sub">' + esc(sp.name) + '</div><div class="np-title">' + esc(title) + '</div><div class="np-sub sub">' + esc(sub) + '</div></div>' +
-      '<span class="play" data-act="play">' + icon(playing ? 'pause' : 'play', true) + '</span>' +
-      '<div class="vol"><input type="range" min="0" max="100" step="1" value="' + vol + '" id="vol"><span id="vol-n">' + vol + '</span></div>' +
-      (withFavs ? '<div class="favs">' + html + '</div>' : '') + '</div>';
+    return html;
+  }
+
+  function volHtml(e) {
+    var vol = Math.round((val(e, 'volume_set') || 0) * 100);
+    return '<input type="range" min="0" max="100" step="1" value="' + vol + '" data-id="' + esc(e.id) + '"><span>' + vol + '</span>';
+  }
+
+  // One room's card: what its group plays, with the room's own volume unless left out.
+  function musicCard(room, favCount, withVol) {
+    if (!room) { return ''; }
+    var lead = leader(room), playing = val(lead, 'speaker_playing') === true;
+    var title = val(lead, 'speaker_track') || T.nothing, sub = val(lead, 'speaker_artist') || '';
+    return '<div class="card music' + (favCount ? '' : ' short') + '"><div class="art">' + icon('radio') + '</div>' +
+      '<div class="now-playing"><div class="sub">' + esc(groupName(groupOf(room))) + '</div><div class="np-title">' + esc(title) + '</div><div class="np-sub sub">' + esc(sub) + '</div></div>' +
+      '<span class="play" data-act="play" data-id="' + esc(lead.id) + '">' + icon(playing ? 'pause' : 'play', true) + '</span>' +
+      (withVol ? '<div class="vol">' + volHtml(room) + '</div>' : '') +
+      (favCount ? '<div class="favs">' + favsHtml(lead, title, favCount) + '</div>' : '') + '</div>';
   }
 
   function tileIcon(e) {
@@ -396,7 +428,7 @@
 
   var PAGES = [
     { id: 'home', icon: 'home' },
-    { id: 'music', icon: 'music', when: function () { return !!panel('speaker'); } },
+    { id: 'music', icon: 'music', when: function () { return speakers().length > 0; } },
     { id: 'lights', icon: 'bulb', when: function () { return byClass(['light', 'socket']).length > 0; } },
     { id: 'climate', icon: 'thermo', when: function () { return !!(panel('indoor') || panel('outdoor')) || byClass(['thermostat', 'heater', 'sensor']).length > 0; } },
     { id: 'flows', icon: 'bolt', when: function () { return byClass(['button']).length > 0; } },
@@ -406,16 +438,30 @@
   function homePage() {
     var tiles = [], i;
     for (i = 0; i < layout.tiles.length && i < 6; i++) { tiles.push(entities[layout.tiles[i]] || { missing: true }); }
-    var html = '<div class="row">' + clockCard() + climateCard('w70') + '</div>' + forecastCard() + musicCard(5) + tilesHtml(tiles, false);
+    var html = '<div class="row">' + clockCard() + climateCard('w70') + '</div>' + forecastCard() + musicCard(panel('speaker'), 5, true) + tilesHtml(tiles, false);
     return layout.tiles.length || panel('indoor') || panel('weather') || panel('speaker') ? html : html + '<p class="empty muted">' + T.empty + '</p>';
   }
 
+  // Pick a group by tapping a room, tick rooms in or out, choose what plays.
   function musicPage() {
-    var sp = panel('speaker'), favs = val(sp, 'favourites') || [], html = '', i;
-    for (i = 0; i < favs.length; i++) {
-      html += '<span class="fav' + (favs[i].title === val(sp, 'speaker_track') ? ' on' : '') + '" data-act="fav" data-fav="' + esc(favs[i].id) + '">' + esc(favs[i].title) + '</span>';
+    var room = anchorRoom(), all = speakers(), lead, rows = '', i, e, inside, other;
+    if (!room) { return ''; }
+    lead = leadOf(room);
+    for (i = 0; i < all.length; i++) {
+      e = all[i];
+      inside = leadOf(e) === lead;
+      other = leader(e);
+      rows += '<div class="rm' + (inside ? ' in' : '') + '">' +
+        '<span class="chk" data-act="join" data-id="' + esc(e.id) + '">' + (inside ? '✓' : '') + '</span>' +
+        '<span class="nm" data-act="pick" data-id="' + esc(e.id) + '">' + esc(e.name) +
+        (inside ? '' : '<span class="sub">' + esc(val(other, 'speaker_playing') ? val(other, 'speaker_track') || '' : T.nothing) + '</span>') + '</span>' +
+        (inside ? '<span class="rv">' + volHtml(e) + '</span>' : '') + '</div>';
     }
-    return musicCard(0) + '<div class="favgrid">' + html + '</div>';
+    return musicCard(room, 0, false) +
+      '<div class="row"><div class="col w50"><div class="card rooms"><span class="label-s">' + T.rooms + '</span>' +
+      (all.length > 1 ? '<span class="all" data-act="all">' + T.allRooms + '</span>' : '') + rows + '</div></div>' +
+      '<div class="col w50"><div class="card"><span class="label-s">' + T.favourites + '</span><div class="favgrid">' +
+      favsHtml(leader(room), val(leader(room), 'speaker_track'), 100) + '</div></div></div></div>';
   }
 
   function weatherPage() {
@@ -481,7 +527,7 @@
   function onTap(ev) {
     var el = actionOf(ev.target);
     if (!el) { return; }
-    var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), e = id ? entities[id] : null, c, prev, next;
+    var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), e = id ? entities[id] : null, c, prev, next, i, all;
     if (act === 'page') {
       page = el.getAttribute('data-page');
       render();
@@ -501,24 +547,61 @@
       el.className += ' pressed';
       setTimeout(render, 400);
       set(e, 'button', true);
-    } else if (act === 'play' && (e = panel('speaker')) && (c = cap(e, 'speaker_playing'))) {
+    } else if (act === 'pick' && e) {
+      anchor = e.id;
+      render();
+    } else if (act === 'join' && e) {
+      join(e);
+    } else if (act === 'all') {
+      for (i = 0, all = speakers(); i < all.length; i++) {
+        if (leadOf(all[i]) !== leadOf(anchorRoom())) { join(all[i]); }
+      }
+    } else if (act === 'play' && e && (c = cap(e, 'speaker_playing'))) {
       prev = c.value;
       c.value = !prev;
       render();
       set(e, 'speaker_playing', c.value, prev);
-    } else if (act === 'fav' && (e = panel('speaker'))) {
+    } else if (act === 'fav' && e) {
       el.className += ' on';
       set(e, 'play_favourite', el.getAttribute('data-fav'));
     }
   }
 
+  // Tick a room into the shown group, or take it out to play on its own.
+  function join(e) {
+    var room = anchorRoom(), c = cap(e, 'speaker_group'), rest, i, prev;
+    if (!room || !c) { return; }
+    prev = c.value;
+    if (leadOf(e) === leadOf(room)) {
+      rest = groupOf(room);
+      if (rest.length < 2) { return; } // a group needs at least one room
+      if (e.id === room.id) {
+        for (i = 0; i < rest.length; i++) { if (rest[i].id !== e.id) { anchor = rest[i].id; break; } }
+      }
+      if (leadOf(e) === e.id) {
+        // The leader leaves: show the others together under a new one until the speakers say who it is.
+        for (i = 0; i < rest.length; i++) { if (rest[i].id !== e.id) { cap(rest[i], 'speaker_group').value = bare(anchor === e.id ? rest[i].id : anchor); } }
+      }
+      c.value = bare(e.id);
+      render();
+      set(e, 'speaker_group', e.id, prev);
+    } else {
+      c.value = val(room, 'speaker_group') || bare(room.id);
+      render();
+      set(e, 'speaker_group', room.id, prev);
+    }
+  }
+
   function onSlide(ev) {
-    if (!ev.target || ev.target.id !== 'vol') { return; }
+    var t = ev.target, id = t && t.getAttribute && t.getAttribute('data-id'), e = id ? entities[id] : null, c, v, prev;
+    if (!e || t.type !== 'range') { return; }
     holdUntil = new Date().getTime() + 1500;
-    $('vol-n').textContent = ev.target.value;
-    if (ev.type === 'change') {
-      var sp = panel('speaker'), c = cap(sp, 'volume_set'), v = parseInt(ev.target.value, 10) / 100, prev = c ? c.value : 0;
-      if (c) { c.value = v; set(sp, 'volume_set', v, prev); }
+    if (t.nextSibling) { t.nextSibling.textContent = t.value; }
+    if (ev.type === 'change' && (c = cap(e, 'volume_set'))) {
+      v = parseInt(t.value, 10) / 100;
+      prev = c.value;
+      c.value = v;
+      set(e, 'volume_set', v, prev);
     }
   }
 

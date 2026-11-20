@@ -42,6 +42,20 @@ fn entity(id: &str, name: &str, zone: &str, class: &str, caps: Vec<(&str, Capabi
     }
 }
 
+/// A room that plays with `group`'s room; rooms in one group share what plays.
+fn speaker(id: &str, room: &str, group: &str, playing: bool, volume: f64, track: &str) -> Entity {
+    let favs: Vec<Value> = ["Radio One", "Radio Two", "Jazz", "Classical", "Morning mix", "Focus"].iter().enumerate().map(|(i, t)| json!({ "id": format!("f{i}"), "title": t })).collect();
+    entity(id, room, room, "speaker", vec![
+        ("speaker_playing", Capability::new(json!(playing), true)),
+        ("volume_set", Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(volume), true) }),
+        ("speaker_track", Capability::new(json!(track), false)),
+        ("speaker_artist", Capability::new(json!(if track.is_empty() { "" } else { "Morning news" }), false)),
+        ("favourites", Capability::new(json!(favs), false)),
+        ("play_favourite", Capability::new(Value::Null, true)),
+        ("speaker_group", Capability::new(json!(group), true)),
+    ])
+}
+
 fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
     let zone = match super::get_str(config, "zone") {
         "" => "Living room",
@@ -67,14 +81,9 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             ("measure_humidity", Capability::new(json!(87), false)),
             ("measure_wind_strength", Capability::new(json!(10.8), false)),
         ]),
-        entity("speaker", zone, zone, "speaker", vec![
-            ("speaker_playing", Capability::new(json!(true), true)),
-            ("volume_set", Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(0.28), true) }),
-            ("speaker_track", Capability::new(json!("Radio One"), false)),
-            ("speaker_artist", Capability::new(json!("Morning news"), false)),
-            ("favourites", Capability::new(json!(["Radio One", "Radio Two", "Jazz", "Classical", "Morning mix", "Focus"].iter().enumerate().map(|(i, t)| json!({ "id": format!("f{i}"), "title": t })).collect::<Vec<_>>()), false)),
-            ("play_favourite", Capability::new(Value::Null, true)),
-        ]),
+        speaker("speaker", zone, "speaker", true, 0.28, "Radio One"),
+        speaker("kitchen", "Kitchen", "speaker", true, 0.2, "Radio One"),
+        speaker("bath", "Bathroom", "bath", false, 0.15, ""),
         entity("night", "Good night", "Scenes", "button", vec![("button", Capability::new(Value::Null, true))]),
     ]));
     let stopped = Arc::new(AtomicBool::new(false));
@@ -111,6 +120,29 @@ impl Instance for Demo {
         let e = list.iter_mut().find(|e| e.id == entity).ok_or("no such entity")?;
         if capability == "button" {
             eprintln!("demo: ran {}", e.name);
+            return Ok(());
+        }
+        if capability == "speaker_group" {
+            let target = value.as_str().ok_or("expected a room")?.to_string();
+            let speakers = |l: &Vec<Entity>| l.iter().filter(|e| e.capabilities.contains_key("speaker_group")).map(|e| e.id.clone()).collect::<Vec<_>>();
+            let lead = |l: &Vec<Entity>, id: &str| l.iter().find(|e| e.id == id).map(|e| e.capabilities["speaker_group"].value.clone());
+            let old = lead(&list, entity).ok_or("no such room")?;
+            let new = if target == entity { json!(entity) } else { lead(&list, &target).ok_or("no such room")? };
+            let mut changes = vec![(entity.to_string(), new.clone())];
+            if old == json!(entity) {
+                // The leader left or moved: the rest of its group follows its first remaining member.
+                let rest: Vec<String> = speakers(&list).into_iter().filter(|id| id != entity && lead(&list, id) == Some(old.clone())).collect();
+                if let Some(first) = rest.first() {
+                    changes.extend(rest.iter().map(|id| (id.clone(), json!(first))));
+                }
+            }
+            for (id, v) in &changes {
+                list.iter_mut().find(|e| e.id == *id).unwrap().capabilities.get_mut("speaker_group").unwrap().value = v.clone();
+            }
+            drop(list);
+            for (id, v) in changes {
+                (self.sink)(Event::Changed { entity: id, capability: "speaker_group".into(), value: v });
+            }
             return Ok(());
         }
         if capability == "play_favourite" {

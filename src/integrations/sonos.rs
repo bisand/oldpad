@@ -8,7 +8,7 @@ use crate::util::{escape_xml, unescape_xml};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -198,6 +198,8 @@ fn entity(room: &Room, now: &Now, favs: &[Favourite]) -> Entity {
     caps.insert("speaker_artist".to_string(), ro(json!(now.subtitle)));
     caps.insert("favourites".to_string(), ro(json!(favs.iter().map(|f| json!({ "id": f.id, "title": f.title })).collect::<Vec<_>>())));
     caps.insert("play_favourite".to_string(), Capability::new(Value::Null, true));
+    // The room whose group this one plays with; itself when it plays alone or leads.
+    caps.insert("speaker_group".to_string(), Capability::new(json!(room.coordinator_uuid), true));
     Entity { id: room.uuid.clone(), name: room.name.clone(), zone: room.name.clone(), class: "speaker".into(), capabilities: caps }
 }
 
@@ -335,6 +337,7 @@ struct Sonos {
     state: Arc<Mutex<State>>,
     stopped: Arc<AtomicBool>,
     poke: Arc<AtomicBool>,
+    regroup: Arc<AtomicUsize>,
 }
 
 /// Speakers to ask for the topology: every room we know of, then the admin's seeds.
@@ -402,7 +405,8 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
     let rooms: Vec<String> = state.lock().unwrap().rooms.iter().map(|r| format!("{} {}", r.name, r.host)).collect();
     eprintln!("sonos: {} rooms: {}", rooms.len(), rooms.join(", "));
     let (stopped, poke) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
-    let (st, stop, pk) = (state.clone(), stopped.clone(), poke.clone());
+    let regroup = Arc::new(AtomicUsize::new(0));
+    let (st, stop, pk, rg) = (state.clone(), stopped.clone(), poke.clone(), regroup.clone());
     std::thread::spawn(move || {
         let mut last_full = Instant::now();
         let mut lost = false;
@@ -416,7 +420,9 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             }
             // Re-read the topology every 5 minutes, and at once when a room stops
             // answering: that is how a speaker's new address is learned.
-            let full = lost || last_full.elapsed() > Duration::from_secs(300);
+            // After a regrouping, re-read it for a few polls: Sonos takes a moment to settle.
+            let settling = rg.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1)).is_ok();
+            let full = lost || settling || last_full.elapsed() > Duration::from_secs(300);
             match refresh(&seeds, &st, &sink, full) {
                 Ok(all) => {
                     if full {
@@ -431,7 +437,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             }
         }
     });
-    Ok(Box::new(Sonos { state, stopped, poke }))
+    Ok(Box::new(Sonos { state, stopped, poke, regroup }))
 }
 
 impl Instance for Sonos {
@@ -471,6 +477,18 @@ impl Instance for Sonos {
                     soap(c, AV, "SetAVTransportURI", &[("InstanceID", "0"), ("CurrentURI", &fav.uri), ("CurrentURIMetaData", &fav.meta)])?;
                 }
                 soap(c, AV, "Play", &[("InstanceID", "0"), ("Speed", "1")])?;
+            }
+            "speaker_group" => {
+                let target = value.as_str().ok_or("expected a room")?;
+                if target == room.uuid {
+                    soap(&room.host, AV, "BecomeCoordinatorOfStandaloneGroup", &[("InstanceID", "0")])?;
+                } else {
+                    // Join the target's group by following its coordinator.
+                    let lead = self.state.lock().unwrap().rooms.iter().find(|r| r.uuid == target).map(|r| r.coordinator_uuid.clone()).ok_or("no such room")?;
+                    let uri = format!("x-rincon:{lead}");
+                    soap(&room.host, AV, "SetAVTransportURI", &[("InstanceID", "0"), ("CurrentURI", &uri), ("CurrentURIMetaData", "")])?;
+                }
+                self.regroup.store(3, Ordering::Relaxed);
             }
             _ => return Err("not supported".into()),
         }

@@ -115,7 +115,8 @@ fn phone_and_tablet_end_to_end() {
     // --- phone picks two tiles; tablet sees them
     let (lamp, heater, plug, reading, outdoor) =
         (format!("{iid}:lamp"), format!("{iid}:heater"), format!("{iid}:plug"), format!("{iid}:reading"), format!("{iid}:outdoor"));
-    let layout = json!({ "tiles": [lamp, heater], "more": [plug], "panels": { "outdoor": outdoor } });
+    let (speaker, kitchen, bath) = (format!("{iid}:speaker"), format!("{iid}:kitchen"), format!("{iid}:bath"));
+    let layout = json!({ "tiles": [lamp, heater], "more": [plug, speaker, kitchen], "panels": { "outdoor": outdoor } });
     assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(layout)).0, 200);
     let (s, state) = tablet.call("GET", "/api/tablet", None);
     assert_eq!(s, 200);
@@ -145,6 +146,16 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": plug, "capability": "onoff", "value": true }))).0, 200);
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": reading, "capability": "onoff", "value": true }))).0, 403);
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": heater, "capability": "measure_temperature", "value": 30 }))).0, 502);
+
+    // --- grouping: only with rooms this screen controls, and the room id is passed on bare
+    let mut group = |room: &str, to: &str| tablet.call("POST", "/api/tablet/set", Some(json!({ "id": room, "capability": "speaker_group", "value": to }))).0;
+    assert_eq!(group(&kitchen, &bath), 403);
+    assert_eq!(group(&kitchen, "other:speaker"), 403);
+    assert_eq!(group(&kitchen, &kitchen), 200); // leave
+    assert_eq!(group(&kitchen, &speaker), 200); // join
+    let (_, state) = tablet.call("GET", "/api/tablet", None);
+    let room = state["more"].as_array().unwrap().iter().find(|e| e["id"] == kitchen.as_str()).unwrap().clone();
+    assert_eq!(room["capabilities"]["speaker_group"]["value"], "speaker");
 
     // --- removing the screen revokes its token
     assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{device_id}"), None).0, 200);

@@ -88,7 +88,25 @@ body.day { background: #eceef2; color: #1b1d21; }
 .play { position: absolute; right: 380px; top: 22px; width: 58px; height: 58px; border-radius: 29px; text-align: center; line-height: 58px; }
 .vol { position: absolute; right: 18px; top: 38px; width: 340px; }
 .vol input { width: 280px; vertical-align: middle; }
-.vol span { display: inline-block; width: 44px; text-align: right; font-size: 18px; }
+.vol span, .rv span { display: inline-block; width: 44px; text-align: right; font-size: 18px; }
+.music.short { height: 100px; }
+
+/* ---------- music page: rooms in the shown group ---------- */
+.rooms .all { position: absolute; right: 18px; top: 10px; padding: 6px 14px; border-radius: 16px; font-size: 15px; background: #1b2840; color: #a9c4ff; }
+.day .rooms .all { background: #e3ecfd; color: #1f4fae; }
+.rm { position: relative; height: 58px; margin-top: 6px; }
+.rm .chk { position: absolute; left: 0; top: 10px; width: 38px; height: 38px; border-radius: 19px; border: 2px solid #3a3d45; text-align: center; line-height: 34px; font-size: 20px; }
+.rm.in .chk { background: #2f6fde; border-color: #2f6fde; color: #fff; }
+.day .rm .chk { border-color: #cfd3da; }
+.day .rm.in .chk { border-color: #2f6fde; }
+.rm .nm { position: absolute; left: 52px; right: 0; top: 8px; height: 44px; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rm .nm .sub { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.rm.in .nm { right: 210px; top: 18px; }
+.rv { position: absolute; right: 0; top: 18px; width: 200px; }
+.rv input { width: 150px; vertical-align: middle; }
+.col .favgrid { margin-top: 10px; }
+.col .favgrid .fav { width: 49%; margin: 0 2% 10px 0; }
+.col .favgrid .fav:nth-child(2n) { margin-right: 0; }
 input[type=range] { -webkit-appearance: none; height: 6px; border-radius: 3px; outline: none; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 15px; background: #fff; border: 1px solid #b9bcc3; }
 .favs { position: absolute; left: 18px; right: 18px; bottom: 14px; font-size: 0; white-space: nowrap; overflow: hidden; }
@@ -137,3 +155,5 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
   .slot { width: 25%; margin-bottom: 6px; }
   .slot.now, .slot.tomorrow { width: 50%; }
 }
+.music.short .now-playing { right: 96px; }
+.music.short .play { right: 18px; top: 20px; }
