@@ -8,7 +8,7 @@ later, other home automation systems — and the tablet only draws what it is
 sent. It is built for devices newer dashboards have left behind: the tablet
 page runs on **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
 
-> Status: early, running daily on an iPad 2. Integrations: Homey Pro, Sonos,
+> Status: early. Integrations: Homey Pro, Sonos,
 > InfluxDB, MET Norway weather, and a demo house. See [docs/design.md](docs/design.md).
 
 ## What works today
@@ -17,7 +17,7 @@ page runs on **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
   with a passkey (Face ID / Touch ID — there are no passwords), name the
   screen, and it is paired. The tablet keeps a long-lived token that renews
   itself with use and that you can revoke from your phone.
-- **A home screen** with the clock, indoor and outdoor readings (today's low
+- **A home screen** with the clock, indoor and outdoor readings (the last 24 hours' low
   and high, humidity, CO₂, wind), the forecast for the coming hours and
   tomorrow, the room's Sonos (now playing, play/pause, volume, favourites) and
   six tiles: lights, sockets, thermostats, sensors or Homey Flows.

@@ -55,7 +55,7 @@ vocabulary the tablet understands:
 | `target_temperature` | number, `min`/`max` | − / + in 0.5° steps |
 | `measure_temperature` | number | read-only reading |
 | `button` | write-only | tap to run (a Flow, a scene) |
-| `temperature_min`, `temperature_max` | number | today's range on the climate panel |
+| `temperature_min`, `temperature_max` | number | the last 24 hours' range on the climate panel |
 | `measure_humidity`, `measure_co2`, `measure_wind_strength` (km/h) | number | climate panel |
 | `speaker_playing`, `volume_set` (0–1) | bool, number | music card controls |
 | `speaker_track`, `speaker_artist` | string | music card text |
