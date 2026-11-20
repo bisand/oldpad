@@ -24,14 +24,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -463,6 +463,7 @@
     if (c === 'speaker') { return 'music'; }
     if (c === 'garagedoor' || c === 'door' || c === 'lock') { return 'door'; }
     if (c === 'ais') { return 'boat'; }
+    if (c === 'price') { return 'bolt'; }
     return 'bolt';
   }
 
@@ -488,6 +489,9 @@
       body = '<div class="value sub">' + T.run + '</div>';
     } else if (measure) {
       body = '<div class="value">' + num(measure.value, 1) + '°</div>';
+    } else if (cap(e, 'prices')) {
+      var pn = val(e, 'price');
+      body = '<div class="value ' + priceLevel(e, pn) + '">' + (typeof pn === 'number' ? num(pn, 2) : '–') + '<span class="unit"> kr</span></div>';
     } else if (cap(e, 'ships')) {
       var near = val(e, 'ships') || [];
       body = '<div class="value up">' + near.length + '<div class="sub">' + (near.length ? esc(shipName(near[0])) + ' · ' + km(near[0].km) : '') + '</div></div>';
@@ -563,10 +567,59 @@
 
   function sheetHtml() {
     var e = sheet && entities[sheet], list = controls(e), html = '', i;
+    if (e && e['class'] === 'price') { return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + priceCard(e) + '</div></div>'; }
     if (!list.length) { return ''; }
     for (i = 0; i < list.length; i++) { html += controlHtml(e, list[i]); }
     return '<div class="sheet-bg" data-act="close"><div class="sheet" data-act="none">' +
       '<span class="x" data-act="close">✕</span><div class="sheet-h">' + esc(e.name) + '</div><div class="sub">' + esc(e.zone) + '</div>' + html + '</div></div>';
+  }
+
+  // ------------------------------------------------------------- electricity price
+
+  // The hours from now on: [start, end, kr], start in seconds.
+  function pricesAhead(e) {
+    var all = val(e, 'prices') || [], now = new Date().getTime() / 1000, out = [], i;
+    for (i = 0; i < all.length; i++) { if (all[i][1] > now) { out.push(all[i]); } }
+    return out;
+  }
+  // Cheap or dear: where the price sits between the cheapest and dearest hour ahead.
+  function priceRange(e) {
+    var ahead = pricesAhead(e).slice(0, 36), lo = null, hi = null, i;
+    for (i = 0; i < ahead.length; i++) {
+      if (lo === null || ahead[i][2] < lo) { lo = ahead[i][2]; }
+      if (hi === null || ahead[i][2] > hi) { hi = ahead[i][2]; }
+    }
+    return { lo: lo, hi: hi };
+  }
+  function priceLevel(e, p) {
+    var r = priceRange(e), f;
+    if (typeof p !== 'number' || r.lo === null || r.hi - r.lo < 0.05) { return 'p-mid'; }
+    f = (p - r.lo) / (r.hi - r.lo);
+    return f < 0.34 ? 'p-low' : f > 0.66 ? 'p-high' : 'p-mid';
+  }
+  function hh(sec) { return pad(new Date(sec * 1000).getHours()); }
+
+  function priceCard(e) {
+    var ahead = pricesAhead(e).slice(0, 36), max = 0, min = null, lo = null, hi = null, bars = '', i, p, h;
+    if (!ahead.length) { return '<div class="card price"><div class="sub">' + T.price + '</div><p class="muted">' + T.noPrices + '</p></div>'; }
+    for (i = 0; i < ahead.length; i++) {
+      p = ahead[i][2];
+      if (p > max) { max = p; hi = ahead[i]; }
+      if (min === null || p < min) { min = p; lo = ahead[i]; }
+    }
+    // Bars start a little below the cheapest hour, so the differences show; the numbers say the rest.
+    var floor = Math.max(0, min - (max - min) - 0.05);
+    for (i = 0; i < ahead.length; i++) {
+      p = ahead[i][2];
+      h = new Date(ahead[i][0] * 1000).getHours();
+      bars += '<span class="bar' + (i === 0 ? ' now' : '') + '"><i class="' + priceLevel(e, p) + '" data-w="' + Math.max(4, Math.round((p - floor) / (max - floor) * 100)) + '%"></i>' +
+        (h % 3 === 0 ? '<em>' + pad(h) + '</em>' : '') + '</span>';
+    }
+    return '<div class="card price"><div class="sub">' + T.price + '</div>' +
+      '<div class="price-top"><span class="big ' + priceLevel(e, ahead[0][2]) + '">' + num(ahead[0][2], 2) + '</span> <span class="sub">' + T.krKwh + '</span>' +
+      '<span class="price-mm"><span>' + T.cheapest + ' <b>' + num(lo[2], 2) + '</b> ' + hh(lo[0]) + '–' + hh(lo[1]) + '</span>' +
+      '<span>' + T.dearest + ' <b>' + num(hi[2], 2) + '</b> ' + hh(hi[0]) + '–' + hh(hi[1]) + '</span></span></div>' +
+      '<div class="bars">' + bars + '</div></div>';
   }
 
   // ------------------------------------------------------------- ships
@@ -609,21 +662,21 @@
       dir = typeof s.cog === 'number' ? s.cog : s.hdg;
       moving = s.kn >= 0.5 && typeof dir === 'number';
       kind = shipKind(s.type);
-      dots += '<span class="ship k-' + kind + (moving ? '' : ' still') + '" data-l="' + x.toFixed(1) + '%" data-t="' + y.toFixed(1) + '%">' +
+      dots += '<span class="ship k-' + kind + (moving ? '' : ' still') + (s.age >= 300 ? ' old' : '') + '" data-l="' + x.toFixed(1) + '%" data-t="' + y.toFixed(1) + '%">' +
         '<i' + (moving ? rot(dir) : '') + '></i>' + (i < 4 ? '<b>' + esc(shipName(s)) + '</b>' : '') + '</span>';
     }
     for (i = 0; i < list.length && i < 12; i++) {
       s = list[i];
       kind = shipKind(s.type);
       moving = s.kn >= 0.5 && typeof s.cog === 'number';
-      rows += '<div class="sh"><span class="sw k-' + kind + '"></span><span class="sn">' + esc(shipName(s)) +
+      rows += '<div class="sh' + (s.age >= 300 ? ' old' : '') + '"><span class="sw k-' + kind + '"></span><span class="sn">' + esc(shipName(s)) +
         '<span class="sub">' + T.shipKinds[kind] + (s.dest ? ' → ' + esc(s.dest) : '') + '</span></span>' +
-        '<span class="sd">' + km(s.km) + '<span class="sub">' + (moving ? num(s.kn, 0) + ' ' + T.kn + ' <i class="arr"' + rot(s.cog) + '>↑</i>' : '—') + '</span></span></div>';
+        '<span class="sd">' + km(s.km) + '<span class="sub">' + (s.age >= 300 ? T.ago.replace('%', Math.round(s.age / 60)) : moving ? num(s.kn, 0) + ' ' + T.kn + ' <i class="arr"' + rot(s.cog) + '>↑</i>' : '—') + '</span></span></div>';
     }
     var view = load(SHIPVIEW_KEY) || 'radar';
     var head = '<div class="ships-head"><span class="sub">' + T.ships + '</span>' + choices('shipview', view, [['radar', T.radar], ['chart', T.chart], ['map', T.map]]) + '</div>';
     if (view !== 'radar' && val(e, 'home')) {
-      return '<div class="card ships">' + head + mapHtml(e, list, r, view === 'chart' ? 'sjokartraster' : 'topograatone') + '</div>';
+      return '<div class="card ships">' + head + mapHtml(e, list, r, view === 'chart' ? 'sjokartraster' : 'topo') + '</div>';
     }
     return '<div class="card ships">' + head + '<div class="ships-in">' +
       '<div class="radar"><span class="ring r1"></span><span class="ring r2"></span><span class="ring r3"></span>' +
@@ -640,16 +693,25 @@
 
   // Kartverket's tiles around home (through oldpad: the page may only load from it), ships on top.
   function mapHtml(e, list, r, layer) {
-    var home = val(e, 'home'), w = Math.max(300, $('page').clientWidth - 36), h = Math.max(300, Math.min(620, window.innerHeight - 150));
-    var fit = Math.floor(Math.log(156543 * Math.cos(home[0] * Math.PI / 180) * Math.min(w, h) / 2 / (r * 1000)) / Math.LN2);
-    var z = Math.max(7, Math.min(15, fit + mapZoom)), c = merc(home[0], home[1], z), left = c.x - w / 2, top = c.y - h / 2;
-    var iid = e.id.slice(0, e.id.indexOf(':')), html = '', tx, ty, i, s, p, dir, moving, kind;
+    var i, home = val(e, 'home'), w = Math.max(300, $('page').clientWidth - 36), h = Math.max(300, Math.min(620, window.innerHeight - 150));
+    // Fit home and every ship in view (zoom 0 pixels), then + and − on top of that.
+    var x0 = merc(home[0], home[1], 0), b = { l: x0.x, r: x0.x, t: x0.y, b: x0.y }, q, fit;
+    for (i = 0; i < list.length; i++) {
+      if (typeof list[i].lat !== 'number') { continue; }
+      q = merc(list[i].lat, list[i].lon, 0);
+      b.l = Math.min(b.l, q.x); b.r = Math.max(b.r, q.x); b.t = Math.min(b.t, q.y); b.b = Math.max(b.b, q.y);
+    }
+    fit = b.r - b.l > 0 || b.b - b.t > 0 ? Math.floor(Math.log(Math.min((w - 120) / Math.max(b.r - b.l, 1e-9), (h - 80) / Math.max(b.b - b.t, 1e-9))) / Math.LN2) : 13;
+    var z = Math.max(7, Math.min(15, Math.min(fit, 14) + mapZoom)), scale = Math.pow(2, z);
+    var left = (b.l + b.r) / 2 * scale - w / 2, top = (b.t + b.b) / 2 * scale - h / 2;
+    var iid = e.id.slice(0, e.id.indexOf(':')), html = '', tx, ty, s, p, dir, moving, kind, c;
     for (ty = Math.floor(top / 256); ty <= Math.floor((top + h) / 256); ty++) {
       for (tx = Math.floor(left / 256); tx <= Math.floor((left + w) / 256); tx++) {
         html += '<img class="tile-img" alt="" src="/api/image/' + esc(iid) + '/' + layer + '-' + z + '-' + ty + '-' + tx + '" data-l="' + Math.round(tx * 256 - left) + 'px" data-t="' + Math.round(ty * 256 - top) + 'px">';
       }
     }
-    html += '<span class="home" data-l="' + Math.round(w / 2) + 'px" data-t="' + Math.round(h / 2) + 'px"></span>';
+    c = merc(home[0], home[1], z);
+    html += '<span class="home" data-l="' + Math.round(c.x - left) + 'px" data-t="' + Math.round(c.y - top) + 'px"></span>';
     for (i = list.length - 1; i >= 0; i--) {
       s = list[i];
       if (typeof s.lat !== 'number') { continue; }
@@ -657,7 +719,7 @@
       dir = typeof s.cog === 'number' ? s.cog : s.hdg;
       moving = s.kn >= 0.5 && typeof dir === 'number';
       kind = shipKind(s.type);
-      html += '<span class="ship k-' + kind + (moving ? '' : ' still') + '" data-l="' + Math.round(p.x - left) + 'px" data-t="' + Math.round(p.y - top) + 'px"><i' + (moving ? rot(dir) : '') + '></i>' +
+      html += '<span class="ship k-' + kind + (moving ? '' : ' still') + (s.age >= 300 ? ' old' : '') + '" data-l="' + Math.round(p.x - left) + 'px" data-t="' + Math.round(p.y - top) + 'px"><i' + (moving ? rot(dir) : '') + '></i>' +
         '<b>' + esc(shipName(s)) + (moving ? ' · ' + num(s.kn, 0) + ' ' + T.kn : '') + '</b></span>';
     }
     return '<div class="map ' + layer + '" data-w="' + h + 'px">' + html +
@@ -799,7 +861,7 @@
         if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], favRows(), true); }
       } else {
         it = typeof it === 'string' ? entities[it] || { missing: true } : it;
-        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else { run.push(it); }
+        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else { run.push(it); }
       }
     }
     flush();
@@ -892,6 +954,9 @@
       c.value = next;
       render();
       set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
+    } else if (act === 'tile' && e && cap(e, 'prices')) {
+      sheet = id;
+      render();
     } else if (act === 'tile' && e && cap(e, 'ships')) {
       page = 'ships';
       render();

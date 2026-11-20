@@ -21,6 +21,7 @@ pub fn kind() -> Kind {
             Field { key: "latitude", label: "Home latitude", kind: FieldKind::Number, required: true, placeholder: "59.91", help: "The middle of the radar. Right-click a place in a map app to copy its coordinates." },
             Field { key: "longitude", label: "Home longitude", kind: FieldKind::Number, required: true, placeholder: "10.75", help: "" },
             Field { key: "radius", label: "Radius (km)", kind: FieldKind::Number, required: false, placeholder: "20", help: "Ships further away are left out. 20 km if empty." },
+            Field { key: "forget", label: "Hide after (minutes)", kind: FieldKind::Number, required: false, placeholder: "20", help: "How long a ship stays after its last report. Anchored ships report every 3 minutes, small boats less often. Ships unheard for 5 minutes are shown faded." },
         ],
         test,
         start,
@@ -28,12 +29,12 @@ pub fn kind() -> Kind {
 }
 
 const SHOWN: usize = 25; // nearest ships sent to screens
-const FORGET: Duration = Duration::from_secs(20 * 60); // a moored ship reports every 3 min, class B less often
 
 struct Config {
     address: String,
     home: (f64, f64),
     radius: f64,
+    forget: Duration, // a moored ship reports every 3 min, class B less often
 }
 
 fn config(c: &Map<String, Value>) -> Result<Config, String> {
@@ -47,7 +48,8 @@ fn config(c: &Map<String, Value>) -> Result<Config, String> {
         return Err("coordinates are out of range".into());
     }
     let radius = c.get("radius").and_then(Value::as_f64).filter(|r| *r > 0.0 && *r <= 500.0).unwrap_or(20.0);
-    Ok(Config { address, home: (lat, lon), radius })
+    let forget = Duration::from_secs(c.get("forget").and_then(Value::as_f64).filter(|m| *m >= 1.0 && *m <= 24.0 * 60.0).unwrap_or(20.0) as u64 * 60);
+    Ok(Config { address, home: (lat, lon), radius, forget })
 }
 
 fn connect(address: &str) -> Result<BufReader<TcpStream>, String> {
@@ -234,11 +236,11 @@ fn apply(ships: &mut HashMap<u32, Ship>, msg: Msg, now: Instant) -> bool {
 }
 
 /// Ships only say their name every six minutes; remember the ones heard, so a restart
-/// doesn't leave the screen full of numbers. The most recently seen 300.
+/// doesn't leave the screen full of numbers. The most recently seen 500 (about 15 kB).
 fn names(ships: &HashMap<u32, Ship>) -> Value {
     let mut known: Vec<(&u32, &Ship)> = ships.iter().filter(|(_, s)| s.name.is_some() || s.kind.is_some()).collect();
     known.sort_by_key(|(_, s)| std::cmp::Reverse(s.seen));
-    Value::Object(known.into_iter().take(300).map(|(m, s)| (m.to_string(), json!([s.name, s.kind]))).collect())
+    Value::Object(known.into_iter().take(500).map(|(m, s)| (m.to_string(), json!([s.name, s.kind]))).collect())
 }
 
 fn remembered(c: &Map<String, Value>) -> HashMap<u32, Ship> {
@@ -250,7 +252,7 @@ fn remembered(c: &Map<String, Value>) -> HashMap<u32, Ship> {
 
 /// The nearest ships within the radius, as the screen gets them.
 fn nearby(ships: &mut HashMap<u32, Ship>, cfg: &Config, now: Instant) -> Vec<Value> {
-    ships.retain(|_, s| s.seen.is_none_or(|t| now.duration_since(t) < FORGET));
+    ships.retain(|_, s| s.seen.is_none_or(|t| now.duration_since(t) < cfg.forget));
     let mut list: Vec<(f64, Value)> = ships
         .iter()
         .filter_map(|(mmsi, s)| {
@@ -456,7 +458,7 @@ mod tests {
 
     #[test]
     fn keeps_the_nearest_within_the_radius() {
-        let cfg = Config { address: String::new(), home: (59.0, 10.0), radius: 20.0 };
+        let cfg = Config { address: String::new(), home: (59.0, 10.0), radius: 20.0, forget: Duration::from_secs(20 * 60) };
         let now = Instant::now();
         let mut ships = HashMap::new();
         apply(&mut ships, Msg::Position { mmsi: 1, lat: 59.1, lon: 10.0, sog: Some(12.0), cog: Some(90.0), heading: None }, now);
@@ -468,7 +470,7 @@ mod tests {
         assert_eq!(again.remove(&1).and_then(|s| s.name).as_deref(), Some("COLOR FANTASY"), "names survive a restart");
         assert_eq!(list.iter().map(|s| s["mmsi"].as_u64().unwrap()).collect::<Vec<_>>(), vec![2, 1]);
         assert_eq!((list[1]["name"].as_str(), list[1]["km"].as_f64(), list[1]["brg"].as_f64()), (Some("COLOR FANTASY"), Some(11.1), Some(0.0)));
-        let later = now + FORGET;
+        let later = now + cfg.forget;
         assert!(nearby(&mut ships, &cfg, later).is_empty(), "forgotten when silent");
     }
 }
