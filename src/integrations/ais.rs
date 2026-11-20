@@ -6,7 +6,7 @@ use super::{Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader};
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{TcpStream, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -17,7 +17,7 @@ pub fn kind() -> Kind {
         name: "Ships nearby (AIS)",
         description: "Boats and ships around you, from your own AIS receiver.",
         fields: vec![
-            Field { key: "address", label: "NMEA stream", kind: FieldKind::Text, required: true, placeholder: "192.168.1.20:12123", help: "host:port of a TCP port that sends !AIVDM lines, e.g. socat in front of rtl_ais, or AIS-catcher." },
+            Field { key: "address", label: "NMEA stream", kind: FieldKind::Text, required: true, placeholder: "192.168.1.20:12123", help: "host:port of a TCP port that sends !AIVDM lines (socat in front of rtl_ais, AIS-catcher), or udp:PORT to listen for the receiver's UDP, broadcasts included. UDP broadcasts only reach oldpad if it runs on the same network, e.g. on a Pi, not inside Kubernetes." },
             Field { key: "latitude", label: "Home latitude", kind: FieldKind::Number, required: true, placeholder: "59.91", help: "The middle of the radar. Right-click a place in a map app to copy its coordinates." },
             Field { key: "longitude", label: "Home longitude", kind: FieldKind::Number, required: true, placeholder: "10.75", help: "" },
             Field { key: "radius", label: "Radius (km)", kind: FieldKind::Number, required: false, placeholder: "20", help: "Ships further away are left out. 20 km if empty." },
@@ -39,8 +39,8 @@ struct Config {
 
 fn config(c: &Map<String, Value>) -> Result<Config, String> {
     let address = c.get("address").and_then(Value::as_str).unwrap_or("").trim().to_string();
-    if address.rsplit_once(':').and_then(|(_, p)| p.parse::<u16>().ok()).is_none() {
-        return Err("the NMEA stream needs host:port".into());
+    if address.rsplit_once(':').and_then(|(_, p)| p.trim().parse::<u16>().ok()).is_none() {
+        return Err("the NMEA stream needs host:port, or udp:PORT".into());
     }
     let lat = c.get("latitude").and_then(Value::as_f64).ok_or("latitude is required")?;
     let lon = c.get("longitude").and_then(Value::as_f64).ok_or("longitude is required")?;
@@ -59,14 +59,45 @@ fn connect(address: &str) -> Result<BufReader<TcpStream>, String> {
     Ok(BufReader::new(s))
 }
 
+/// Where the NMEA comes from: a TCP stream, or UDP datagrams (`udp:PORT`, broadcasts included).
+enum Source {
+    Tcp(BufReader<TcpStream>),
+    Udp(UdpSocket, Vec<u8>),
+}
+
+impl Source {
+    fn open(address: &str) -> Result<Self, String> {
+        let Some(port) = address.strip_prefix("udp:") else { return connect(address).map(Source::Tcp) };
+        let port: u16 = port.trim().parse().map_err(|_| "udp:PORT needs a port number")?;
+        let s = UdpSocket::bind(("0.0.0.0", port)).map_err(|e| format!("cannot listen on UDP port {port}: {e}"))?;
+        s.set_read_timeout(Some(Duration::from_secs(2))).ok();
+        Ok(Source::Udp(s, vec![0; 4096]))
+    }
+
+    /// The next lines. A timeout is an error of kind WouldBlock or TimedOut.
+    fn lines(&mut self) -> std::io::Result<Vec<String>> {
+        match self {
+            Source::Tcp(r) => {
+                let mut line = String::new();
+                match r.read_line(&mut line)? {
+                    0 => Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "the stream closed")),
+                    _ => Ok(vec![line]),
+                }
+            }
+            Source::Udp(s, buf) => {
+                let n = s.recv(buf)?; // a datagram may hold several sentences
+                Ok(String::from_utf8_lossy(&buf[..n]).lines().map(str::to_string).collect())
+            }
+        }
+    }
+}
+
 fn test(c: &Map<String, Value>) -> Result<String, String> {
     let cfg = config(c)?;
-    let mut r = connect(&cfg.address)?;
+    let mut src = Source::open(&cfg.address)?;
     let until = Instant::now() + Duration::from_secs(30);
-    let mut line = String::new();
     while Instant::now() < until {
-        line.clear();
-        if r.read_line(&mut line).is_ok() && line.starts_with("!AIVDM") {
+        if src.lines().is_ok_and(|l| l.iter().any(|l| l.starts_with("!AIVDM"))) {
             return Ok("Connected, and hearing ships.".into());
         }
     }
@@ -347,8 +378,8 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
     let mut backoff = Duration::from_secs(2);
     let mut published = Instant::now();
     while !stopped.load(Ordering::Relaxed) {
-        let mut r = match connect(&cfg.address) {
-            Ok(r) => r,
+        let mut src = match Source::open(&cfg.address) {
+            Ok(s) => s,
             Err(e) => {
                 eprintln!("ais: {e}");
                 std::thread::sleep(backoff);
@@ -357,16 +388,13 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
             }
         };
         eprintln!("ais: connected to {}", cfg.address);
-        let mut line = String::new();
         let mut heard = Instant::now();
         while !stopped.load(Ordering::Relaxed) {
-            line.clear();
-            match r.read_line(&mut line) {
-                Ok(0) => break, // closed
-                Ok(_) => {
+            match src.lines() {
+                Ok(lines) => {
                     heard = Instant::now();
                     backoff = Duration::from_secs(2);
-                    for msg in asm.line(&line).map(|p| decode(&p)).unwrap_or_default() {
+                    for msg in lines.iter().filter_map(|l| asm.line(l)).flat_map(|p| decode(&p)) {
                         learned |= apply(&mut ships, msg, heard);
                     }
                 }
@@ -452,6 +480,18 @@ mod tests {
         // Class B position.
         let p = asm.line("!AIVDM,1,1,,A,B52K>;h00Fc>jpUlNV@ikwpUoP06,0*4C").unwrap();
         assert!(matches!(decode(&p)[..], [Msg::Position { mmsi: 338087471, .. }]));
+    }
+
+    #[test]
+    fn listens_for_udp() {
+        let mut src = Source::open("udp:0").unwrap(); // any free port
+        let Source::Udp(s, _) = &src else { panic!("expected UDP") };
+        let port = s.local_addr().unwrap().port();
+        let tx = UdpSocket::bind("127.0.0.1:0").unwrap();
+        tx.send_to(b"!AIVDM,1,1,,B,177KQJ5000G?tO`K>RA1wUbN0TKH,0*5C\r\n!AIVDM,1,1,,A,B52K>;h00Fc>jpUlNV@ikwpUoP06,0*4C\r\n", ("127.0.0.1", port)).unwrap();
+        assert_eq!(src.lines().unwrap().len(), 2, "two sentences in one datagram");
+        assert!(config(json!({"address": "udp:2948", "latitude": 59.9, "longitude": 10.7}).as_object().unwrap()).is_ok());
+        assert!(config(json!({"address": "udp:x", "latitude": 59.9, "longitude": 10.7}).as_object().unwrap()).is_err());
     }
 
     #[test]
