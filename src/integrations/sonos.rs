@@ -19,7 +19,7 @@ pub fn kind() -> Kind {
         description: "Play and pause, volume, what is playing and your Sonos favourites (radio stations, playlists) for each room.",
         fields: vec![Field {
             key: "host",
-            label: "Address of a Sonos speaker (optional)",
+            label: "Address of a Sonos speaker",
             kind: FieldKind::Text,
             required: false,
             placeholder: "found automatically",
@@ -304,7 +304,7 @@ fn test(config: &Map<String, Value>) -> Result<String, String> {
     let seeds = seeds(config)?;
     let (rooms, discovered) = find_topology(&seeds)?;
     let favs = favourites(&rooms[0].host).map(|f| f.len()).unwrap_or(0);
-    let how = if discovered { " (found automatically)" } else { "" };
+    let how = if discovered { " on the network" } else { "" };
     Ok(format!("Found {} rooms{how}: {}. {favs} favourites.", rooms.len(), rooms.iter().map(|r| r.name.as_str()).collect::<Vec<_>>().join(", ")))
 }
 

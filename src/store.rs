@@ -107,16 +107,13 @@ impl Store {
             }
         }
         let file = dir.join("oldpad.json");
-        let data = match fs::read(&file) {
-            Ok(bytes) => serde_json::from_slice(&bytes)
-                .map_err(|e| std::io::Error::other(format!("{}: {e}", file.display())))?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Data::default(),
-            Err(e) => return Err(e),
-        };
+        let data = read(&file)?;
         Ok(Store { data, file })
     }
 
-    pub fn save(&self) {
+    /// On failure the in-memory data is put back to what is on disk, so a
+    /// request that reports the error has not changed anything.
+    pub fn save(&mut self) -> Result<(), &'static str> {
         let tmp = self.file.with_extension("json.tmp");
         let result = (|| {
             let bytes = serde_json::to_vec_pretty(&self.data).map_err(std::io::Error::other)?;
@@ -129,10 +126,24 @@ impl Store {
             f.sync_all()?;
             fs::rename(&tmp, &self.file)
         })();
-        if let Err(e) = result {
-            // Losing a write is bad but not fatal: the in-memory state stays correct until restart.
-            eprintln!("store: could not save {}: {e}", self.file.display());
+        let Err(e) = result else { return Ok(()) };
+        eprintln!("store: could not save {}: {e}", self.file.display());
+        let _ = fs::remove_file(&tmp);
+        match read(&self.file) {
+            Ok(data) => self.data = data,
+            Err(e) => eprintln!("store: could not reload {} after a failed save: {e}", self.file.display()),
         }
+        Err(SAVE_FAILED)
+    }
+}
+
+pub const SAVE_FAILED: &str = "Could not save the change: the server cannot write its data file. Check the server log.";
+
+fn read(file: &Path) -> std::io::Result<Data> {
+    match fs::read(file) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| std::io::Error::other(format!("{}: {e}", file.display()))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Data::default()),
+        Err(e) => Err(e),
     }
 }
 
@@ -155,10 +166,16 @@ mod tests {
             panels: Panels { speaker: Some("sonos:RINCON_1".into()), ..Default::default() },
             more: vec![],
         });
-        s.save();
+        s.save().unwrap();
         let s2 = Store::open(&dir).unwrap();
         assert_eq!(s2.data.devices[0].tiles, vec!["demo:lamp"]);
         assert!(s2.data.devices[0].allowed().contains("sonos:RINCON_1"));
+
+        // A directory where the temp file goes makes the write fail, even as root.
+        fs::create_dir(dir.join("oldpad.json.tmp")).unwrap();
+        s.data.devices.clear();
+        assert_eq!(s.save(), Err(SAVE_FAILED));
+        assert_eq!(s.data.devices.len(), 1, "failed save puts memory back to what is on disk");
         fs::remove_dir_all(dir).unwrap();
     }
 }

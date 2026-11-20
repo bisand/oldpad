@@ -182,13 +182,14 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                     }
                     let id = random_code(10);
                     store.data.admins.push(Admin { id: id.clone(), name, user_handle, credentials: vec![cred] });
-                    *app.setup_code.lock().unwrap() = None;
                     id
                 }
             };
-            store.save();
+            store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
-            let cookie = app.new_session(&admin_id);
+            // Only once the first admin is on disk, so a failed save leaves setup possible.
+            *app.setup_code.lock().unwrap() = None;
+            let cookie = app.new_session(&admin_id).map_err(|e| Response::error(500, e))?;
             return Ok(Response::ok(json!({ "ok": true })).header("Set-Cookie", &cookie));
         }
         ("POST", ["login", "options"]) => {
@@ -214,13 +215,13 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .ok_or_else(|| Response::error(401, "Unknown passkey"))?;
             cred.counter = webauthn::verify_authentication(&rp(app), challenge, &body["credential"], &cred.public_key, cred.counter)
                 .map_err(|e| Response::error(401, &e))?;
-            store.save();
+            store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
-            let cookie = app.new_session(&admin_id);
+            let cookie = app.new_session(&admin_id).map_err(|e| Response::error(500, e))?;
             return Ok(Response::ok(json!({ "ok": true })).header("Set-Cookie", &cookie));
         }
         ("POST", ["logout"]) => {
-            let cookie = app.end_session(req);
+            let cookie = app.end_session(req).map_err(|e| Response::error(500, e))?;
             return Ok(Response::ok(json!({ "ok": true })).header("Set-Cookie", &cookie));
         }
         _ => {}
@@ -238,7 +239,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         }
         ("POST", ["pair", code]) => {
             let body = req.json()?;
-            let device = app.approve_pairing(code, str_field(&body, "name", 64)?).map_err(|e| Response::error(410, e))?;
+            let device = app.approve_pairing(code, str_field(&body, "name", 64)?).map_err(|e| Response::error(if e == crate::store::SAVE_FAILED { 500 } else { 410 }, e))?;
             Ok(Response::ok(json!({ "id": device.id })))
         }
         ("GET", ["devices"]) => {
@@ -280,7 +281,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 d.panels = panels;
             }
             let device = d.clone();
-            store.save();
+            store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.update_client_tiles(&device);
             app.notify_device(&device.id, "reload");
@@ -289,7 +290,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         ("DELETE", ["devices", id]) => {
             let mut store = app.store.lock().unwrap();
             store.data.devices.retain(|d| d.id != *id);
-            store.save();
+            store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.notify_device(id, "revoked");
             Ok(Response::ok(json!({ "ok": true })))
@@ -340,7 +341,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                     id
                 }
             };
-            store.save();
+            store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.registry.start(id.clone(), kind.id.into(), config, app.sink(id.clone()));
             Ok(Response::ok(json!({ "id": id })))
@@ -348,7 +349,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         ("DELETE", ["integrations", id]) => {
             let mut store = app.store.lock().unwrap();
             store.data.integrations.retain(|i| i.id != *id);
-            store.save();
+            store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.registry.stop(id);
             Ok(Response::ok(json!({ "ok": true })))

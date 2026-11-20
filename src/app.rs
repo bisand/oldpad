@@ -155,24 +155,24 @@ impl App {
     }
 
     /// Creates a session and returns the Set-Cookie value.
-    pub fn new_session(&self, admin_id: &str) -> String {
+    pub fn new_session(&self, admin_id: &str) -> Result<String, &'static str> {
         let token = random_token();
         let mut store = self.store.lock().unwrap();
         let t = now();
         store.data.sessions.retain(|s| s.expires > t);
         store.data.sessions.push(crate::store::Session { hash: sha256_hex(&token), admin_id: admin_id.into(), expires: t + self.cfg.admin_ttl });
-        store.save();
-        self.cookie(&token, self.cfg.admin_ttl)
+        store.save()?;
+        Ok(self.cookie(&token, self.cfg.admin_ttl))
     }
 
-    pub fn end_session(&self, req: &Request) -> String {
+    pub fn end_session(&self, req: &Request) -> Result<String, &'static str> {
         if let Some(token) = req.cookie("oldpad_admin") {
             let hash = sha256_hex(&token);
             let mut store = self.store.lock().unwrap();
             store.data.sessions.retain(|s| s.hash != hash);
-            store.save();
+            store.save()?;
         }
-        self.cookie("", 0)
+        Ok(self.cookie("", 0))
     }
 
     fn cookie(&self, value: &str, max_age: u64) -> String {
@@ -192,7 +192,8 @@ impl App {
             device.last_seen = t;
             device.expires = t + self.cfg.device_ttl;
             let d = device.clone();
-            store.save();
+            // Bookkeeping, not the tablet's change: a failure is logged and the tablet carries on.
+            let _ = store.save();
             return Some(d);
         }
         Some(device.clone())
@@ -254,10 +255,10 @@ impl App {
             panels: Default::default(),
             more: Vec::new(),
         };
-        p.token = Some(token);
         let mut store = self.store.lock().unwrap();
         store.data.devices.push(device.clone());
-        store.save();
+        store.save()?;
+        p.token = Some(token);
         Ok(device)
     }
 
