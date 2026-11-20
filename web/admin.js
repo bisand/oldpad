@@ -502,9 +502,46 @@ async function integrationInfoView(id) {
     h('p', { class: `notice ${i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : ''}` }, `${i.typeName}: ${i.status}`),
     h('div', { class: 'actions' }, restart, h('button', { onclick: () => (location.hash = `#/integration/${id}`) }, 'Edit settings'), h('button', { onclick: () => (location.hash = '#/integrations') }, 'Back')),
     (i.accounts || []).length ? [h('h2', {}, 'Accounts'), h('div', { class: 'card' }, i.accounts.map((a) => accountRow(i, a)))] : null,
+    mine.some((e) => e.capabilities?.arrange_favourites) ? favouritesSection(id, mine.find((e) => e.capabilities.arrange_favourites)) : null,
     h('h2', {}, 'Devices'),
     mine.length ? [filter, list] : h('p', { class: 'muted' }, i.status === 'running' ? 'This integration has no devices.' : 'Devices show up here once it is running.'),
   );
+}
+
+// The household's favourites (Sonos): oldpad's order, which go on the front page, and removing.
+function favouritesSection(iid, speaker) {
+  let favs = speaker.capabilities.favourites.value.map((f) => ({ ...f }));
+  const list = h('div', { class: 'card' });
+  const note = h('div');
+  const save = async () => {
+    draw();
+    try {
+      await api('POST', '/set', { id: speaker.id, capability: 'arrange_favourites', value: { order: favs.map((f) => f.id), front: favs.filter((f) => f.front).map((f) => f.id) } });
+      note.replaceChildren();
+    } catch (e) { note.replaceChildren(errorBox(e)); }
+  };
+  const move = (i, by) => { const [f] = favs.splice(i, 1); favs.splice(i + by, 0, f); save(); };
+  const draw = () => list.replaceChildren(...(favs.length ? favs.map((f, i) => h('div', { class: 'fav-row' },
+    f.art ? h('img', { src: `/api/image/${iid}/${f.art}`, alt: '' }) : h('span', { class: 'noart' }, f.title.slice(0, 1)),
+    h('span', { class: 'grow' }, f.title),
+    h('button', { class: `chip${f.front ? ' on' : ''}`, title: 'Show on the front page', 'aria-pressed': String(f.front), onclick: () => { f.front = !f.front; save(); } }, 'Front'),
+    h('button', { class: 'chip', 'aria-label': `Move ${f.title} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+    h('button', { class: 'chip', 'aria-label': `Move ${f.title} down`, disabled: i === favs.length - 1, onclick: () => move(i, 1) }, '↓'),
+    h('button', { class: 'chip danger', 'aria-label': `Remove ${f.title}`, onclick: async () => {
+      if (!confirm(`Remove "${f.title}" from Sonos favourites? This removes it in the Sonos app too.`)) return;
+      try {
+        await api('POST', '/set', { id: speaker.id, capability: 'remove_favourite', value: f.id });
+        favs = favs.filter((x) => x !== f);
+        draw();
+      } catch (e) { note.replaceChildren(errorBox(e)); }
+    } }, '✕'))) : [h('p', { class: 'muted' }, 'No favourites yet. Star music or radio in a screen\'s search to add some.')]));
+  draw();
+  return [
+    h('h2', {}, 'Favourites'),
+    h('p', { class: 'muted small' }, 'The front page shows the ones marked Front, in this order. The music page shows them all.'),
+    h('div', { class: 'actions' }, h('button', { class: 'chip', onclick: () => { favs.sort((a, b) => a.title.localeCompare(b.title)); save(); } }, 'Sort A–Z')),
+    note, list,
+  ];
 }
 
 // The integration wizard: 1. pick a type, 2. fill in its fields, 3. test, 4. save.

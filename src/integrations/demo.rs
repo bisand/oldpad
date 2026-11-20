@@ -46,7 +46,7 @@ fn entity(id: &str, name: &str, zone: &str, class: &str, caps: Vec<(&str, Capabi
 
 /// A room that plays with `group`'s room; rooms in one group share what plays.
 fn speaker(id: &str, room: &str, group: &str, playing: bool, volume: f64, track: &str) -> Entity {
-    let favs: Vec<Value> = ["Radio One", "Radio Two", "Jazz", "Classical", "Morning mix", "Focus"].iter().enumerate().map(|(i, t)| json!({ "id": format!("f{i}"), "title": t })).collect();
+    let favs: Vec<Value> = ["Radio One", "Radio Two", "Jazz", "Classical", "Morning mix", "Focus"].iter().enumerate().map(|(i, t)| json!({ "id": format!("f{i}"), "title": t, "art": "", "front": true })).collect();
     entity(id, room, room, "speaker", vec![
         ("speaker_playing", Capability::new(json!(playing), true)),
         ("volume_set", Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(volume), true) }),
@@ -55,6 +55,8 @@ fn speaker(id: &str, room: &str, group: &str, playing: bool, volume: f64, track:
         ("favourites", Capability::new(json!(favs), false)),
         ("play_favourite", Capability::new(Value::Null, true)),
         ("add_favourite", Capability::new(Value::Null, true)),
+        ("arrange_favourites", Capability::new(Value::Null, true)),
+        ("remove_favourite", Capability::new(Value::Null, true)),
         ("speaker_group", Capability::new(json!(group), true)),
     ])
 }
@@ -148,15 +150,36 @@ impl Instance for Demo {
             }
             return Ok(());
         }
-        if capability == "add_favourite" {
-            let i = value.as_str().and_then(|v| v.strip_prefix("radio:")).and_then(|i| i.parse::<usize>().ok()).filter(|i| *i < STATIONS.len()).ok_or("no such station")?;
+        if matches!(capability, "add_favourite" | "arrange_favourites" | "remove_favourite") {
+            // Every speaker shares the household's favourites: work out the new list once.
+            let mut arr = e.capabilities["favourites"].value.as_array().cloned().unwrap_or_default();
+            match capability {
+                "add_favourite" => {
+                    let i = value.as_str().and_then(|v| v.strip_prefix("radio:")).and_then(|i| i.parse::<usize>().ok()).filter(|i| *i < STATIONS.len()).ok_or("no such station")?;
+                    if !arr.iter().any(|f| f["id"] == *value) {
+                        arr.push(json!({ "id": value, "title": STATIONS[i], "art": "", "front": false }));
+                    }
+                }
+                "remove_favourite" => {
+                    let n = arr.len();
+                    arr.retain(|f| f["id"] != *value);
+                    if arr.len() == n {
+                        return Err("no such favourite".into());
+                    }
+                }
+                _ => {
+                    let ids = |k: &str| value[k].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()).ok_or("expected the order and the front page favourites");
+                    let (order, front) = (ids("order")?, ids("front")?);
+                    for f in arr.iter_mut() {
+                        f["front"] = json!(front.iter().any(|id| f["id"] == *id));
+                    }
+                    arr.sort_by_key(|f| order.iter().position(|id| f["id"] == *id).unwrap_or(usize::MAX));
+                }
+            }
             let mut changed = vec![];
             for e in list.iter_mut().filter(|e| e.capabilities.contains_key("favourites")) {
                 let favs = e.capabilities.get_mut("favourites").unwrap();
-                let arr = favs.value.as_array_mut().unwrap();
-                if !arr.iter().any(|f| f["id"] == *value) {
-                    arr.push(json!({ "id": value, "title": STATIONS[i] }));
-                }
+                favs.value = json!(arr);
                 changed.push((e.id.clone(), favs.value.clone()));
             }
             drop(list);

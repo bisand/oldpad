@@ -333,6 +333,15 @@
     return '<div class="col w30"><div class="card clock"><div class="label-s">' + icon('clock') + ' ' + T.clock + '</div><div class="time" id="time"></div><span class="date" id="date"></span></div></div>';
   }
 
+  // A slight tint by temperature: blue when cold, amber and red when warm.
+  // Rooms are judged by comfort, outdoors by the weather.
+  function tempCls(t, indoor) {
+    if (typeof t !== 'number') { return ''; }
+    if (indoor) { return t < 18 ? 't-cool' : t >= 26 ? 't-hot' : t >= 24 ? 't-warm' : ''; }
+    return t < -5 ? 't-cold' : t < 5 ? 't-cool' : t >= 25 ? 't-hot' : t >= 18 ? 't-warm' : '';
+  }
+  function deg(t) { return '<span class="' + tempCls(t, false) + '">' + Math.round(t) + '°</span>'; }
+
   function climateHalf(e, label, iconName, wind, divider) {
     if (!e) { return ''; }
     var lo = val(e, 'temperature_min'), hi = val(e, 'temperature_max'), hum = val(e, 'measure_humidity'), co2 = val(e, 'measure_co2');
@@ -343,7 +352,7 @@
     var w = wind ? val(wind, 'measure_wind_strength') : null;
     if (typeof w === 'number') { bits.push(Math.round(w / 3.6) + ' m/s'); }
     return '<div class="half' + (divider ? ' divider' : '') + '"><div class="label-s">' + icon(iconName) + ' ' + label + '</div>' +
-      '<div class="big">' + num(val(e, 'measure_temperature'), 1) + '°</div><div class="sub">' + bits.join(' · ') + '</div></div>';
+      '<div class="big ' + tempCls(val(e, 'measure_temperature'), iconName === 'home') + '">' + num(val(e, 'measure_temperature'), 1) + '°</div><div class="sub">' + bits.join(' · ') + '</div></div>';
   }
 
   function climateCard(width) {
@@ -371,12 +380,12 @@
     for (i = 0; i < s.length && n < 6; i++) {
       d = new Date(s[i][0] * 1000);
       if (s[i][0] > now && d.getHours() % 2 === 0) {
-        html += slot('', pad(d.getHours()), s[i][2], Math.round(s[i][1]) + '°');
+        html += slot('', pad(d.getHours()), s[i][2], deg(s[i][1]));
         n++;
       }
     }
     var t = tomorrow(s);
-    if (t) { html += '<div class="slot tomorrow"><span class="h">' + T.tomorrow + '</span>' + icon(weather(t.symbol).icon) + ' ' + Math.round(t.lo) + '°/' + Math.round(t.hi) + '°</div>'; }
+    if (t) { html += '<div class="slot tomorrow"><span class="h">' + T.tomorrow + '</span>' + icon(weather(t.symbol).icon) + ' ' + deg(t.lo) + '/' + deg(t.hi) + '</div>'; }
     return '<div class="card forecast">' + html + '</div>';
   }
 
@@ -395,10 +404,18 @@
 
   function tomorrow(s) { return dayStats(s, 1); }
 
-  function favsHtml(lead, title, max) {
-    var favs = val(lead, 'favourites') || [], html = '', i;
-    for (i = 0; i < favs.length && i < max; i++) {
-      html += '<span class="fav' + (favs[i].title === title ? ' on' : '') + '" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(favs[i].id) + '">' + esc(favs[i].title) + '</span>';
+  // An image the integration serves through oldpad, by its key.
+  function imgSrc(e, key) { return '/api/image/' + esc(e.id.slice(0, e.id.indexOf(':'))) + '/' + esc(key); }
+
+  // The favourites in the admin's order; the front page shows only those marked for it.
+  function favsHtml(lead, title, max, frontOnly) {
+    var favs = val(lead, 'favourites') || [], html = '', i, n = 0, f;
+    for (i = 0; i < favs.length && n < max; i++) {
+      f = favs[i];
+      if (frontOnly && f.front === false) { continue; }
+      n++;
+      html += '<span class="fav' + (f.art ? ' pic' : '') + (f.title === title ? ' on' : '') + '" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(f.id) + '">' +
+        (f.art ? '<img src="' + imgSrc(lead, f.art) + '" alt="">' : '') + esc(f.title) + '</span>';
     }
     return html;
   }
@@ -414,12 +431,12 @@
     var lead = leader(room), playing = val(lead, 'speaker_playing') === true;
     var title = val(lead, 'speaker_track') || T.nothing, sub = val(lead, 'speaker_artist') || '';
     var art = val(lead, 'speaker_art');
-    var artHtml = art ? '<img src="/api/image/' + esc(lead.id.slice(0, lead.id.indexOf(':'))) + '/' + esc(art) + '" alt="">' : icon('radio');
+    var artHtml = art ? '<img src="' + imgSrc(lead, art) + '" alt="">' : icon('radio');
     return '<div class="card music' + (favCount ? '' : ' short') + '"><div class="art">' + artHtml + '</div>' +
       '<div class="now-playing"><div class="sub">' + esc(groupName(groupOf(room))) + '</div><div class="np-title">' + esc(title) + '</div><div class="np-sub sub">' + esc(sub) + '</div></div>' +
       '<span class="play" data-act="play" data-id="' + esc(lead.id) + '">' + icon(playing ? 'pause' : 'play', true) + '</span>' +
       (withVol ? '<div class="vol">' + volHtml(room) + '</div>' : '') +
-      (favCount ? '<div class="favs">' + favsHtml(lead, title, favCount) + '</div>' : '') + '</div>';
+      (favCount ? '<div class="favs">' + favsHtml(lead, title, favCount, true) + '</div>' : '') + '</div>';
   }
 
   function tileIcon(e) {
@@ -565,13 +582,13 @@
     for (i = 0; i < s.length && n < 12; i++) {
       if (s[i][0] > now) {
         d = new Date(s[i][0] * 1000);
-        hours += slot('', pad(d.getHours()), s[i][2], Math.round(s[i][1]) + '°');
+        hours += slot('', pad(d.getHours()), s[i][2], deg(s[i][1]));
         n++;
       }
     }
     for (i = 0; i < 4; i++) {
       st = dayStats(s, i);
-      if (st) { days += slot('', i === 0 ? T.today : T.days[st.date.getDay()], st.symbol, Math.round(st.lo) + '° / ' + Math.round(st.hi) + '°'); }
+      if (st) { days += slot('', i === 0 ? T.today : T.days[st.date.getDay()], st.symbol, deg(st.lo) + ' / ' + deg(st.hi)); }
     }
     return forecastCard() + '<div class="card"><div class="label-s">' + T.next + '</div><div class="hours">' + hours + '</div></div>' +
       '<div class="card"><div class="label-s">' + T.days3 + '</div><div class="days">' + days + '</div></div>';

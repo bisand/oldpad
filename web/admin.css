@@ -58,3 +58,9 @@ header { gap: 12px; flex-wrap: wrap; }
   #nav { order: 3; flex-basis: 100%; justify-content: space-between; }
   #nav a { padding: 6px 8px; }
 }
+
+.fav-row { display: flex; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.fav-row:last-child { border-bottom: 0; }
+.fav-row img, .fav-row .noart { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; flex: none; }
+.fav-row .noart { display: grid; place-items: center; background: rgba(128,128,128,.2); font-weight: 600; }
+.fav-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -17,6 +17,8 @@ const ADMIN_CSS: &str = include_str!("../web/admin.css");
 
 const CSP: &str = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
+const ADMIN_ONLY: [&str; 2] = ["arrange_favourites", "remove_favourite"];
+
 fn asset(content_type: &str, body: &str) -> Response {
     Response::new(200, content_type, body).header("Cache-Control", "no-cache").header("Content-Security-Policy", CSP)
 }
@@ -129,6 +131,10 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                         return Err(Response::error(403, "Not configured for this screen"));
                     }
                     let capability = body["capability"].as_str().unwrap_or("");
+                    // Removing and arranging favourites changes them for the whole household: admin only.
+                    if ADMIN_ONLY.contains(&capability) {
+                        return Err(Response::error(403, "Only the admin page can do that"));
+                    }
                     let mut value = body["value"].clone();
                     // Grouping names a second speaker: the screen must control that one too,
                     // and it must belong to the same integration.
@@ -551,6 +557,13 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["entities"]) => Ok(Response::ok(json!(app.registry.entities()))),
+        ("POST", ["set"]) => {
+            let body = req.json()?;
+            app.registry
+                .set(body["id"].as_str().unwrap_or(""), body["capability"].as_str().unwrap_or(""), &body["value"])
+                .map(|_| Response::ok(json!({ "ok": true })))
+                .map_err(|e| Response::error(502, &e))
+        }
         _ => Err(Response::error(404, "Not found")),
     }
 }

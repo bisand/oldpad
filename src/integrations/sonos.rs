@@ -6,6 +6,7 @@ use super::smapi::{self, Account, SPOTIFY_URL};
 use super::{Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
 use crate::client::request;
 use crate::util::{escape_xml, percent_encode, unescape_xml};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::net::Ipv4Addr;
@@ -141,6 +142,7 @@ struct Favourite {
     uri: String,
     meta: String,
     sub: String, // shown under a search result
+    art: String, // cover or logo URL, or empty
 }
 
 fn parse_favourites(didl: &str) -> Vec<Favourite> {
@@ -154,6 +156,7 @@ fn parse_favourites(didl: &str) -> Vec<Favourite> {
                 // resMD is escaped once more inside the item; tag() already unescaped it once.
                 meta: tag(item, "r:resMD").unwrap_or_default(),
                 sub: String::new(),
+                art: tag(item, "upnp:albumArtURI").unwrap_or_default(),
             })
         })
         .filter(|f| !f.uri.is_empty())
@@ -161,9 +164,38 @@ fn parse_favourites(didl: &str) -> Vec<Favourite> {
 }
 
 fn favourites(host: &str) -> Result<Vec<Favourite>, String> {
-    let args = [("ObjectID", "FV:2"), ("BrowseFlag", "BrowseDirectChildren"), ("Filter", "dc:title,res,r:resMD"), ("StartingIndex", "0"), ("RequestedCount", "100"), ("SortCriteria", "")];
+    let args = [("ObjectID", "FV:2"), ("BrowseFlag", "BrowseDirectChildren"), ("Filter", "dc:title,res,r:resMD,upnp:albumArtURI"), ("StartingIndex", "0"), ("RequestedCount", "100"), ("SortCriteria", "")];
     let xml = soap(host, CD, "Browse", &args)?;
-    Ok(parse_favourites(&tag(&xml, "Result").unwrap_or_default()))
+    let mut favs = parse_favourites(&tag(&xml, "Result").unwrap_or_default());
+    for f in &mut favs {
+        f.art = art_url(&f.art, host);
+    }
+    Ok(favs)
+}
+
+/// An image URL the screens can be given: speakers hand out their own as a path.
+fn art_url(art: &str, host: &str) -> String {
+    // TuneIn logos come at 60 px through Sonos's resizer; ask for more.
+    let art = if art.starts_with('/') { format!("http://{host}:1400{art}") } else { art.replace("?w=60&", "?w=200&") };
+    if art.starts_with("http://") || art.starts_with("https://") { art } else { String::new() }
+}
+
+/// oldpad's own order for the favourites, and which go on the front page.
+/// Sonos keeps no order that other apps can change, so oldpad keeps one.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+struct Arrangement {
+    order: Vec<String>,
+    front: Vec<String>,
+}
+
+/// The favourites in the admin's order, each with whether it goes on the
+/// front page. Before any arranging: Sonos's order, all on the front page.
+/// Favourites added later go last, off the front page.
+fn arrange<'a>(favs: &'a [Favourite], a: Option<&Arrangement>) -> Vec<(&'a Favourite, bool)> {
+    let Some(a) = a else { return favs.iter().map(|f| (f, true)).collect() };
+    let mut out: Vec<_> = favs.iter().map(|f| (f, a.front.contains(&f.id))).collect();
+    out.sort_by_key(|(f, _)| a.order.iter().position(|id| *id == f.id).unwrap_or(usize::MAX));
+    out
 }
 
 const DIDL: &str = r#"<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">"#;
@@ -199,7 +231,7 @@ fn parse_stations(list: &[Value]) -> Vec<Favourite> {
         );
         let sub = [s["country"].as_str().unwrap_or(""), s["tags"].as_str().unwrap_or("").split(',').next().unwrap_or("")]
             .iter().filter(|x| !x.is_empty()).cloned().collect::<Vec<_>>().join(" · ");
-        out.push(Favourite { id: format!("radio:{uuid}"), title, uri: format!("x-rincon-mp3radio://{url}"), meta, sub });
+        out.push(Favourite { id: format!("radio:{uuid}"), title, uri: format!("x-rincon-mp3radio://{url}"), meta, sub, art: String::new() });
     }
     out.truncate(20);
     out
@@ -232,7 +264,7 @@ fn spotify_item(item: &smapi::Item, sn: &str) -> Favourite {
         r#"{DIDL}<item id="{item_id}" parentID="" restricted="true"><dc:title>{}</dc:title><upnp:class>{class}</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON2311_X_#Svc2311-0-Token</desc></item></DIDL-Lite>"#,
         escape_xml(&item.title)
     );
-    Favourite { id: item.id.clone(), title: item.title.clone(), uri, meta, sub: item.sub.clone() }
+    Favourite { id: item.id.clone(), title: item.title.clone(), uri, meta, sub: item.sub.clone(), art: String::new() }
 }
 
 /// A Sonos favourite for `f`, as CreateObject wants it in FV:2.
@@ -272,8 +304,7 @@ fn now_playing(room: &Room) -> Result<Now, String> {
     };
     // The track's cover, else the station's logo; speakers give their own as a path.
     let art = [tag(&track, "upnp:albumArtURI"), tag(&media, "upnp:albumArtURI")].into_iter().flatten().find(|u| !u.is_empty()).unwrap_or_default();
-    let art = if art.starts_with('/') { format!("http://{}:1400{art}", room.coordinator) } else { art };
-    let art = if art.starts_with("http://") || art.starts_with("https://") { art } else { String::new() };
+    let art = art_url(&art, &room.coordinator);
     Ok(Now { playing: matches!(state.as_str(), "PLAYING" | "TRANSITIONING"), volume: volume / 100.0, title, subtitle, art })
 }
 
@@ -282,14 +313,16 @@ fn art_key(url: &str) -> String {
     if url.is_empty() { String::new() } else { crate::util::sha256_hex(url)[..16].to_string() }
 }
 
-fn entity(room: &Room, now: &Now, favs: &[Favourite]) -> Entity {
+fn entity(room: &Room, now: &Now, favs: &[(&Favourite, bool)]) -> Entity {
     let ro = |v: Value| Capability::new(v, false);
     let mut caps = BTreeMap::new();
     caps.insert("speaker_playing".to_string(), Capability::new(json!(now.playing), true));
     caps.insert("volume_set".to_string(), Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(now.volume), true) });
     caps.insert("speaker_track".to_string(), ro(json!(now.title)));
     caps.insert("speaker_artist".to_string(), ro(json!(now.subtitle)));
-    caps.insert("favourites".to_string(), ro(json!(favs.iter().map(|f| json!({ "id": f.id, "title": f.title })).collect::<Vec<_>>())));
+    caps.insert("favourites".to_string(), ro(json!(favs.iter().map(|(f, front)| json!({ "id": f.id, "title": f.title, "art": art_key(&f.art), "front": front })).collect::<Vec<_>>())));
+    caps.insert("arrange_favourites".to_string(), Capability::new(Value::Null, true));
+    caps.insert("remove_favourite".to_string(), Capability::new(Value::Null, true));
     caps.insert("play_favourite".to_string(), Capability::new(Value::Null, true));
     caps.insert("speaker_art".to_string(), ro(json!(art_key(&now.art))));
     caps.insert("add_favourite".to_string(), Capability::new(Value::Null, true));
@@ -428,6 +461,7 @@ struct State {
     entities: Vec<Entity>,
     /// Images the screens may fetch through oldpad: key → URL. Recent ones only.
     art: Vec<(String, String)>,
+    arranged: Option<Arrangement>,
 }
 
 struct Sonos {
@@ -461,14 +495,16 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
         let s = state.lock().unwrap();
         (s.rooms.clone(), s.favs.clone())
     };
-    let mut arts = Vec::new();
+    let arranged = state.lock().unwrap().arranged.clone();
+    let ordered = arrange(&favs, arranged.as_ref());
+    let mut arts: Vec<(String, String)> = favs.iter().map(|f| (art_key(&f.art), f.art.clone())).collect();
     let mut fresh = Vec::new();
     let mut all_answered = true;
     for room in &rooms {
         match now_playing(room) {
             Ok(now) => {
                 arts.push((art_key(&now.art), now.art.clone()));
-                fresh.push(entity(room, &now, &favs))
+                fresh.push(entity(room, &now, &ordered))
             }
             Err(e) => {
                 all_answered = false;
@@ -497,7 +533,10 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
             art.push(old);
         }
     }
-    *s = State { rooms, favs, entities: fresh, art };
+    drop(ordered);
+    // Keep the arrangement as it is now: the admin may have changed it meanwhile.
+    let arranged = s.arranged.take();
+    *s = State { rooms, favs, entities: fresh, art, arranged };
     drop(s);
     for (entity, capability, value) in changes {
         sink(Event::Changed { entity, capability, value });
@@ -510,7 +549,8 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
 
 fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
     let seeds = seeds(config)?;
-    let state = Arc::new(Mutex::new(State { rooms: vec![], favs: vec![], entities: vec![], art: vec![] }));
+    let arranged = config.get("_favourites").and_then(|v| serde_json::from_value::<Arrangement>(v.clone()).ok());
+    let state = Arc::new(Mutex::new(State { rooms: vec![], favs: vec![], entities: vec![], art: vec![], arranged }));
     refresh(&seeds, &state, &(Arc::new(|_| {}) as Sink), true)?;
     let rooms: Vec<String> = state.lock().unwrap().rooms.iter().map(|r| format!("{} {}", r.name, r.host)).collect();
     eprintln!("sonos: {} rooms: {}", rooms.len(), rooms.join(", "));
@@ -702,6 +742,20 @@ impl Instance for Sonos {
                 soap(&room.host, CD, "CreateObject", &[("ContainerID", "FV:2"), ("Elements", &favourite_didl(&f))])?;
                 self.regroup.store(1, Ordering::Relaxed); // the next full refresh reads the new list
             }
+            "arrange_favourites" => {
+                let a: Arrangement = serde_json::from_value(value.clone()).map_err(|_| "expected the order and the front page favourites")?;
+                if a.order.len() > 500 || a.front.len() > 500 {
+                    return Err("too many favourites".into());
+                }
+                self.state.lock().unwrap().arranged = Some(a.clone());
+                (self.sink)(Event::Remember { key: "_favourites".into(), value: json!(a) });
+            }
+            "remove_favourite" => {
+                // Only Sonos favourites, never a search result: this deletes it for the household.
+                let id = value.as_str().filter(|id| id.starts_with("FV:2/") && self.state.lock().unwrap().favs.iter().any(|f| f.id == *id)).ok_or("no such favourite")?;
+                soap(&room.host, CD, "DestroyObject", &[("ObjectID", id)])?;
+                self.regroup.store(1, Ordering::Relaxed); // the next full refresh reads the new list
+            }
             "speaker_group" => {
                 let target = value.as_str().ok_or("expected a room")?;
                 if target == room.uuid {
@@ -750,6 +804,19 @@ mod tests {
     }
 
     #[test]
+    fn arranges_favourites() {
+        let fav = |id: &str| Favourite { id: id.into(), title: id.into(), uri: String::new(), meta: String::new(), sub: String::new(), art: String::new() };
+        let favs = [fav("a"), fav("b"), fav("c"), fav("new")];
+        let ids = |v: Vec<(&Favourite, bool)>| v.into_iter().map(|(f, front)| format!("{}{}", f.id, if front { "*" } else { "" })).collect::<Vec<_>>();
+        assert_eq!(ids(arrange(&favs, None)), ["a*", "b*", "c*", "new*"]);
+        let a = Arrangement { order: vec!["c".into(), "gone".into(), "a".into(), "b".into()], front: vec!["c".into(), "b".into()] };
+        assert_eq!(ids(arrange(&favs, Some(&a))), ["c*", "a", "b*", "new"]);
+        assert_eq!(art_url("/getaa?s=1&u=x", "10.0.0.5"), "http://10.0.0.5:1400/getaa?s=1&u=x");
+        assert_eq!(art_url("https://x.cloudfront.net/image?w=60&image=a", "h"), "https://x.cloudfront.net/image?w=200&image=a");
+        assert_eq!(art_url("file:///etc/passwd", "h"), "");
+    }
+
+    #[test]
     fn reads_ssdp_replies() {
         let sonos = "HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age = 1800\r\nLOCATION: http://192.168.1.44:1400/xml/device_description.xml\r\nSERVER: Linux UPnP/1.0 Sonos/80.1-55014 (ZPS27)\r\nST: urn:schemas-upnp-org:device:ZonePlayer:1\r\n\r\n";
         assert_eq!(parse_ssdp(sonos).as_deref(), Some("192.168.1.44"));
@@ -777,7 +844,7 @@ mod tests {
 
     #[test]
     fn plays_spotify_results_like_its_favourites() {
-        let fav = |uri: &str| Favourite { id: "x".into(), title: "x".into(), uri: uri.into(), meta: String::new(), sub: String::new() };
+        let fav = |uri: &str| Favourite { id: "x".into(), title: "x".into(), uri: uri.into(), meta: String::new(), sub: String::new(), art: String::new() };
         let favs = [fav("x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a1?sid=9&flags=8300&sn=4"), fav("x-sonos-spotify:spotify%3atrack%3a1?sid=9&flags=8224&sn=2"), fav("x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a2?sid=9&flags=8300&sn=2"), fav("x-rincon-mp3radio://x?sn=7")];
         assert_eq!(spotify_sn(&favs), "2");
         assert_eq!(spotify_sn(&[]), "1");

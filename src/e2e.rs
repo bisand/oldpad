@@ -187,6 +187,17 @@ fn phone_and_tablet_end_to_end() {
     let room = state["more"].as_array().unwrap().iter().find(|e| e["id"] == kitchen.as_str()).unwrap().clone();
     assert_eq!(room["capabilities"]["speaker_group"]["value"], "speaker");
 
+    // --- favourites: the admin arranges and removes them for the household; screens can't
+    assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": kitchen, "capability": "remove_favourite", "value": "f0" }))).0, 403);
+    let arranged = json!({ "order": ["f2", "f0"], "front": ["f2"] });
+    assert_eq!(phone.call("POST", "/api/admin/set", Some(json!({ "id": kitchen, "capability": "arrange_favourites", "value": arranged }))).0, 200);
+    assert_eq!(phone.call("POST", "/api/admin/set", Some(json!({ "id": kitchen, "capability": "remove_favourite", "value": "f1" }))).0, 200);
+    let (_, state) = tablet.call("GET", "/api/tablet", None);
+    let room = state["more"].as_array().unwrap().iter().find(|e| e["id"] == speaker.as_str()).unwrap().clone();
+    let favs: Vec<String> = room["capabilities"]["favourites"]["value"].as_array().unwrap().iter().map(|f| format!("{}{}", f["id"].as_str().unwrap(), if f["front"] == true { "*" } else { "" })).collect();
+    assert_eq!(favs, ["f2*", "f0", "f3", "f4", "f5"]);
+    assert_eq!(guest.call("POST", "/api/admin/set", Some(json!({ "id": kitchen, "capability": "remove_favourite", "value": "f2" }))).0, 401);
+
     // --- an admin can look at the screen (read only); nobody else can
     let (s, seen) = phone.call("GET", &format!("/api/tablet?preview={device_id}"), None);
     assert_eq!((s, seen["device"]["name"].as_str()), (200, Some("Kitchen")));
