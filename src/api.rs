@@ -98,7 +98,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     let p = &device.panels;
                     let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
                     Ok(Response::ok(json!({
-                        "device": { "id": device.id, "name": device.name },
+                        "device": { "id": device.id, "name": device.name, "favRows": device.fav_rows.unwrap_or(1) },
                         "settings": app.store.lock().unwrap().data.settings,
                         "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
                         "more": device.more.iter().map(get).collect::<Vec<_>>(),
@@ -304,7 +304,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .data
                 .devices
                 .iter()
-                .map(|d| json!({ "id": d.id, "name": d.name, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1) }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
@@ -335,6 +335,9 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                     return Err(Response::error(400, "Bad panels"));
                 }
                 d.panels = panels;
+            }
+            if let Some(rows) = body.get("favRows") {
+                d.fav_rows = Some(rows.as_u64().filter(|r| *r <= 3).ok_or_else(|| Response::error(400, "Favourite rows: 0 to 3"))? as u8);
             }
             if body.get("pages").is_some() {
                 let pages: Vec<crate::store::Page> = serde_json::from_value(body["pages"].clone()).map_err(|_| Response::error(400, "Bad pages"))?;

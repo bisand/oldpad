@@ -390,7 +390,7 @@ async function deviceView(id) {
   if (!device) return render(errorBox(new Error('No such screen.')));
   main.classList.add('wide');
   const ent = new Map(entities.map((e) => [e.id, e]));
-  const s = { name: device.name, tiles: [...device.tiles], more: [...device.more], panels: { ...device.panels }, pages: structuredClone(device.pages || []) };
+  const s = { name: device.name, tiles: [...device.tiles], more: [...device.more], panels: { ...device.panels }, pages: structuredClone(device.pages || []), favRows: device.favRows ?? 1 };
   const here = location.hash;
   let dirty = false;
   let current = 'home';
@@ -485,7 +485,7 @@ async function deviceView(id) {
     try {
       if (!s.name.trim()) throw new Error('Give the screen a name in Settings.');
       if (s.pages.some((p) => !p.name.trim())) throw new Error('Every page needs a name.');
-      await api('PUT', `/devices/${id}`, { name: s.name.trim(), tiles: s.tiles, more: s.more, panels: s.panels, pages: s.pages });
+      await api('PUT', `/devices/${id}`, { name: s.name.trim(), tiles: s.tiles, more: s.more, panels: s.panels, pages: s.pages, favRows: s.favRows });
       dirty = false;
       note = h('span', { class: 'ok small' }, 'Saved. The screen reloads by itself.');
     } catch (e) { note = h('span', { class: 'bad small' }, e.message); }
@@ -561,6 +561,12 @@ async function deviceView(id) {
     return h('div', { class: 'slot' }, h('div', { class: 'slot-title' }, title), sel, hint ? h('div', { class: 't-sub' }, hint) : null);
   }
 
+  function favRowsSlot() {
+    const sel = h('select', { 'aria-label': 'Favourite rows', onchange: () => { s.favRows = +sel.value; changed(); } },
+      [0, 1, 2, 3].map((n) => h('option', { value: n, selected: s.favRows === n }, n ? `${n} row${n > 1 ? 's' : ''}` : 'None')));
+    return h('div', { class: 'slot' }, h('div', { class: 'slot-title' }, 'Favourites'), sel, h('div', { class: 't-sub' }, '5 per row'));
+  }
+
   function homeCanvas() {
     const temp = (e) => has(e, 'measure_temperature') && e.class !== 'weather';
     const tiles = s.tiles;
@@ -581,7 +587,9 @@ async function deviceView(id) {
           panelSlot('outdoor', 'Outdoor', temp),
           panelSlot('wind', 'Wind', (e) => has(e, 'measure_wind_strength'), 'Only if Outdoor has no wind'))),
       panelSlot('weather', 'Forecast', (e) => e.class === 'weather'),
-      panelSlot('speaker', 'Music', (e) => e.class === 'speaker', h('span', {}, 'This screen\'s room. Favourites: ', h('a', { href: '#/integrations' }, 'Integrations → Favourites'), '.')),
+      h('div', { class: 'slot music-slot' },
+        panelSlot('speaker', 'Music', (e) => e.class === 'speaker', h('span', {}, 'This screen\'s room. Which favourites: ', h('a', { href: '#/integrations' }, 'Integrations → Favourites'), '.')),
+        favRowsSlot()),
       h('div', { class: 'section-label' }, `Tiles · ${Math.min(tiles.length, HOME_TILES)} of ${HOME_TILES}`),
       grid,
       addButton('+ Add tiles'),

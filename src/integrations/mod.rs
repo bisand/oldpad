@@ -51,11 +51,19 @@ pub struct Capability {
     pub min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
+    /// What the device calls it ("Dim level", "Mode"), for the controls sheet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<f64>,
+    /// The choices of an enum capability: `[{id, title}]`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values: Option<Value>,
 }
 
 impl Capability {
     pub fn new(value: Value, settable: bool) -> Self {
-        Capability { value, settable, units: None, min: None, max: None }
+        Capability { value, settable, units: None, min: None, max: None, title: None, step: None, values: None }
     }
 }
 

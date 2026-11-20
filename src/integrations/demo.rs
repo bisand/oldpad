@@ -68,9 +68,23 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
     };
     let temp = |v: f64, settable| Capability { units: Some("°C".into()), min: Some(5.0), max: Some(30.0), ..Capability::new(json!(v), settable) };
     let entities = Arc::new(Mutex::new(vec![
-        entity("lamp", "Ceiling lamp", zone, "light", vec![("onoff", Capability::new(json!(true), true)), ("dim", Capability::new(json!(0.6), true))]),
+        entity("lamp", "Ceiling lamp", zone, "light", vec![
+            ("onoff", Capability::new(json!(true), true)),
+            ("dim", Capability { min: Some(0.0), max: Some(1.0), step: Some(0.01), title: Some("Brightness".into()), ..Capability::new(json!(0.6), true) }),
+            ("light_temperature", Capability { min: Some(0.0), max: Some(1.0), step: Some(0.01), title: Some("Colour temperature".into()), ..Capability::new(json!(0.3), true) }),
+            ("measure_power", Capability { units: Some("W".into()), title: Some("Power".into()), ..Capability::new(json!(7.4), false) }),
+        ]),
         entity("reading", "Reading lamp", zone, "light", vec![("onoff", Capability::new(json!(false), true))]),
-        entity("heater", "Heater", zone, "thermostat", vec![("target_temperature", temp(21.5, true)), ("measure_temperature", temp(20.8, false))]),
+        entity("heater", "Heater", zone, "thermostat", vec![
+            ("target_temperature", Capability { step: Some(0.5), title: Some("Target temperature".into()), ..temp(21.5, true) }),
+            ("measure_temperature", temp(20.8, false)),
+            ("thermostat_mode", Capability {
+                title: Some("Mode".into()),
+                values: Some(json!([{"id": "heat", "title": "Heat"}, {"id": "eco", "title": "Eco"}, {"id": "off", "title": "Off"}])),
+                ..Capability::new(json!("heat"), true)
+            }),
+            ("alarm_contact", Capability { title: Some("Window open".into()), ..Capability::new(json!(false), false) }),
+        ]),
         entity("plug", "Coffee maker", "Kitchen", "socket", vec![("onoff", Capability::new(json!(false), true))]),
         entity("indoor", "Indoor", zone, "sensor", vec![
             ("measure_temperature", temp(21.4, false)),
@@ -204,6 +218,7 @@ impl Instance for Demo {
             "onoff" | "speaker_playing" => value.is_boolean(),
             "volume_set" => value.as_f64().is_some_and(|v| (0.0..=1.0).contains(&v)),
             "dim" => value.as_f64().is_some_and(|v| (0.0..=1.0).contains(&v)),
+            _ if cap.values.is_some() => cap.values.as_ref().and_then(Value::as_array).is_some_and(|vs| vs.iter().any(|v| v["id"] == *value)),
             _ => value.as_f64().is_some_and(|v| cap.min.is_none_or(|m| v >= m) && cap.max.is_none_or(|m| v <= m)),
         };
         if !ok {

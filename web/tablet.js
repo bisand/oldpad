@@ -23,14 +23,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -87,6 +87,7 @@
     plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
     door: 'M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M15 12h.01',
     clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+    dots: 'M5 12h.01M12 12h.01M19 12h.01',
     cog: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.7 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.7 1-.5 2.4h-3.4l-.5-2.4-1.7-1-2.3.8-1.7-2.9 1.8-1.6v-2L4.1 8.5l1.7-2.9 2.3.8 1.7-1z'
   };
 
@@ -108,6 +109,7 @@
   var events = null;
   var pairTimer = null;
   var toastTimer = null;
+  var sheet = null;            // the entity whose controls are open
   var holdUntil = 0;          // don't redraw under a finger on the volume slider
   var redrawPending = false;
 
@@ -233,7 +235,7 @@
         }
       }
       var i, k;
-      layout = { tiles: [], more: [], panels: {}, pages: [], name: data.device ? data.device.name : '' };
+      layout = { tiles: [], more: [], panels: {}, pages: [], name: data.device ? data.device.name : '', favRows: data.device ? data.device.favRows : 1 };
       for (i = 0; i < data.tiles.length; i++) { layout.tiles.push(keep(data.tiles[i])); }
       for (i = 0; i < data.more.length; i++) { layout.more.push(keep(data.more[i])); }
       for (k in data.panels) { if (data.panels.hasOwnProperty(k)) { layout.panels[k] = keep(data.panels[k]); } }
@@ -278,6 +280,7 @@
 
   function cap(e, name) { return e && e.capabilities && e.capabilities[name] ? e.capabilities[name] : null; }
   function val(e, name) { var c = cap(e, name); return c ? c.value : null; }
+  function favRows() { return typeof layout.favRows === 'number' ? layout.favRows : 1; }
   function panel(name) { return layout.panels[name] ? entities[layout.panels[name]] : null; }
 
   function pool() {
@@ -426,17 +429,21 @@
   }
 
   // One room's card: what its group plays, with the room's own volume unless left out.
-  function musicCard(room, favCount, withVol) {
+  // `rows` of five favourites under it; fewer when there are fewer favourites.
+  function musicCard(room, rows, withVol) {
     if (!room) { return ''; }
-    var lead = leader(room), playing = val(lead, 'speaker_playing') === true;
+    var lead = leader(room), favs = val(lead, 'favourites') || [], front = 0, i;
+    for (i = 0; i < favs.length; i++) { if (favs[i].front !== false) { front++; } }
+    rows = Math.min(rows, Math.ceil(front / 5));
+    var playing = val(lead, 'speaker_playing') === true;
     var title = val(lead, 'speaker_track') || T.nothing, sub = val(lead, 'speaker_artist') || '';
     var art = val(lead, 'speaker_art');
     var artHtml = art ? '<img src="' + imgSrc(lead, art) + '" alt="">' : icon('radio');
-    return '<div class="card music' + (favCount ? '' : ' short') + '"><div class="art">' + artHtml + '</div>' +
+    return '<div class="card music' + (rows ? (rows > 1 ? ' r' + rows : '') : ' short') + '"><div class="art">' + artHtml + '</div>' +
       '<div class="now-playing"><div class="sub">' + esc(groupName(groupOf(room))) + '</div><div class="np-title">' + esc(title) + '</div><div class="np-sub sub">' + esc(sub) + '</div></div>' +
       '<span class="play" data-act="play" data-id="' + esc(lead.id) + '">' + icon(playing ? 'pause' : 'play', true) + '</span>' +
       (withVol ? '<div class="vol">' + volHtml(room) + '</div>' : '') +
-      (favCount ? '<div class="favs">' + favsHtml(lead, title, favCount, true) + '</div>' : '') + '</div>';
+      (rows ? '<div class="favs">' + favsHtml(lead, title, rows * 5, true) + '</div>' : '') + '</div>';
   }
 
   function tileIcon(e) {
@@ -462,7 +469,7 @@
       body = '<div class="value">' + (onoff.value ? (dim ? Math.round(dim.value * 100) + ' %' : T.on) : T.off) + '</div>';
     } else if (target) {
       body = '<div class="value up">' + num(target.value, 1) + '°' + (measure ? '<div class="sub">' + T.now + ' ' + num(measure.value, 1) + '°</div>' : '') + '</div>' +
-        '<div class="steps"><span class="step" data-act="step" data-step="-0.5" data-id="' + esc(e.id) + '">−</span><span class="step" data-act="step" data-step="0.5" data-id="' + esc(e.id) + '">+</span></div>';
+        '<div class="steps"><span class="step" data-act="step" data-step="-' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">−</span><span class="step" data-act="step" data-step="' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">+</span></div>';
     } else if (cap(e, 'speaker_playing')) {
       if (val(leader(e), 'speaker_playing')) { cls += ' on'; }
       body = '<div class="value sub">' + esc(val(leader(e), 'speaker_playing') ? val(leader(e), 'speaker_track') || T.on : T.off) + '</div>';
@@ -471,8 +478,81 @@
     } else if (measure) {
       body = '<div class="value">' + num(measure.value, 1) + '°</div>';
     }
+    if (controls(e).length > 1) { body += '<span class="more" data-act="more" data-id="' + esc(e.id) + '">' + icon('dots') + '</span>'; }
     return '<div class="' + cls + '" data-act="tile" data-id="' + esc(e.id) + '"><div class="in">' + icon(tileIcon(e)) +
       '<p class="label">' + esc(e.name) + '</p><p class="zone">' + esc(e.zone) + '</p>' + body + '</div></div>';
+  }
+
+  // ------------------------------------------------------------- controls sheet
+
+  // Capabilities the sheet shows, controls first. Speakers and Flows have their own UI.
+  var SHEET_FIRST = ['onoff', 'dim', 'target_temperature'];
+  function controls(e) {
+    var out = [], id, c, i;
+    if (!e || !e.capabilities || e['class'] === 'speaker' || e['class'] === 'button') { return out; }
+    for (id in e.capabilities) {
+      if (!e.capabilities.hasOwnProperty(id)) { continue; }
+      c = e.capabilities[id];
+      // Write-only maintenance actions (reset meter, identify) don't belong on a wall screen.
+      if (c.value === null || typeof c.value === 'object') { continue; }
+      out.push(id);
+    }
+    out.sort(function (a, b) {
+      var ia = SHEET_FIRST.indexOf(a), ib = SHEET_FIRST.indexOf(b);
+      var ra = ia >= 0 ? ia : e.capabilities[a].settable ? 10 : 20, rb = ib >= 0 ? ib : e.capabilities[b].settable ? 10 : 20;
+      return ra - rb || (a < b ? -1 : 1);
+    });
+    return out;
+  }
+
+  function capTitle(id, c) {
+    if (c.title) { return c.title; }
+    if (id === 'onoff') { return T.on; }
+    var s = id.replace(/^(measure|meter|alarm)_/, '').replace(/[._]/g, ' ');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // 0..1 scales show as percent.
+  function isPct(c) { return c.min === 0 && c.max === 1; }
+  function fmt(c, v) {
+    if (typeof v === 'boolean') { return v ? T.yes : T.no; }
+    if (typeof v !== 'number') { return esc(String(v)); }
+    if (isPct(c)) { return Math.round(v * 100) + ' %'; }
+    var digits = c.step && c.step < 1 ? (c.step < 0.1 ? 2 : 1) : (Math.round(v) === v && (c.units || '').charAt(0) !== '°' ? 0 : 1);
+    return num(v, digits) + (c.units ? (c.units.charAt(0) === '°' ? '' : ' ') + esc(c.units) : '');
+  }
+
+  function controlHtml(e, id) {
+    var c = e.capabilities[id], d = ' data-id="' + esc(e.id) + '" data-cap="' + esc(id) + '"', ctl = '', i, v, scale, step;
+    if (c.settable && c.values && c.values.length) {
+      for (i = 0; i < c.values.length; i++) {
+        v = c.values[i];
+        ctl += '<span class="fav' + (v.id === c.value ? ' on' : '') + '" data-act="enum"' + d + ' data-value="' + esc(v.id) + '">' + esc(v.title || v.id) + '</span>';
+      }
+      return '<div class="ctl"><div class="ctl-t">' + esc(capTitle(id, c)) + '</div><div class="choices">' + ctl + '</div></div>';
+    }
+    if (c.settable && typeof c.value === 'boolean') {
+      ctl = '<span class="switch' + (c.value ? ' on' : '') + '" data-act="flip"' + d + '><span></span></span>';
+    } else if (c.settable && typeof c.value === 'number' && id === 'target_temperature') {
+      ctl = '<span class="step" data-act="step" data-step="-' + (c.step || 0.5) + '"' + d + '>−</span><span class="ctl-v">' + fmt(c, c.value) + '</span>' +
+        '<span class="step" data-act="step" data-step="' + (c.step || 0.5) + '"' + d + '>+</span>';
+    } else if (c.settable && typeof c.value === 'number' && typeof c.min === 'number' && typeof c.max === 'number') {
+      scale = isPct(c) ? 100 : 1;
+      step = (c.step || (c.max - c.min) / 100) * scale;
+      return '<div class="ctl"><div class="ctl-t">' + esc(capTitle(id, c)) + '</div><div class="ctl-r"><input type="range" min="' + c.min * scale + '" max="' + c.max * scale +
+        '" step="' + step + '" value="' + c.value * scale + '" data-scale="' + scale + '"' + d + '><span>' + fmt(c, c.value) + '</span></div></div>';
+    } else {
+      ctl = '<span class="ctl-v' + (id.indexOf('alarm_') === 0 && c.value === true ? ' alarm' : '') + '">' + fmt(c, c.value) + '</span>';
+    }
+    return '<div class="ctl line"><div class="ctl-t">' + esc(capTitle(id, c)) + '</div><div class="ctl-x">' + ctl + '</div></div>';
+  }
+
+  function sheetHtml() {
+    var e = sheet && entities[sheet], list = controls(e), html = '', i;
+    if (!list.length) { return ''; }
+    for (i = 0; i < list.length; i++) { html += controlHtml(e, list[i]); }
+    return '<div class="sheet-bg" data-act="close"><div class="sheet" data-act="none">' +
+      '<span class="x" data-act="close">✕</span><div class="sheet-h">' + esc(e.name) + '</div><div class="sub">' + esc(e.zone) + '</div>' + html + '</div></div>';
   }
 
   function tilesHtml(list, big) {
@@ -495,7 +575,7 @@
   function homePage() {
     var tiles = [], i;
     for (i = 0; i < layout.tiles.length && i < 6; i++) { tiles.push(entities[layout.tiles[i]] || { missing: true }); }
-    var html = '<div class="row">' + clockCard() + climateCard('w70') + '</div>' + forecastCard() + musicCard(panel('speaker'), 5, true) + tilesHtml(tiles, false);
+    var html = '<div class="row">' + clockCard() + climateCard('w70') + '</div>' + forecastCard() + musicCard(panel('speaker'), favRows(), true) + tilesHtml(tiles, false);
     return layout.tiles.length || panel('indoor') || panel('weather') || panel('speaker') ? html : html + '<p class="empty muted">' + T.empty + '</p>';
   }
 
@@ -605,7 +685,7 @@
         if (it.card === 'clock') { html += '<div class="row">' + clockCard().replace('w30', 'w100') + '</div>'; }
         if (it.card === 'climate') { html += '<div class="row">' + climateCard('w100') + '</div>'; }
         if (it.card === 'forecast') { html += forecastCard(); }
-        if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], 5, true); }
+        if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], favRows(), true); }
       } else {
         run.push(typeof it === 'string' ? entities[it] || { missing: true } : it);
       }
@@ -643,7 +723,7 @@
     }
     rail += '<a data-act="page" data-page="settings" class="cog' + (page === 'settings' ? ' on' : '') + '">' + icon('cog') + '</a>';
     $('rail').innerHTML = rail;
-    $('page').innerHTML = pageHtml();
+    $('page').innerHTML = pageHtml() + sheetHtml();
     tick();
   }
 
@@ -673,15 +753,31 @@
     var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), e = id ? entities[id] : null, c, prev, next, i, all;
     if (act === 'page') {
       page = el.getAttribute('data-page');
+      sheet = null;
       render();
-    } else if (act === 'step' && e && (c = cap(e, 'target_temperature'))) {
+    } else if (act === 'more') {
+      sheet = id;
+      render();
+    } else if (act === 'close') {
+      sheet = null;
+      render();
+    } else if (act === 'flip' && e && (c = cap(e, el.getAttribute('data-cap')))) {
+      c.value = !c.value;
+      render();
+      set(e, el.getAttribute('data-cap'), c.value, !c.value);
+    } else if (act === 'enum' && e && (c = cap(e, el.getAttribute('data-cap')))) {
       prev = c.value;
-      next = Math.round((prev + parseFloat(el.getAttribute('data-step'))) * 2) / 2;
+      c.value = el.getAttribute('data-value');
+      render();
+      set(e, el.getAttribute('data-cap'), c.value, prev);
+    } else if (act === 'step' && e && (c = cap(e, el.getAttribute('data-cap') || 'target_temperature'))) {
+      prev = c.value;
+      next = Math.round((prev + parseFloat(el.getAttribute('data-step'))) * 100) / 100;
       if (typeof c.min === 'number') { next = Math.max(c.min, next); }
       if (typeof c.max === 'number') { next = Math.min(c.max, next); }
       c.value = next;
       render();
-      set(e, 'target_temperature', next, prev);
+      set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
     } else if (act === 'tile' && e && (c = cap(e, 'onoff')) && c.settable) {
       c.value = !c.value;
       render();
@@ -757,16 +853,18 @@
     }
   }
 
+  // Volume, and any number the controls sheet offers; sent when the finger lets go.
   function onSlide(ev) {
     var t = ev.target, id = t && t.getAttribute && t.getAttribute('data-id'), e = id ? entities[id] : null, c, v, prev;
-    if (!e || t.type !== 'range') { return; }
+    var name = t && t.getAttribute && t.getAttribute('data-cap') || 'volume_set', scale = parseFloat(t && t.getAttribute && t.getAttribute('data-scale')) || 100;
+    if (!e || t.type !== 'range' || !(c = cap(e, name))) { return; }
     holdUntil = new Date().getTime() + 1500;
-    if (t.nextSibling) { t.nextSibling.textContent = t.value; }
-    if (ev.type === 'change' && (c = cap(e, 'volume_set'))) {
-      v = parseInt(t.value, 10) / 100;
+    v = parseFloat(t.value) / scale;
+    if (t.nextSibling) { t.nextSibling.textContent = name === 'volume_set' ? t.value : fmt(c, v).replace('&amp;', '&'); }
+    if (ev.type === 'change') {
       prev = c.value;
       c.value = v;
-      set(e, 'volume_set', v, prev);
+      set(e, name, v, prev);
     }
   }
 
@@ -798,7 +896,7 @@
   }, false);
   document.addEventListener('touchend', function (ev) {
     var t = ev.changedTouches[0];
-    if (!touchAt || !actionOf(ev.target) || Math.abs(t.clientX - touchAt.x) > 10 || Math.abs(t.clientY - touchAt.y) > 10) { return; }
+    if (!touchAt || !actionOf(ev.target) || ev.target.tagName === 'INPUT' || Math.abs(t.clientX - touchAt.x) > 10 || Math.abs(t.clientY - touchAt.y) > 10) { return; }
     touchAt = null;
     ev.preventDefault(); // or the browser sends its own click after this
     onTap(ev);

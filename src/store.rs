@@ -47,6 +47,9 @@ pub struct Device {
     /// The admin's own pages, after the built-in ones in the side rail.
     #[serde(default)]
     pub pages: Vec<Page>,
+    /// Rows of favourites on the home page's music card (0 to 3); unset means one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fav_rows: Option<u8>,
 }
 
 /// A page of the admin's choosing. Items are entity ids, or `card:<name>` for
@@ -212,6 +215,7 @@ mod tests {
             panels: Panels { speaker: Some("sonos:RINCON_1".into()), ..Default::default() },
             more: vec![],
             pages: vec![],
+            fav_rows: None,
         });
         s.save().unwrap();
         let s2 = Store::open(&dir).unwrap();

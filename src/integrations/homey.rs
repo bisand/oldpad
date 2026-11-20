@@ -78,6 +78,11 @@ fn test(config: &Map<String, Value>) -> Result<String, String> {
     Ok(format!("Connected to Homey {id}. {} devices visible.", items(&devices).len()))
 }
 
+/// Homey titles are a string in the Homey's language, or sometimes `{en, nb, …}`.
+fn text(v: &Value) -> Option<String> {
+    v.as_str().or_else(|| v["en"].as_str()).map(str::to_string)
+}
+
 fn map_device(d: &Value, zones: &HashMap<String, String>) -> Option<Entity> {
     let id = d["id"].as_str()?.to_string();
     let mut capabilities = BTreeMap::new();
@@ -91,6 +96,11 @@ fn map_device(d: &Value, zones: &HashMap<String, String>) -> Option<Entity> {
                     units: c["units"].as_str().map(str::to_string),
                     min: c["min"].as_f64(),
                     max: c["max"].as_f64(),
+                    title: text(&c["title"]),
+                    step: c["step"].as_f64(),
+                    values: c["values"].as_array().map(|vs| {
+                        vs.iter().filter_map(|v| Some(json!({ "id": v["id"].as_str()?, "title": text(&v["title"]).unwrap_or_default() }))).collect()
+                    }),
                 },
             );
         }
@@ -161,7 +171,8 @@ impl Instance for Homey {
 
     fn set(&self, entity: &str, capability: &str, value: &Value) -> Result<(), String> {
         let enc = |s: &str| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-        if !enc(entity) || !enc(capability) {
+        // Sub-capabilities have a dot: `measure_temperature.inside`.
+        if !enc(entity) || !enc(&capability.replace('.', "")) {
             return Err("bad id".into());
         }
         if let Some(id) = entity.strip_prefix("aflow-") {
@@ -347,11 +358,15 @@ mod tests {
     fn maps_devices_and_flows() {
         let zones = HashMap::from([("z1".to_string(), "Stue".to_string())]);
         let d = json!({"id": "d1", "name": "Taklampe", "zone": "z1", "class": "light",
-            "capabilitiesObj": {"onoff": {"value": true, "setable": true}, "dim": {"value": 0.4, "setable": true, "min": 0, "max": 1}}});
+            "capabilitiesObj": {"onoff": {"value": true, "setable": true}, "dim": {"value": 0.4, "setable": true, "min": 0, "max": 1, "title": "Dimme", "step": 0.01},
+                "thermostat_mode": {"value": "heat", "setable": true, "title": {"en": "Mode"}, "values": [{"id": "heat", "title": "Varme"}, {"id": "off", "title": {"en": "Off"}}]}}});
         let e = map_device(&d, &zones).unwrap();
         assert_eq!((e.zone.as_str(), e.class.as_str()), ("Stue", "light"));
         assert!(e.capabilities["onoff"].settable);
         assert_eq!(e.capabilities["dim"].max, Some(1.0));
+        assert_eq!((e.capabilities["dim"].title.as_deref(), e.capabilities["dim"].step), (Some("Dimme"), Some(0.01)));
+        assert_eq!(e.capabilities["thermostat_mode"].title.as_deref(), Some("Mode"));
+        assert_eq!(e.capabilities["thermostat_mode"].values, Some(json!([{"id": "heat", "title": "Varme"}, {"id": "off", "title": "Off"}])));
 
         assert!(map_flow(&json!({"id": "f1", "name": "God natt", "triggerable": true}), "flow-").is_some());
         assert!(map_flow(&json!({"id": "f2", "name": "Auto", "triggerable": false}), "flow-").is_none());
