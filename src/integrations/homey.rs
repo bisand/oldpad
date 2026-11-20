@@ -213,12 +213,17 @@ fn regroup(list: &mut [Entity], device: &str) -> Vec<(String, Value)> {
     changed
 }
 
-/// Zone id → name.
-fn load_zones(api: &Api) -> Result<HashMap<String, String>, String> {
+/// Zone id → (name, parent).
+fn load_zones(api: &Api) -> Result<HashMap<String, (String, Value)>, String> {
     Ok(items(&api.call("GET", "/api/manager/zones/zone", None)?)
         .into_iter()
-        .filter_map(|z| Some((z["id"].as_str()?.to_string(), z["name"].as_str()?.to_string())))
+        .filter_map(|z| Some((z["id"].as_str()?.to_string(), (z["name"].as_str()?.to_string(), z["parent"].clone()))))
         .collect())
+}
+
+/// Zones report motion ("active") all the time; only a new name or parent matters here.
+fn zone_reshaped(zones: &HashMap<String, (String, Value)>, event: &str, z: &Value) -> bool {
+    event != "zone.update" || zones.get(z["id"].as_str().unwrap_or("")).is_none_or(|(name, parent)| z["name"] != name.as_str() || z["parent"] != *parent)
 }
 
 /// Takes a renamed or moved device's new name, room and kind. None if nothing changed,
@@ -371,7 +376,8 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
     let ids: Vec<String> = entities.lock().unwrap().iter().filter(|e| !is_flow(e)).map(|e| e.id.clone()).collect();
     // The Flow and zone managers too, so new Flows and renamed rooms show up without a restart.
     let mut uris = vec!["homey:manager:devices".to_string(), "homey:manager:flow".to_string(), "homey:manager:zones".to_string()];
-    let zones = load_zones(api)?;
+    let tree = load_zones(api)?;
+    let zones: HashMap<String, String> = tree.iter().map(|(id, (name, _))| (id.clone(), name.clone())).collect();
     uris.extend(ids.iter().map(|id| format!("homey:device:{id}")));
     for (i, uri) in uris.iter().enumerate() {
         ws.send(&emit(&nsp, 10 + i as u64, json!(["subscribe", uri])))?;
@@ -434,7 +440,7 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
                 }
                 None => {}
             }
-        } else if uri == "homey:manager:zones" && event.starts_with("zone.") {
+        } else if uri == "homey:manager:zones" && event.starts_with("zone.") && zone_reshaped(&tree, event, data) {
             // A renamed or new room: reconnect, which reloads names and rooms.
             return Err("zones changed".into());
         } else if uri == "homey:manager:devices" && matches!(event, "device.create" | "device.delete") {
@@ -491,6 +497,15 @@ mod tests {
         assert!(parse_packet("3").is_none());
         assert_eq!(emit("/api/x", 12, json!(["subscribe", "u"])), r#"42/api/x,12["subscribe","u"]"#);
         assert_eq!(emit("/", 1, json!(["a"])), r#"421["a"]"#);
+    }
+
+    #[test]
+    fn zone_motion_is_not_a_change() {
+        let tree = HashMap::from([("s".to_string(), ("Stue".to_string(), json!("o")))]);
+        assert!(!zone_reshaped(&tree, "zone.update", &json!({"id": "s", "name": "Stue", "parent": "o", "active": true})));
+        assert!(zone_reshaped(&tree, "zone.update", &json!({"id": "s", "name": "Stua", "parent": "o"})));
+        assert!(zone_reshaped(&tree, "zone.update", &json!({"id": "s", "name": "Stue", "parent": "h"})));
+        assert!(zone_reshaped(&tree, "zone.create", &json!({"id": "n", "name": "Ny", "parent": "h"})));
     }
 
     #[test]
