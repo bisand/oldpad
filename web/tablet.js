@@ -777,7 +777,8 @@
     { id: 'climate', icon: 'thermo', when: function () { return !!(panel('indoor') || panel('outdoor')) || byClass(['thermostat', 'heater', 'sensor']).length > 0; } },
     { id: 'flows', icon: 'bolt', when: function () { return byClass(['button']).length > 0; } },
     { id: 'weather', icon: 'cloud', when: function () { return !!series(); } },
-    { id: 'ships', icon: 'boat', when: function () { return byClass(['ais']).length > 0; } }
+    { id: 'ships', icon: 'boat', when: function () { return byClass(['ais']).length > 0; } },
+    { id: 'departures', icon: 'clock', when: function () { return byClass(['departures']).length > 0; } }
   ];
 
   function homePage() {
@@ -912,6 +913,7 @@
     if (page === 'flows') { return tilesHtml(byClass(['button']), true); }
     if (page === 'weather') { return weatherPage(); }
     if (page === 'ships') { return byClass(['ais']).map(shipsCard).join(''); }
+    if (page === 'departures') { return byClass(['departures']).map(departuresCard).join(''); }
     if (page === 'settings') { return settingsPage(); }
     return homePage();
   }
