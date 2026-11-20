@@ -25,6 +25,7 @@ pub struct Item {
     pub title: String,
     pub sub: String,
     pub kind: &'static str, // track, album or playlist
+    pub art: String,        // cover URL, or empty
 }
 
 fn call(url: &str, device: &str, household: &str, login: Option<&Account>, action: &str, body: &str) -> Result<String, String> {
@@ -123,7 +124,8 @@ pub fn parse_search(xml: &str) -> Vec<Item> {
                 _ => continue, // artists and the like need browsing, not playing
             };
             let sub = tag(item, "artist").unwrap_or_default();
-            out.push(Item { id, title, sub, kind });
+            let art = tag(item, "albumArtURI").unwrap_or_default();
+            out.push(Item { id, title, sub, kind, art });
         }
     }
     out
@@ -140,11 +142,11 @@ mod tests {
 
     #[test]
     fn reads_search_results() {
-        let xml = strip_ns(r#"<ns2:searchResult><ns2:mediaMetadata><ns2:id>spotify:track:2Wf</ns2:id><ns2:itemType>track</ns2:itemType><ns2:title>Take on Me</ns2:title><ns2:trackMetadata><ns2:artist>a-ha</ns2:artist></ns2:trackMetadata></ns2:mediaMetadata><ns2:mediaCollection><ns2:id>spotify:playlist:37i</ns2:id><ns2:itemType>playlist</ns2:itemType><ns2:title>Dinner &#127837; 2026</ns2:title></ns2:mediaCollection><ns2:mediaCollection><ns2:id>spotify:artist:9</ns2:id><ns2:title>a-ha</ns2:title></ns2:mediaCollection></ns2:searchResult>"#);
+        let xml = strip_ns(r#"<ns2:searchResult><ns2:mediaMetadata><ns2:id>spotify:track:2Wf</ns2:id><ns2:itemType>track</ns2:itemType><ns2:title>Take on Me</ns2:title><ns2:trackMetadata><ns2:artist>a-ha</ns2:artist><ns2:albumArtURI>https://i.scdn.co/image/ab67</ns2:albumArtURI></ns2:trackMetadata></ns2:mediaMetadata><ns2:mediaCollection><ns2:id>spotify:playlist:37i</ns2:id><ns2:itemType>playlist</ns2:itemType><ns2:title>Dinner &#127837; 2026</ns2:title></ns2:mediaCollection><ns2:mediaCollection><ns2:id>spotify:artist:9</ns2:id><ns2:title>a-ha</ns2:title></ns2:mediaCollection></ns2:searchResult>"#);
         let items = parse_search(&xml);
         assert_eq!(items, vec![
-            Item { id: "spotify:track:2Wf".into(), title: "Take on Me".into(), sub: "a-ha".into(), kind: "track" },
-            Item { id: "spotify:playlist:37i".into(), title: "Dinner 🍝 2026".into(), sub: "".into(), kind: "playlist" },
+            Item { id: "spotify:track:2Wf".into(), title: "Take on Me".into(), sub: "a-ha".into(), kind: "track", art: "https://i.scdn.co/image/ab67".into() },
+            Item { id: "spotify:playlist:37i".into(), title: "Dinner 🍝 2026".into(), sub: "".into(), kind: "playlist", art: "".into() },
         ]);
     }
 }

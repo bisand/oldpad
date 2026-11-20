@@ -534,7 +534,7 @@
       r = results[i];
       if (i === 0 || results[i - 1].kind !== r.kind) { html += '<div class="label-s kind">' + esc(T.kinds[r.kind] || r.kind) + '</div>'; }
       known = saved[r.id] || favs.some(function (f) { return f.title === r.title; });
-      html += '<div class="hit"><span class="hit-t" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(r.id) + '">' + esc(r.title) +
+      html += '<div class="hit' + (r.art ? ' pic' : '') + '">' + (r.art ? '<img src="' + imgSrc(lead, r.art) + '" alt="">' : '') + '<span class="hit-t" data-act="fav" data-id="' + esc(lead.id) + '" data-fav="' + esc(r.id) + '">' + esc(r.title) +
         '<span class="sub">' + esc(r.sub || '') + '</span></span>' +
         '<span class="star' + (known ? ' on' : '') + '" data-act="save" data-id="' + esc(lead.id) + '" data-fav="' + esc(r.id) + '">' + (known ? '★' : '☆') + '</span></div>';
     }

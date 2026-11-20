@@ -231,7 +231,8 @@ fn parse_stations(list: &[Value]) -> Vec<Favourite> {
         );
         let sub = [s["country"].as_str().unwrap_or(""), s["tags"].as_str().unwrap_or("").split(',').next().unwrap_or("")]
             .iter().filter(|x| !x.is_empty()).cloned().collect::<Vec<_>>().join(" · ");
-        out.push(Favourite { id: format!("radio:{uuid}"), title, uri: format!("x-rincon-mp3radio://{url}"), meta, sub, art: String::new() });
+        let art = art_url(s["favicon"].as_str().unwrap_or(""), "");
+        out.push(Favourite { id: format!("radio:{uuid}"), title, uri: format!("x-rincon-mp3radio://{url}"), meta, sub, art });
     }
     out.truncate(20);
     out
@@ -264,15 +265,17 @@ fn spotify_item(item: &smapi::Item, sn: &str) -> Favourite {
         r#"{DIDL}<item id="{item_id}" parentID="" restricted="true"><dc:title>{}</dc:title><upnp:class>{class}</upnp:class><desc id="cdudn" nameSpace="urn:schemas-rinconnetworks-com:metadata-1-0/">SA_RINCON2311_X_#Svc2311-0-Token</desc></item></DIDL-Lite>"#,
         escape_xml(&item.title)
     );
-    Favourite { id: item.id.clone(), title: item.title.clone(), uri, meta, sub: item.sub.clone(), art: String::new() }
+    Favourite { id: item.id.clone(), title: item.title.clone(), uri, meta, sub: item.sub.clone(), art: art_url(&item.art, "") }
 }
 
 /// A Sonos favourite for `f`, as CreateObject wants it in FV:2.
 fn favourite_didl(f: &Favourite) -> String {
     let scheme = f.uri.split(':').next().unwrap_or("");
     format!(
-        r#"{DIDL}<item id="" restricted="false" parentID="FV:2"><dc:title>{}</dc:title><upnp:class>object.itemobject.item.sonos-favorite</upnp:class><r:ordinal>-1</r:ordinal><res protocolInfo="{scheme}:*:*:*">{}</res><r:type>instantPlay</r:type><r:description>{}</r:description><r:resMD>{}</r:resMD></item></DIDL-Lite>"#,
-        escape_xml(&f.title), escape_xml(&f.uri), if f.uri.contains("sid=9&") { "Spotify" } else { "Radio" }, escape_xml(&f.meta)
+        r#"{DIDL}<item id="" restricted="false" parentID="FV:2"><dc:title>{}</dc:title><upnp:class>object.itemobject.item.sonos-favorite</upnp:class><r:ordinal>-1</r:ordinal><res protocolInfo="{scheme}:*:*:*">{}</res>{}<r:type>instantPlay</r:type><r:description>{}</r:description><r:resMD>{}</r:resMD></item></DIDL-Lite>"#,
+        escape_xml(&f.title), escape_xml(&f.uri),
+        if f.art.is_empty() { String::new() } else { format!("<upnp:albumArtURI>{}</upnp:albumArtURI>", escape_xml(&f.art)) },
+        if f.uri.contains("sid=9&") { "Spotify" } else { "Radio" }, escape_xml(&f.meta)
     )
 }
 
@@ -529,7 +532,7 @@ fn refresh(seeds: &[String], state: &Mutex<State>, sink: &Sink, full: bool) -> R
     let reshaped = s.entities.len() != fresh.len();
     let mut art = arts.into_iter().filter(|(k, _)| !k.is_empty()).collect::<Vec<_>>();
     for old in std::mem::take(&mut s.art) {
-        if art.len() < 50 && !art.iter().any(|(k, _)| *k == old.0) {
+        if art.len() < 150 && !art.iter().any(|(k, _)| *k == old.0) {
             art.push(old);
         }
     }
@@ -645,7 +648,16 @@ impl Instance for Sonos {
         found.retain(|f| !results.iter().any(|(r, _)| r.id == f.id));
         found.splice(0..0, results.iter().map(|(f, _)| f.clone()));
         found.truncate(300);
-        Ok(results.iter().map(|(f, kind)| json!({ "id": f.id, "title": f.title, "sub": f.sub, "kind": kind })).collect())
+        drop(found);
+        // Newest first: older pictures are the ones dropped when the list is full.
+        let mut s = self.state.lock().unwrap();
+        for (f, _) in results.iter().filter(|(f, _)| !f.art.is_empty()) {
+            let key = art_key(&f.art);
+            s.art.retain(|(k, _)| *k != key);
+            s.art.insert(0, (key, f.art.clone()));
+        }
+        drop(s);
+        Ok(results.iter().map(|(f, kind)| json!({ "id": f.id, "title": f.title, "sub": f.sub, "kind": kind, "art": art_key(&f.art) })).collect())
     }
 
     fn image(&self, key: &str) -> Result<(String, Vec<u8>), String> {
@@ -827,7 +839,7 @@ mod tests {
     #[test]
     fn reads_radio_stations() {
         let list: Vec<Value> = serde_json::from_str(r#"[
-            {"stationuuid":"a","name":"NRK P1 ","url_resolved":"https://cdn.example/p1_mp3_h","codec":"MP3","country":"Norway","tags":"news,talk"},
+            {"stationuuid":"a","name":"NRK P1 ","url_resolved":"https://cdn.example/p1_mp3_h","codec":"MP3","country":"Norway","tags":"news,talk","favicon":"https://cdn.example/p1.png"},
             {"stationuuid":"b","name":"nrk p1","url_resolved":"https://mirror.example/p1","codec":"MP3"},
             {"stationuuid":"c","name":"Video","url_resolved":"https://x.example/v.m3u8","codec":"UNKNOWN"},
             {"stationuuid":"d","name":"Rock & <Roll>","url_resolved":"http://r.example/s","codec":"AAC+"}
@@ -836,6 +848,8 @@ mod tests {
         assert_eq!(s.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), vec!["radio:a", "radio:d"]);
         assert_eq!((s[0].title.as_str(), s[0].sub.as_str(), s[0].uri.as_str()), ("NRK P1", "Norway · news", "x-rincon-mp3radio://https://cdn.example/p1_mp3_h"));
         assert!(s[1].meta.contains("<dc:title>Rock &amp; &lt;Roll&gt;</dc:title>"));
+        assert_eq!((s[0].art.as_str(), s[1].art.as_str()), ("https://cdn.example/p1.png", ""));
+        assert!(favourite_didl(&s[0]).contains("<upnp:albumArtURI>https://cdn.example/p1.png</upnp:albumArtURI>"));
         // The favourite's metadata is escaped once more inside it, as Sonos stores it.
         let didl = favourite_didl(&s[1]);
         assert!(didl.contains(r#"<res protocolInfo="x-rincon-mp3radio:*:*:*">x-rincon-mp3radio://http://r.example/s</res>"#));
@@ -848,10 +862,10 @@ mod tests {
         let favs = [fav("x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a1?sid=9&flags=8300&sn=4"), fav("x-sonos-spotify:spotify%3atrack%3a1?sid=9&flags=8224&sn=2"), fav("x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a2?sid=9&flags=8300&sn=2"), fav("x-rincon-mp3radio://x?sn=7")];
         assert_eq!(spotify_sn(&favs), "2");
         assert_eq!(spotify_sn(&[]), "1");
-        let track = spotify_item(&smapi::Item { id: "spotify:track:2Wf".into(), title: "Take <on> Me".into(), sub: "a-ha".into(), kind: "track" }, "2");
+        let track = spotify_item(&smapi::Item { id: "spotify:track:2Wf".into(), title: "Take <on> Me".into(), sub: "a-ha".into(), kind: "track", art: String::new() }, "2");
         assert_eq!(track.uri, "x-sonos-spotify:spotify%3atrack%3a2Wf?sid=9&flags=8224&sn=2");
         assert!(track.meta.contains(r#"<item id="00032020spotify%3atrack%3a2Wf""#) && track.meta.contains("<dc:title>Take &lt;on&gt; Me</dc:title>"));
-        let list = spotify_item(&smapi::Item { id: "spotify:playlist:37i".into(), title: "Mix".into(), sub: String::new(), kind: "playlist" }, "2");
+        let list = spotify_item(&smapi::Item { id: "spotify:playlist:37i".into(), title: "Mix".into(), sub: String::new(), kind: "playlist", art: String::new() }, "2");
         assert_eq!(list.uri, "x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i?sid=9&flags=8300&sn=2");
         assert!(favourite_didl(&list).contains("<r:description>Spotify</r:description>"));
     }
