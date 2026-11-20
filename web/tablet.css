@@ -273,3 +273,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 @media (max-width: 900px) {
   .sheet { left: 16px; right: 16px; width: auto; margin-left: 0; }
 }
+
+/* ---------- thermostat tiles: setpoint, what it is now, − + ---------- */
+.tile.thermo .value.up { bottom: 48px; font-size: 26px; line-height: 30px; right: 10px; }
+.tile.thermo .value .sub { font-size: 13px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile.thermo .steps { bottom: 8px; }
+.tile.thermo .step { height: 36px; line-height: 34px; }
+.tiles.big .tile.thermo .zone { display: none; } /* the shorter tiles have no room for it */

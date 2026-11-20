@@ -470,6 +470,7 @@
     var onoff = cap(e, 'onoff'), dim = cap(e, 'dim'), target = cap(e, 'target_temperature'), measure = cap(e, 'measure_temperature');
     // A thermostat may have an on/off switch too; its setpoint matters more (the switch is in its sheet).
     if (target) {
+      cls += ' thermo';
       body = '<div class="value up">' + num(target.value, 1) + '°<div class="sub">' + (onoff && onoff.value === false ? T.off + ' · ' : '') +
         (measure ? T.now + ' ' + num(measure.value, 1) + '°' : '') + '</div></div>' +
         '<div class="steps"><span class="step" data-act="step" data-step="-' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">−</span><span class="step" data-act="step" data-step="' + (target.step || 0.5) + '" data-id="' + esc(e.id) + '">+</span></div>';
