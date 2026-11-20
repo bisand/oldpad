@@ -91,7 +91,7 @@
 
   var token = null;
   var entities = {};          // id → entity
-  var layout = { tiles: [], more: [], panels: {} };
+  var layout = { tiles: [], more: [], panels: {}, pages: [] };
   var page = 'home';
   var anchor = null;           // the speaker whose group the music page shows
   var query = '', results = null, searching = false, saved = {};
@@ -216,10 +216,16 @@
       }
       entities = {};
       var i, k;
-      layout = { tiles: [], more: [], panels: {} };
+      layout = { tiles: [], more: [], panels: {}, pages: [] };
       for (i = 0; i < data.tiles.length; i++) { layout.tiles.push(keep(data.tiles[i])); }
       for (i = 0; i < data.more.length; i++) { layout.more.push(keep(data.more[i])); }
       for (k in data.panels) { if (data.panels.hasOwnProperty(k)) { layout.panels[k] = keep(data.panels[k]); } }
+      // Own pages: entities are kept like any other; cards stay as {card: name}.
+      for (i = 0; i < (data.pages || []).length; i++) {
+        var pg = data.pages[i], items = [], j;
+        for (j = 0; j < pg.items.length; j++) { items.push(pg.items[j].card ? pg.items[j] : (keep(pg.items[j]) || { missing: true })); }
+        layout.pages.push({ id: 'own-' + pg.id, name: pg.name, icon: pg.icon, items: items });
+      }
       show('app');
       render();
       connectEvents();
@@ -257,6 +263,7 @@
 
   function pool() {
     var seen = {}, out = [], lists = [layout.tiles, layout.more], i, j, id;
+    for (i = 0; i < layout.pages.length; i++) { lists.push(pageIds(layout.pages[i])); }
     for (i = 0; i < lists.length; i++) {
       for (j = 0; j < lists[i].length; j++) {
         id = lists[i][j];
@@ -264,6 +271,12 @@
       }
     }
     return out;
+  }
+
+  function pageIds(pg) {
+    var ids = [], i;
+    for (i = 0; i < pg.items.length; i++) { if (typeof pg.items[i] === 'string') { ids.push(pg.items[i]); } }
+    return ids;
   }
 
   function byClass(classes) {
@@ -395,6 +408,7 @@
     if (c === 'thermostat' || c === 'heater') { return 'flame'; }
     if (c === 'button') { return 'moon'; }
     if (c === 'sensor') { return 'thermo'; }
+    if (c === 'speaker') { return 'music'; }
     if (c === 'garagedoor' || c === 'door' || c === 'lock') { return 'door'; }
     return 'bolt';
   }
@@ -411,6 +425,9 @@
     } else if (target) {
       body = '<div class="value up">' + num(target.value, 1) + '°' + (measure ? '<div class="sub">' + T.now + ' ' + num(measure.value, 1) + '°</div>' : '') + '</div>' +
         '<div class="steps"><span class="step" data-act="step" data-step="-0.5" data-id="' + esc(e.id) + '">−</span><span class="step" data-act="step" data-step="0.5" data-id="' + esc(e.id) + '">+</span></div>';
+    } else if (cap(e, 'speaker_playing')) {
+      if (val(leader(e), 'speaker_playing')) { cls += ' on'; }
+      body = '<div class="value sub">' + esc(val(leader(e), 'speaker_playing') ? val(leader(e), 'speaker_track') || T.on : T.off) + '</div>';
     } else if (cap(e, 'button')) {
       body = '<div class="value sub">' + T.run + '</div>';
     } else if (measure) {
@@ -519,7 +536,29 @@
       '<div class="card"><div class="label-s">' + T.days3 + '</div><div class="days">' + days + '</div></div>';
   }
 
+  // An own page: cards full width, runs of entities as big tiles, in the admin's order.
+  function ownPage(pg) {
+    var html = '', run = [], i, it;
+    function flush() { html += tilesHtml(run, true); run = []; }
+    for (i = 0; i < pg.items.length; i++) {
+      it = pg.items[i];
+      if (typeof it === 'object' && it.card) {
+        flush();
+        if (it.card === 'clock') { html += '<div class="row">' + clockCard().replace('w30', 'w100') + '</div>'; }
+        if (it.card === 'climate') { html += '<div class="row">' + climateCard('w100') + '</div>'; }
+        if (it.card === 'forecast') { html += forecastCard(); }
+        if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], 5, true); }
+      } else {
+        run.push(typeof it === 'string' ? entities[it] || { missing: true } : it);
+      }
+    }
+    flush();
+    return html || '<p class="empty muted">' + T.empty + '</p>';
+  }
+
   function pageHtml() {
+    var i;
+    for (i = 0; i < layout.pages.length; i++) { if (layout.pages[i].id === page) { return ownPage(layout.pages[i]); } }
     if (page === 'music') { return musicPage(); }
     if (page === 'lights') { return tilesHtml(byClass(['light', 'socket']), true); }
     if (page === 'climate') { return '<div class="row">' + climateCard('w100') + '</div>' + tilesHtml(byClass(['thermostat', 'heater', 'sensor']), true); }
@@ -538,6 +577,10 @@
     for (i = 0; i < PAGES.length; i++) {
       p = PAGES[i];
       if (!p.when || p.when()) { rail += '<a data-act="page" data-page="' + p.id + '"' + (p.id === page ? ' class="on"' : '') + '>' + icon(p.icon) + '</a>'; }
+    }
+    for (i = 0; i < layout.pages.length; i++) {
+      p = layout.pages[i];
+      rail += '<a data-act="page" data-page="' + esc(p.id) + '" class="own' + (p.id === page ? ' on' : '') + '">' + icon(p.icon) + '<span class="rail-name">' + esc(p.name) + '</span></a>';
     }
     $('rail').innerHTML = rail;
     $('page').innerHTML = pageHtml();
@@ -582,6 +625,12 @@
       c.value = !c.value;
       render();
       set(e, 'onoff', c.value, !c.value);
+    } else if (act === 'tile' && e && cap(e, 'speaker_playing')) {
+      e = leader(e);
+      c = cap(e, 'speaker_playing');
+      c.value = !c.value;
+      render();
+      set(e, 'speaker_playing', c.value, !c.value);
     } else if (act === 'tile' && e && cap(e, 'button')) {
       el.className += ' pressed';
       setTimeout(render, 400);

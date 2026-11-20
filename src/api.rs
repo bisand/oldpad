@@ -88,6 +88,10 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                         "device": { "id": device.id, "name": device.name },
                         "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
                         "more": device.more.iter().map(get).collect::<Vec<_>>(),
+                        "pages": device.pages.iter().map(|p| json!({
+                            "id": p.id, "name": p.name, "icon": p.icon,
+                            "items": p.items.iter().map(|i| if i.starts_with("card:") { json!({ "card": &i[5..] }) } else { get(i) }).collect::<Vec<_>>(),
+                        })).collect::<Vec<_>>(),
                         "panels": { "indoor": panel(&p.indoor), "outdoor": panel(&p.outdoor), "wind": panel(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker) },
                     })))
                 }
@@ -273,7 +277,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .data
                 .devices
                 .iter()
-                .map(|d| json!({ "id": d.id, "name": d.name, "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
@@ -304,6 +308,20 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                     return Err(Response::error(400, "Bad panels"));
                 }
                 d.panels = panels;
+            }
+            if body.get("pages").is_some() {
+                let pages: Vec<crate::store::Page> = serde_json::from_value(body["pages"].clone()).map_err(|_| Response::error(400, "Bad pages"))?;
+                let bad = pages.len() > 12
+                    || pages.iter().any(|p| {
+                        p.name.trim().is_empty() || p.name.chars().count() > 32 || p.id.is_empty() || p.id.len() > 16
+                            || !crate::store::PAGE_ICONS.contains(&p.icon.as_str())
+                            || p.items.len() > 48
+                            || p.items.iter().any(|i| i.len() > 200 || (i.starts_with("card:") && !crate::store::PAGE_CARDS.contains(&i.as_str())))
+                    });
+                if bad {
+                    return Err(Response::error(400, "Pages: up to 12, each with a name (max 32 characters), a known icon and up to 48 items"));
+                }
+                d.pages = pages.into_iter().map(|p| crate::store::Page { name: p.name.trim().to_string(), ..p }).collect();
             }
             let device = d.clone();
             store.save().map_err(|e| Response::error(500, e))?;

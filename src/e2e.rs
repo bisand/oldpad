@@ -116,7 +116,12 @@ fn phone_and_tablet_end_to_end() {
     let (lamp, heater, plug, reading, outdoor) =
         (format!("{iid}:lamp"), format!("{iid}:heater"), format!("{iid}:plug"), format!("{iid}:reading"), format!("{iid}:outdoor"));
     let (speaker, kitchen, bath) = (format!("{iid}:speaker"), format!("{iid}:kitchen"), format!("{iid}:bath"));
-    let layout = json!({ "tiles": [lamp, heater], "more": [plug, speaker, kitchen], "panels": { "outdoor": outdoor } });
+    let night = format!("{iid}:night");
+    let layout = json!({ "tiles": [lamp, heater], "more": [plug, speaker, kitchen], "panels": { "outdoor": outdoor },
+        "pages": [{ "id": "p1", "name": "Evening", "icon": "moon", "items": ["card:clock", night] }] });
+    for bad in [json!([{ "id": "p1", "name": "X", "icon": "nope", "items": [] }]), json!([{ "id": "p1", "name": "X", "icon": "moon", "items": ["card:secret"] }]), json!([{ "id": "p1", "name": " ", "icon": "moon", "items": [] }])] {
+        assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(json!({ "pages": bad }))).0, 400);
+    }
     assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(layout)).0, 200);
     let (s, state) = tablet.call("GET", "/api/tablet", None);
     assert_eq!(s, 200);
@@ -126,6 +131,8 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(state["panels"]["outdoor"]["capabilities"]["measure_temperature"]["value"], 4.2);
     assert!(state["panels"]["indoor"].is_null());
     assert_eq!(state["more"][0]["name"], "Coffee maker");
+    assert_eq!((state["pages"][0]["name"].as_str(), state["pages"][0]["items"][0]["card"].as_str()), (Some("Evening"), Some("clock")));
+    assert_eq!(state["pages"][0]["items"][1]["name"], "Good night");
 
     // --- live stream: flip the lamp, the event arrives on the stream
     let (_, ticket) = tablet.call("POST", "/api/tablet/ticket", Some(json!({})));
@@ -145,6 +152,7 @@ fn phone_and_tablet_end_to_end() {
     // --- a screen controls what is configured for it only; read-only values stay read-only
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": plug, "capability": "onoff", "value": true }))).0, 200);
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": reading, "capability": "onoff", "value": true }))).0, 403);
+    assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": night, "capability": "button", "value": true }))).0, 200); // via its page
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": heater, "capability": "measure_temperature", "value": 30 }))).0, 502);
 
     // --- grouping: only with rooms this screen controls, and the room id is passed on bare

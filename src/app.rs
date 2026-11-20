@@ -266,6 +266,7 @@ impl App {
             tiles: Vec::new(),
             panels: Default::default(),
             more: Vec::new(),
+            pages: Vec::new(),
         };
         let mut store = self.store.lock().unwrap();
         store.data.devices.push(device.clone());

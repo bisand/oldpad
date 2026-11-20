@@ -42,7 +42,23 @@ pub struct Device {
     /// Further entities for the menu pages (lights, climate, flows, music).
     #[serde(default)]
     pub more: Vec<String>,
+    /// The admin's own pages, after the built-in ones in the side rail.
+    #[serde(default)]
+    pub pages: Vec<Page>,
 }
+
+/// A page of the admin's choosing. Items are entity ids, or `card:<name>` for
+/// one of the home screen's cards (clock, climate, forecast, music).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Page {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+    pub items: Vec<String>,
+}
+
+pub const PAGE_ICONS: [&str; 12] = ["home", "music", "bulb", "thermo", "bolt", "cloud", "sun", "moon", "chart", "radio", "flame", "plug"];
+pub const PAGE_CARDS: [&str; 4] = ["card:clock", "card:climate", "card:forecast", "card:music"];
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct Panels {
@@ -62,7 +78,8 @@ impl Panels {
 impl Device {
     /// Everything this screen may show and control: its tiles, panels and menu entities.
     pub fn allowed(&self) -> std::collections::HashSet<String> {
-        self.tiles.iter().chain(self.more.iter()).chain(self.panels.ids()).cloned().collect()
+        let pages = self.pages.iter().flat_map(|p| p.items.iter()).filter(|i| !i.starts_with("card:"));
+        self.tiles.iter().chain(self.more.iter()).chain(self.panels.ids()).chain(pages).cloned().collect()
     }
 }
 
@@ -165,6 +182,7 @@ mod tests {
             tiles: vec!["demo:lamp".into()],
             panels: Panels { speaker: Some("sonos:RINCON_1".into()), ..Default::default() },
             more: vec![],
+            pages: vec![],
         });
         s.save().unwrap();
         let s2 = Store::open(&dir).unwrap();

@@ -284,6 +284,34 @@ async function deviceView(id) {
     }));
   };
   draw();
+
+  // Own pages: a name, an icon and an ordered list of cards and entities.
+  const pages = structuredClone(device.pages || []);
+  const cards = [['card:clock', 'Clock'], ['card:climate', 'Indoor / outdoor'], ['card:forecast', 'Forecast'], ['card:music', 'Music']];
+  const icons = ['home', 'music', 'bulb', 'thermo', 'bolt', 'cloud', 'sun', 'moon', 'chart', 'radio', 'flame', 'plug'];
+  const label = (item) => cards.find(([id]) => id === item)?.[1] ?? (entities.find((e) => e.id === item)?.name || 'Unavailable');
+  const pageList = h('div');
+  const drawPages = () => {
+    pageList.replaceChildren(...pages.map((pg, n) => {
+      const pname = h('input', { type: 'text', value: pg.name, maxlength: '32', 'aria-label': 'Page name', oninput: () => { pg.name = pname.value; } });
+      const picon = h('select', { 'aria-label': 'Icon', onchange: () => { pg.icon = picon.value; } }, icons.map((i) => h('option', { value: i, selected: pg.icon === i }, i)));
+      const add = h('select', { 'aria-label': 'Add to page', onchange: () => { if (add.value) { pg.items.push(add.value); drawPages(); } } },
+        h('option', { value: '' }, '+ Add…'),
+        h('optgroup', { label: 'Cards' }, cards.filter(([id]) => !pg.items.includes(id)).map(([id, l]) => h('option', { value: id }, l))),
+        h('optgroup', { label: 'Devices' }, entities.filter((e) => e.class !== 'weather' && !pg.items.includes(e.id)).map((e) => h('option', { value: e.id }, `${e.name}${e.zone && e.zone !== e.name ? ` (${e.zone})` : ''}`))));
+      const move = (i, d) => { const [x] = pg.items.splice(i, 1); pg.items.splice(i + d, 0, x); drawPages(); };
+      return h('div', { class: 'card' },
+        h('div', { class: 'row' }, pname, picon,
+          h('button', { class: 'danger', onclick: () => { if (confirm(`Delete the page “${pg.name}”?`)) { pages.splice(n, 1); drawPages(); } } }, 'Delete')),
+        pg.items.map((item, i) => h('div', { class: 'pick' }, h('span', { class: 'grow' }, label(item)),
+          h('button', { class: 'chip', disabled: i === 0, onclick: () => move(i, -1), 'aria-label': 'Up' }, '↑'),
+          h('button', { class: 'chip', disabled: i === pg.items.length - 1, onclick: () => move(i, 1), 'aria-label': 'Down' }, '↓'),
+          h('button', { class: 'chip', onclick: () => { pg.items.splice(i, 1); drawPages(); }, 'aria-label': 'Remove' }, '×'))),
+        add);
+    }), h('button', { onclick: () => { pages.push({ id: Math.random().toString(36).slice(2, 10), name: 'New page', icon: 'home', items: [] }); drawPages(); } }, 'Add page'));
+  };
+  drawPages();
+
   const out = h('div');
   const name = h('input', { type: 'text', id: 'd-name', value: device.name, maxlength: '64' });
   render(
@@ -295,12 +323,16 @@ async function deviceView(id) {
     h('h2', {}, 'Tiles and menu pages'),
     h('p', { class: 'muted' }, '“Home” puts it in the tile row, in the order you tap (six fit). “Menu” shows it on the lights, climate, Flows or music page.'),
     entities.length ? list : h('p', { class: 'notice' }, 'Nothing to show yet. Add an integration first.'),
+    h('h2', {}, 'Own pages'),
+    h('p', { class: 'muted' }, 'Extra pages in the screen\'s side rail, for what doesn\'t fit on the home page. Devices on a page can be controlled from it.'),
+    pageList,
     h('div', { class: 'actions' },
       h('button', { class: 'primary', onclick: async () => {
         try {
           const n = name.value.trim();
           if (!n) throw new Error('Give the screen a name.');
-          await api('PUT', `/devices/${id}`, { name: n, tiles, more: [...more], panels });
+          if (pages.some((pg) => !pg.name.trim())) throw new Error('Every page needs a name.');
+          await api('PUT', `/devices/${id}`, { name: n, tiles, more: [...more], panels, pages });
           location.hash = '#/';
         } catch (e) { out.replaceChildren(errorBox(e)); }
       } }, 'Save'),
