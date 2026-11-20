@@ -113,13 +113,18 @@ fn phone_and_tablet_end_to_end() {
     tablet.bearer = Some(got["token"].as_str().unwrap().to_string());
 
     // --- phone picks two tiles; tablet sees them
-    let (lamp, heater, plug) = (format!("{iid}:lamp"), format!("{iid}:heater"), format!("{iid}:plug"));
-    assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(json!({ "tiles": [lamp, heater] }))).0, 200);
+    let (lamp, heater, plug, reading, outdoor) =
+        (format!("{iid}:lamp"), format!("{iid}:heater"), format!("{iid}:plug"), format!("{iid}:reading"), format!("{iid}:outdoor"));
+    let layout = json!({ "tiles": [lamp, heater], "more": [plug], "panels": { "outdoor": outdoor } });
+    assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(layout)).0, 200);
     let (s, state) = tablet.call("GET", "/api/tablet", None);
     assert_eq!(s, 200);
     assert_eq!(state["device"]["name"], "Kitchen");
     assert_eq!(state["tiles"][0]["capabilities"]["onoff"]["value"], true);
     assert_eq!(state["tiles"][0]["zone"], "Stue");
+    assert_eq!(state["panels"]["outdoor"]["capabilities"]["measure_temperature"]["value"], 4.2);
+    assert!(state["panels"]["indoor"].is_null());
+    assert_eq!(state["more"][0]["name"], "Coffee maker");
 
     // --- live stream: flip the lamp, the event arrives on the stream
     let (_, ticket) = tablet.call("POST", "/api/tablet/ticket", Some(json!({})));
@@ -136,8 +141,9 @@ fn phone_and_tablet_end_to_end() {
     let data: Value = serde_json::from_str(event.trim_start_matches("data: ")).unwrap();
     assert_eq!((data["id"].as_str(), data["value"].as_bool()), (Some(lamp.as_str()), Some(false)));
 
-    // --- a tablet controls its own tiles only; read-only values stay read-only
-    assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": plug, "capability": "onoff", "value": true }))).0, 403);
+    // --- a screen controls what is configured for it only; read-only values stay read-only
+    assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": plug, "capability": "onoff", "value": true }))).0, 200);
+    assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": reading, "capability": "onoff", "value": true }))).0, 403);
     assert_eq!(tablet.call("POST", "/api/tablet/set", Some(json!({ "id": heater, "capability": "measure_temperature", "value": 30 }))).0, 502);
 
     // --- removing the screen revokes its token

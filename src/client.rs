@@ -1,37 +1,41 @@
-//! Outgoing connections: a small HTTP/1.1 client and a WebSocket client, both
-//! plain TCP. Enough for LAN devices like Homey; `https://` is refused with a
-//! clear error rather than silently downgraded.
+//! Outgoing connections: a small HTTP/1.1 client (plain TCP for LAN devices,
+//! TLS via rustls for internet services) and a plain-TCP WebSocket client.
 
 use crate::util::{b64_encode, random_bytes};
 use std::collections::HashMap;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 const MAX_RESPONSE: usize = 16 * 1024 * 1024;
 const MAX_FRAME: usize = 4 * 1024 * 1024;
+/// MET Norway's terms ask clients to identify the application and a contact; the project page is that contact.
+const USER_AGENT: &str = concat!("oldpad/", env!("CARGO_PKG_VERSION"), " (+https://github.com/bisand/oldpad)");
 
 pub struct Target {
+    pub https: bool,
     pub host: String,
     pub port: u16,
     pub prefix: String,
 }
 
 pub fn parse_url(url: &str) -> Result<Target, String> {
-    if url.starts_with("https://") {
-        return Err("https:// is not supported yet; use the device's http:// LAN address".into());
-    }
-    let rest = url.strip_prefix("http://").ok_or("address must start with http://")?;
+    let (https, rest) = match (url.strip_prefix("https://"), url.strip_prefix("http://")) {
+        (Some(r), _) => (true, r),
+        (_, Some(r)) => (false, r),
+        _ => return Err("address must start with http:// or https://".into()),
+    };
     let (authority, prefix) = rest.split_once('/').map(|(a, p)| (a, format!("/{p}"))).unwrap_or((rest, String::new()));
     // shortcut: no IPv6 literals ("[::1]:80"); add when someone needs them.
     let (host, port) = match authority.rsplit_once(':') {
         Some((h, p)) => (h.to_string(), p.parse().map_err(|_| "bad port")?),
-        None => (authority.to_string(), 80),
+        None => (authority.to_string(), if https { 443 } else { 80 }),
     };
     if host.is_empty() || host.contains(['/', '@', ' ']) {
         return Err("bad host".into());
     }
-    Ok(Target { host, port, prefix: prefix.trim_end_matches('/').to_string() })
+    Ok(Target { https, host, port, prefix: prefix.trim_end_matches('/').to_string() })
 }
 
 fn connect(t: &Target, timeout: Duration) -> Result<TcpStream, String> {
@@ -94,15 +98,50 @@ fn dechunk(mut data: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
+trait Stream: Read + Write {}
+impl<T: Read + Write> Stream for T {}
+
+fn tls_config() -> Arc<rustls::ClientConfig> {
+    static CONFIG: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
+    CONFIG
+        .get_or_init(|| {
+            let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.into() };
+            let config = rustls::ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+                .with_safe_default_protocol_versions()
+                .expect("ring supports the default TLS versions")
+                .with_root_certificates(roots)
+                .with_no_client_auth();
+            Arc::new(config)
+        })
+        .clone()
+}
+
+fn open(t: &Target) -> Result<Box<dyn Stream>, String> {
+    let tcp = connect(t, Duration::from_secs(10))?;
+    if !t.https {
+        return Ok(Box::new(tcp));
+    }
+    let name = rustls::pki_types::ServerName::try_from(t.host.clone()).map_err(|_| format!("bad TLS host name {}", t.host))?;
+    let conn = rustls::ClientConnection::new(tls_config(), name).map_err(|e| format!("TLS: {e}"))?;
+    Ok(Box::new(rustls::StreamOwned::new(conn, tcp)))
+}
+
 pub fn request(base: &str, method: &str, path: &str, headers: &[(&str, &str)], body: Option<&[u8]>) -> Result<HttpResponse, String> {
     let t = parse_url(base)?;
-    let mut s = connect(&t, Duration::from_secs(10))?;
-    let mut req = format!("{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nUser-Agent: oldpad\r\n", t.prefix, t.host);
+    let mut s = open(&t)?;
+    let mut req = format!("{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nUser-Agent: {USER_AGENT}\r\n", t.prefix, t.host);
     for (k, v) in headers {
         req.push_str(&format!("{k}: {v}\r\n"));
     }
+    let has = |name: &str| headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(name));
+    if !has("accept") {
+        req.push_str("Accept: application/json\r\n");
+    }
     if let Some(b) = body {
-        req.push_str(&format!("Content-Type: application/json\r\nContent-Length: {}\r\n", b.len()));
+        if !has("content-type") {
+            req.push_str("Content-Type: application/json\r\n");
+        }
+        req.push_str(&format!("Content-Length: {}\r\n", b.len()));
     }
     req.push_str("\r\n");
     s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
@@ -111,7 +150,12 @@ pub fn request(base: &str, method: &str, path: &str, headers: &[(&str, &str)], b
     }
 
     let mut raw = Vec::new();
-    s.take(MAX_RESPONSE as u64 + 1).read_to_end(&mut raw).map_err(|e| format!("reading response: {e}"))?;
+    match s.take(MAX_RESPONSE as u64 + 1).read_to_end(&mut raw) {
+        Ok(_) => {}
+        // Many servers close TLS without close_notify after Connection: close; the body is complete.
+        Err(e) if e.kind() == ErrorKind::UnexpectedEof && !raw.is_empty() => {}
+        Err(e) => return Err(format!("reading response: {e}")),
+    }
     if raw.len() > MAX_RESPONSE {
         return Err("response too large".into());
     }
@@ -135,10 +179,13 @@ pub struct WebSocket {
 impl WebSocket {
     pub fn connect(base: &str, path: &str) -> Result<WebSocket, String> {
         let t = parse_url(base)?;
+        if t.https {
+            return Err("wss:// is not supported; use the device's http:// LAN address".into());
+        }
         let mut stream = connect(&t, Duration::from_secs(10))?;
         let key = b64_encode(&random_bytes::<16>());
         let req = format!(
-            "GET {}{path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: oldpad\r\n\r\n",
+            "GET {}{path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: {USER_AGENT}\r\n\r\n",
             t.prefix, t.host
         );
         stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
@@ -268,7 +315,8 @@ mod tests {
         assert_eq!((t.host.as_str(), t.port, t.prefix.as_str()), ("192.168.1.5", 80, ""));
         let t = parse_url("http://homey.local:8080/base/").unwrap();
         assert_eq!((t.host.as_str(), t.port, t.prefix.as_str()), ("homey.local", 8080, "/base"));
-        assert!(parse_url("https://x").is_err());
+        let t = parse_url("https://api.met.no").unwrap();
+        assert!(t.https && t.port == 443);
         assert!(parse_url("ftp://x").is_err());
         assert!(parse_url("http://user@x").is_err());
     }

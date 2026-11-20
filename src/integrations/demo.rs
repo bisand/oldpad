@@ -12,7 +12,7 @@ pub fn kind() -> Kind {
     Kind {
         id: "demo",
         name: "Demo house",
-        description: "Pretend lights, a heater and a scene. For trying oldpad without any hardware.",
+        description: "Pretend lights, a heater, sensors, a speaker and a scene. For trying oldpad without any hardware.",
         fields: vec![Field {
             key: "zone",
             label: "Room name",
@@ -53,7 +53,28 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
         entity("reading", "Reading lamp", zone, "light", vec![("onoff", Capability::new(json!(false), true))]),
         entity("heater", "Heater", zone, "thermostat", vec![("target_temperature", temp(21.5, true)), ("measure_temperature", temp(20.8, false))]),
         entity("plug", "Coffee maker", "Kitchen", "socket", vec![("onoff", Capability::new(json!(false), true))]),
-        entity("outdoor", "Outdoor", "Garden", "sensor", vec![("measure_temperature", temp(4.2, false))]),
+        entity("indoor", "Indoor", zone, "sensor", vec![
+            ("measure_temperature", temp(21.4, false)),
+            ("temperature_min", temp(19.8, false)),
+            ("temperature_max", temp(22.1, false)),
+            ("measure_humidity", Capability::new(json!(42), false)),
+            ("measure_co2", Capability::new(json!(612), false)),
+        ]),
+        entity("outdoor", "Outdoor", "Garden", "sensor", vec![
+            ("measure_temperature", temp(4.2, false)),
+            ("temperature_min", temp(1.3, false)),
+            ("temperature_max", temp(6.0, false)),
+            ("measure_humidity", Capability::new(json!(87), false)),
+            ("measure_wind_strength", Capability::new(json!(10.8), false)),
+        ]),
+        entity("speaker", zone, zone, "speaker", vec![
+            ("speaker_playing", Capability::new(json!(true), true)),
+            ("volume_set", Capability { min: Some(0.0), max: Some(1.0), ..Capability::new(json!(0.28), true) }),
+            ("speaker_track", Capability::new(json!("Radio One"), false)),
+            ("speaker_artist", Capability::new(json!("Morning news"), false)),
+            ("favourites", Capability::new(json!(["Radio One", "Radio Two", "Jazz", "Classical", "Morning mix", "Focus"].iter().enumerate().map(|(i, t)| json!({ "id": format!("f{i}"), "title": t })).collect::<Vec<_>>()), false)),
+            ("play_favourite", Capability::new(Value::Null, true)),
+        ]),
         entity("night", "Good night", "Scenes", "button", vec![("button", Capability::new(Value::Null, true))]),
     ]));
     let stopped = Arc::new(AtomicBool::new(false));
@@ -92,9 +113,20 @@ impl Instance for Demo {
             eprintln!("demo: ran {}", e.name);
             return Ok(());
         }
+        if capability == "play_favourite" {
+            let favs = e.capabilities["favourites"].value.clone();
+            let title = favs.as_array().into_iter().flatten().find(|f| f["id"] == *value).map(|f| f["title"].clone()).ok_or("no such favourite")?;
+            e.capabilities.get_mut("speaker_track").unwrap().value = title.clone();
+            e.capabilities.get_mut("speaker_playing").unwrap().value = json!(true);
+            drop(list);
+            (self.sink)(Event::Changed { entity: entity.into(), capability: "speaker_track".into(), value: title });
+            (self.sink)(Event::Changed { entity: entity.into(), capability: "speaker_playing".into(), value: json!(true) });
+            return Ok(());
+        }
         let cap = e.capabilities.get_mut(capability).ok_or("no such capability")?;
         let ok = match capability {
-            "onoff" => value.is_boolean(),
+            "onoff" | "speaker_playing" => value.is_boolean(),
+            "volume_set" => value.as_f64().is_some_and(|v| (0.0..=1.0).contains(&v)),
             "dim" => value.as_f64().is_some_and(|v| (0.0..=1.0).contains(&v)),
             _ => value.as_f64().is_some_and(|v| cap.min.is_none_or(|m| v >= m) && cap.max.is_none_or(|m| v <= m)),
         };

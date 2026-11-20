@@ -10,6 +10,9 @@
 
 pub mod demo;
 pub mod homey;
+pub mod influx;
+pub mod met;
+pub mod sonos;
 
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -95,7 +98,7 @@ pub struct Kind {
 }
 
 pub fn kinds() -> Vec<Kind> {
-    vec![homey::kind(), demo::kind()]
+    vec![homey::kind(), influx::kind(), met::kind(), sonos::kind(), demo::kind()]
 }
 
 /// Checks a submitted config against the kind's fields and returns it cleaned:

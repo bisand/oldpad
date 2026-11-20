@@ -33,9 +33,37 @@ pub struct Device {
     pub created: u64,
     pub last_seen: u64,
     pub expires: u64,
-    /// Entity ids shown as tiles, in order. A device may only control these.
+    /// Entity ids shown as tiles on the home page, in order.
     #[serde(default)]
     pub tiles: Vec<String>,
+    /// The home page's fixed panels.
+    #[serde(default)]
+    pub panels: Panels,
+    /// Further entities for the menu pages (lights, climate, flows, music).
+    #[serde(default)]
+    pub more: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+pub struct Panels {
+    pub indoor: Option<String>,
+    pub outdoor: Option<String>,
+    pub wind: Option<String>,
+    pub weather: Option<String>,
+    pub speaker: Option<String>,
+}
+
+impl Panels {
+    pub fn ids(&self) -> impl Iterator<Item = &String> {
+        [&self.indoor, &self.outdoor, &self.wind, &self.weather, &self.speaker].into_iter().flatten()
+    }
+}
+
+impl Device {
+    /// Everything this screen may show and control: its tiles, panels and menu entities.
+    pub fn allowed(&self) -> std::collections::HashSet<String> {
+        self.tiles.iter().chain(self.more.iter()).chain(self.panels.ids()).cloned().collect()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -124,10 +152,13 @@ mod tests {
             last_seen: 1,
             expires: 2,
             tiles: vec!["demo:lamp".into()],
+            panels: Panels { speaker: Some("sonos:RINCON_1".into()), ..Default::default() },
+            more: vec![],
         });
         s.save();
         let s2 = Store::open(&dir).unwrap();
         assert_eq!(s2.data.devices[0].tiles, vec!["demo:lamp"]);
+        assert!(s2.data.devices[0].allowed().contains("sonos:RINCON_1"));
         fs::remove_dir_all(dir).unwrap();
     }
 }

@@ -136,12 +136,12 @@ impl App {
         if open >= 3 {
             clients.retain(|c| c.device_id != device.id);
         }
-        clients.push(Client { device_id: device.id.clone(), tiles: device.tiles.iter().cloned().collect(), tx });
+        clients.push(Client { device_id: device.id.clone(), tiles: device.allowed(), tx });
     }
 
     pub fn update_client_tiles(&self, device: &Device) {
         for c in self.clients.lock().unwrap().iter_mut().filter(|c| c.device_id == device.id) {
-            c.tiles = device.tiles.iter().cloned().collect();
+            c.tiles = device.allowed();
         }
     }
 
@@ -251,6 +251,8 @@ impl App {
             last_seen: t,
             expires: t + self.cfg.device_ttl,
             tiles: Vec::new(),
+            panels: Default::default(),
+            more: Vec::new(),
         };
         p.token = Some(token);
         let mut store = self.store.lock().unwrap();

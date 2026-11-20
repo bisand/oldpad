@@ -134,6 +134,20 @@ pub fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// Percent-encodes everything but unreserved characters (RFC 3986), for query strings.
+pub fn percent_encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+pub fn unescape_xml(s: &str) -> String {
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&#39;", "'").replace("&amp;", "&")
+}
+
 pub fn escape_xml(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
@@ -168,6 +182,13 @@ mod tests {
         assert_eq!(percent_decode("a%3Ab%20c"), "a:b c");
         assert_eq!(percent_decode("100%"), "100%");
         assert_eq!(percent_decode("%zz"), "%zz");
+    }
+
+    #[test]
+    fn encoding_helpers() {
+        assert_eq!(percent_encode("SELECT \"a\" = 'b&c'"), "SELECT%20%22a%22%20%3D%20%27b%26c%27");
+        assert_eq!(unescape_xml("&lt;a href=&quot;x&amp;y&quot;&gt;"), "<a href=\"x&y\">");
+        assert_eq!(unescape_xml(&escape_xml("<&\">")), "<&\">");
     }
 
     #[test]

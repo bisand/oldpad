@@ -1,5 +1,5 @@
-/* Old-browser safe: no flexbox, grid, variables or vw units. Inline-block layout
-   works back to iOS 5. Keep it that way: tests/es5 checks the JS, not this. */
+/* Old-browser safe: no flexbox, grid, variables or vw units. Inline-block and
+   absolute positioning work back to iOS 5. Sized for 1024×768, scales down. */
 * { -webkit-box-sizing: border-box; box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; }
 body {
@@ -10,54 +10,112 @@ body {
   -webkit-touch-callout: none;
   cursor: default;
 }
-body.day { background: #eef0f3; color: #1b1d21; }
-body.night { background: #000; color: #9a9da3; }
 .hidden { display: none; }
-.screen { padding: 24px 28px; }
-.muted { color: #7b8089; }
 .mono { font-family: Menlo, Courier, monospace; }
+svg.ic { width: 24px; height: 24px; vertical-align: middle; }
 
-#pair { text-align: center; padding-top: 40px; }
-#pair h1 { font-weight: 300; font-size: 36px; margin: 0 0 8px; }
+/* ---------- colours: night is the default, day overrides ---------- */
+body { background: #0d0e10; color: #e9eaee; }
+.card, .tile .in, .fav, .step, .play { background: #17181c; border: 1px solid #26282e; }
+.muted, .sub, .zone, .date, .slot .h, .label-s { color: #8b8f98; }
+.rail { background: #111215; border-right: 1px solid #22242a; }
+.rail a { color: #8b8f98; }
+.rail a.on { color: #8fb4ff; background: #1b2840; }
+.tile.on .in { background: #3a2c0c; border-color: #6b5214; color: #ffd27a; }
+.tile.on .zone { color: #c9a24a; }
+.fav.on { background: #1b2840; border-color: #3d5a99; color: #a9c4ff; }
+.ok { color: #6fcf8a; } .warn { color: #f0b54a; } .bad { color: #ff8a80; }
+.divider { border-left: 1px solid #26282e; }
+input[type=range] { background: #3a3d45; }
+
+body.day { background: #eceef2; color: #1b1d21; }
+.day .card, .day .tile .in, .day .fav, .day .step, .day .play { background: #fff; border-color: #d9dce1; }
+.day .muted, .day .sub, .day .zone, .day .date, .day .slot .h, .day .label-s { color: #6f747d; }
+.day .rail { background: #f7f8fa; border-right-color: #dcdfe4; }
+.day .rail a { color: #6f747d; }
+.day .rail a.on { color: #2f6fde; background: #e3ecfd; }
+.day .tile.on .in { background: #ffe9b0; border-color: #f0c85a; color: #5a4100; }
+.day .tile.on .zone { color: #8a6d1e; }
+.day .fav.on { background: #e3ecfd; border-color: #9dbbf5; color: #1f4fae; }
+.day .ok { color: #1f7a3d; } .day .warn { color: #a26300; } .day .bad { color: #b3261e; }
+.day .divider { border-left-color: #e3e5e9; }
+.day input[type=range] { background: #cfd3da; }
+
+/* ---------- pairing ---------- */
+.pair { text-align: center; padding: 40px 20px; }
+.pair h1 { font-weight: 300; font-size: 36px; margin: 0 0 8px; }
 .lead { font-size: 18px; margin: 0 0 24px; }
 .qr { width: 300px; height: 300px; margin: 0 auto 16px; background: #fff; padding: 8px; }
 .qr svg { width: 284px; height: 284px; display: block; }
 .code { font-size: 22px; }
 .code .mono { font-size: 30px; letter-spacing: 4px; }
 
-.top { overflow: hidden; margin-bottom: 18px; }
-.clock { float: left; }
-#time { font-size: 72px; font-weight: 200; line-height: 1; letter-spacing: -2px; }
-.date { display: block; font-size: 20px; margin-top: 6px; }
-.name { float: right; font-size: 16px; padding-top: 8px; }
+/* ---------- frame ---------- */
+.rail { position: fixed; left: 0; top: 0; bottom: 0; width: 76px; padding-top: 14px; text-align: center; }
+.rail a { display: block; width: 52px; height: 52px; line-height: 52px; margin: 0 auto 10px; border-radius: 12px; }
+.page { margin-left: 76px; padding: 14px 16px 10px; }
+.row { font-size: 0; margin: 0 -6px; }
+.col { display: inline-block; vertical-align: top; padding: 0 6px; font-size: 16px; }
+.card { border-radius: 16px; padding: 14px 18px; margin-bottom: 12px; position: relative; overflow: hidden; }
+.w30 { width: 30%; } .w70 { width: 70%; } .w50 { width: 50%; } .w100 { width: 100%; }
 
-.tiles { margin: 0 -8px; font-size: 0; }
-.tile {
-  display: inline-block; vertical-align: top;
-  width: 33.333%; padding: 8px; font-size: 18px;
-}
-.tile .in {
-  position: relative; height: 190px; padding: 18px 20px; border-radius: 14px;
-  background: #fff; border: 1px solid #d9dce1; overflow: hidden;
-}
-.night .tile .in { background: #111; border-color: #222; }
-.tile.on .in { background: #ffe9b0; border-color: #f0c85a; color: #5a4100; }
-.night .tile.on .in { background: #2b2410; border-color: #4a3d14; color: #d8c48a; }
+/* ---------- clock and climate ---------- */
+.clock, .climate { height: 150px; }
+.time { font-size: 64px; font-weight: 300; line-height: 1; letter-spacing: -1px; margin-top: 6px; }
+.date { display: block; font-size: 18px; margin-top: 10px; }
+.half { display: inline-block; vertical-align: top; width: 50%; padding: 0 4px 0 0; font-size: 16px; }
+.half.divider { padding-left: 20px; }
+.label-s { font-size: 14px; }
+.big { font-size: 46px; font-weight: 300; line-height: 1.1; }
+.sub { font-size: 14px; }
+
+/* ---------- forecast ---------- */
+.forecast { height: 90px; padding: 10px 14px; font-size: 0; }
+.slot { display: inline-block; vertical-align: top; width: 11%; text-align: center; font-size: 15px; }
+.slot.now { width: 16%; text-align: left; padding-top: 4px; }
+.slot.now .sub { display: block; margin-top: 2px; font-size: 14px; }
+.slot.tomorrow { width: 18%; text-align: right; }
+.slot .h { display: block; font-size: 13px; margin-bottom: 2px; }
+
+/* ---------- music ---------- */
+.music { height: 160px; }
+.art { position: absolute; left: 18px; top: 16px; width: 64px; height: 64px; border-radius: 10px; background: #1b2840; color: #8fb4ff; text-align: center; line-height: 64px; }
+.day .art { background: #e3ecfd; color: #2f6fde; }
+.art svg.ic { width: 30px; height: 30px; }
+.now-playing { position: absolute; left: 96px; top: 18px; right: 470px; white-space: nowrap; overflow: hidden; }
+.np-title { font-size: 22px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.np-sub { overflow: hidden; text-overflow: ellipsis; }
+.play { position: absolute; right: 380px; top: 22px; width: 58px; height: 58px; border-radius: 29px; text-align: center; line-height: 58px; }
+.vol { position: absolute; right: 18px; top: 38px; width: 340px; }
+.vol input { width: 280px; vertical-align: middle; }
+.vol span { display: inline-block; width: 44px; text-align: right; font-size: 18px; }
+input[type=range] { -webkit-appearance: none; height: 6px; border-radius: 3px; outline: none; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 15px; background: #fff; border: 1px solid #b9bcc3; }
+.favs { position: absolute; left: 18px; right: 18px; bottom: 14px; font-size: 0; white-space: nowrap; overflow: hidden; }
+.fav { display: inline-block; width: 19%; margin-right: 1.25%; padding: 9px 4px; border-radius: 10px; text-align: center; font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
+.fav:last-child { margin-right: 0; }
+.favgrid .fav { width: 23.5%; margin: 0 2% 12px 0; }
+.favgrid .fav:nth-child(4n) { margin-right: 0; }
+
+/* ---------- tiles ---------- */
+.tiles { margin: 0 -6px; font-size: 0; }
+.tile { display: inline-block; vertical-align: top; width: 16.666%; padding: 0 6px; font-size: 16px; margin-bottom: 12px; }
+.tiles.big .tile { width: 25%; }
+.tile .in { position: relative; height: 196px; padding: 12px 14px; border-radius: 14px; overflow: hidden; }
+.tiles.big .tile .in { height: 170px; }
+.tile .label { font-size: 17px; font-weight: 500; margin: 6px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .zone { font-size: 13px; }
+.tile .value { position: absolute; left: 14px; bottom: 12px; font-size: 28px; font-weight: 300; }
+.tile .steps { position: absolute; left: 8px; bottom: 10px; }
+.tile .value.up { bottom: 58px; }
+.step { display: inline-block; width: 44px; height: 40px; margin-left: 6px; border-radius: 20px; line-height: 38px; text-align: center; font-size: 24px; }
 .tile.pressed .in { opacity: 0.6; }
-.tile.missing .in { opacity: 0.5; }
-.tile .label { font-size: 20px; font-weight: 500; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .zone { font-size: 14px; color: #7b8089; }
-.tile.on .zone { color: #8a6d1e; }
-.tile .value { position: absolute; left: 20px; bottom: 16px; font-size: 40px; font-weight: 300; }
-.tile .sub { font-size: 16px; color: #7b8089; }
-.tile .steps { position: absolute; right: 14px; bottom: 14px; }
-.step {
-  display: inline-block; width: 52px; height: 52px; margin-left: 8px; border-radius: 26px;
-  line-height: 50px; text-align: center; font-size: 30px; font-weight: 300;
-  border: 1px solid #c9ccd2; background: #f6f7f9;
-}
-.night .step { background: #1a1a1a; border-color: #333; }
-.empty { font-size: 20px; text-align: center; padding: 60px 0; }
+.tile.missing .in { opacity: 0.45; }
+.empty { font-size: 18px; text-align: center; padding: 40px 0; }
+
+/* ---------- weather page ---------- */
+.hours .slot { width: 8.33%; }
+.days .slot { width: 25%; font-size: 18px; }
 
 .toast {
   position: fixed; left: 50%; bottom: 24px; width: 420px; margin-left: -210px;
@@ -65,7 +123,17 @@ body.night { background: #000; color: #9a9da3; }
   font-size: 17px; text-align: center;
 }
 
-@media (max-width: 800px) {
-  .tile { width: 50%; }
-  #time { font-size: 56px; }
+/* Portrait or smaller tablets */
+@media (max-width: 900px) {
+  .w30, .w70 { width: 100%; }
+  .clock, .climate { height: auto; }
+  .tile { width: 33.333%; }
+  .now-playing { right: 18px; top: 16px; }
+  .play { right: 18px; top: auto; bottom: 64px; }
+  .vol { left: 96px; right: 90px; width: auto; top: auto; bottom: 74px; }
+  .vol input { width: 75%; }
+  .music { height: 230px; }
+  .forecast { height: auto; }
+  .slot { width: 25%; margin-bottom: 6px; }
+  .slot.now, .slot.tomorrow { width: 50%; }
 }

@@ -81,20 +81,23 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
             let device = app.device_from(req).ok_or_else(|| Response::error(401, "Not paired"))?;
             match (m, s) {
                 ("GET", ["tablet"]) => {
-                    let tiles: Vec<Value> = device
-                        .tiles
-                        .iter()
-                        .map(|id| app.registry.entity(id).map(|e| json!(e)).unwrap_or_else(|| json!({ "id": id, "missing": true })))
-                        .collect();
-                    Ok(Response::ok(json!({ "device": { "id": device.id, "name": device.name }, "tiles": tiles })))
+                    let get = |id: &String| app.registry.entity(id).map(|e| json!(e)).unwrap_or_else(|| json!({ "id": id, "missing": true }));
+                    let p = &device.panels;
+                    let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
+                    Ok(Response::ok(json!({
+                        "device": { "id": device.id, "name": device.name },
+                        "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
+                        "more": device.more.iter().map(get).collect::<Vec<_>>(),
+                        "panels": { "indoor": panel(&p.indoor), "outdoor": panel(&p.outdoor), "wind": panel(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker) },
+                    })))
                 }
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
                 ("POST", ["tablet", "set"]) => {
                     let body = req.json()?;
                     let id = body["id"].as_str().unwrap_or("");
-                    // A tablet controls its own tiles and nothing else.
-                    if !device.tiles.iter().any(|t| t == id) {
-                        return Err(Response::error(403, "Not one of this tablet's tiles"));
+                    // A screen controls what is configured for it and nothing else.
+                    if !device.allowed().contains(id) {
+                        return Err(Response::error(403, "Not configured for this screen"));
                     }
                     app.registry
                         .set(id, body["capability"].as_str().unwrap_or(""), &body["value"])
@@ -244,7 +247,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .data
                 .devices
                 .iter()
-                .map(|d| json!({ "id": d.id, "name": d.name, "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
@@ -255,12 +258,26 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             if body.get("name").is_some() {
                 d.name = str_field(&body, "name", 64)?.to_string();
             }
-            if let Some(tiles) = body["tiles"].as_array() {
-                let tiles: Vec<String> = tiles.iter().filter_map(Value::as_str).map(str::to_string).collect();
-                if tiles.len() > 24 || tiles.iter().any(|t| t.len() > 200) {
-                    return Err(Response::error(400, "Too many tiles"));
+            let ids = |v: &Value, max: usize| -> Result<Option<Vec<String>>, Response> {
+                let Some(list) = v.as_array() else { return Ok(None) };
+                let list: Vec<String> = list.iter().filter_map(Value::as_str).map(str::to_string).collect();
+                if list.len() > max || list.iter().any(|t| t.len() > 200) {
+                    return Err(Response::error(400, "Too many entities"));
                 }
+                Ok(Some(list))
+            };
+            if let Some(tiles) = ids(&body["tiles"], 24)? {
                 d.tiles = tiles;
+            }
+            if let Some(more) = ids(&body["more"], 200)? {
+                d.more = more;
+            }
+            if body.get("panels").is_some() {
+                let panels: crate::store::Panels = serde_json::from_value(body["panels"].clone()).map_err(|_| Response::error(400, "Bad panels"))?;
+                if panels.ids().any(|id| id.len() > 200) {
+                    return Err(Response::error(400, "Bad panels"));
+                }
+                d.panels = panels;
             }
             let device = d.clone();
             store.save();

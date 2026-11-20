@@ -8,8 +8,8 @@ later, other home automation systems — and the tablet only draws what it is
 sent. It is built for devices newer dashboards have left behind: the tablet
 page runs on **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
 
-> Status: early. Homey Pro and a demo house work; Sonos, weather and the
-> indoor/outdoor panel are designed but not built yet. See [docs/design.md](docs/design.md).
+> Status: early, running daily on an iPad 2. Integrations: Homey Pro, Sonos,
+> InfluxDB, MET Norway weather, and a demo house. See [docs/design.md](docs/design.md).
 
 ## What works today
 
@@ -17,12 +17,17 @@ page runs on **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
   with a passkey (Face ID / Touch ID — there are no passwords), name the
   screen, and it is paired. The tablet keeps a long-lived token that renews
   itself with use and that you can revoke from your phone.
-- **Tiles.** Pick which lights, sockets, thermostats, sensors and Homey Flows a
-  screen shows. Tap to toggle, − / + for thermostats, tap to run a Flow.
-  Changes made anywhere else show up live.
-- **Integrations by wizard.** Add Homey (or the demo house) from your phone:
-  pick a type, fill in the fields, test the connection, save.
-- **Clock and day/night theme.**
+- **A home screen** with the clock, indoor and outdoor readings (today's low
+  and high, humidity, CO₂, wind), the forecast for the coming hours and
+  tomorrow, the room's Sonos (now playing, play/pause, volume, favourites) and
+  six tiles: lights, sockets, thermostats, sensors or Homey Flows.
+- **Menu pages** for music, lights, climate, Flows and a longer forecast.
+- **Live.** Changes made anywhere else show up within seconds.
+- **Per screen.** Each screen has its own layout, chosen on your phone. Text
+  follows the tablet's language (English and Norwegian so far).
+- **Integrations by wizard.** Add Homey, Sonos, InfluxDB, weather or the demo
+  house from your phone: pick a type, fill in the fields, test, save.
+- **Day and night themes.**
 
 ## Run it
 
@@ -56,10 +61,11 @@ Accessibility → Guided Access*.
 - **The tablet page is ES5 and inline-block CSS.** No `fetch`, no flexbox, no
   frameworks. `cargo test` fails if modern JavaScript slips in.
 - **Few dependencies, on purpose.** HTTP, WebSocket, CBOR and the passkey
-  checks are written here and tested. Crates are used only for JSON
-  (`serde_json`) and cryptography (`p256`, `sha2`, `getrandom`), plus a QR
-  encoder. The release binary is under 1 MB with the web pages built in, and
-  cross-compiles to a Raspberry Pi.
+  checks, the Sonos UPnP client and the Homey realtime client are written here
+  and tested. Crates are used only for JSON (`serde_json`) and cryptography
+  (`p256`, `sha2`, `getrandom`, and `rustls` for the one internet service, the
+  weather), plus a QR encoder. The container image is about 1 MB with the web
+  pages built in.
 
 ## Contributing
 

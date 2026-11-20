@@ -106,8 +106,9 @@ A dashboard has pages, a page has tiles. Tile types:
 
 ## Open questions
 
-- Sonos, weather (MET Norway) and the InfluxDB indoor/outdoor panel: built as
-  integrations, which needs an HTTPS client for MET (rustls).
+- Graphs page (the kiosk's rendered Grafana PNGs) — needs an image proxy, as the CSP allows only same-origin images.
+- Sonos album art (same reason), and UPnP event subscriptions instead of 4-second polling.
+- More languages than English and Norwegian.
 - Day/night by sunrise and sunset instead of fixed 07–21.
 - Packaging: container image and an example Kubernetes manifest.
 - Out-of-process integrations (a program speaking JSON over stdio), so

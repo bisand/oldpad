@@ -55,6 +55,16 @@ vocabulary the tablet understands:
 | `target_temperature` | number, `min`/`max` | − / + in 0.5° steps |
 | `measure_temperature` | number | read-only reading |
 | `button` | write-only | tap to run (a Flow, a scene) |
+| `temperature_min`, `temperature_max` | number | today's range on the climate panel |
+| `measure_humidity`, `measure_co2`, `measure_wind_strength` (km/h) | number | climate panel |
+| `speaker_playing`, `volume_set` (0–1) | bool, number | music card controls |
+| `speaker_track`, `speaker_artist` | string | music card text |
+| `favourites` / `play_favourite` | `[{id,title}]` / write-only id | favourite buttons |
+| `weather_symbol`, `forecast` | MET symbol code, `[[epoch, °C, symbol], …]` | forecast strip and weather page |
+
+Entity `class` decides which menu page shows it: `light`/`socket` → lights,
+`thermostat`/`heater`/`sensor` → climate, `button` → Flows, `speaker` → music
+panel, `weather` → forecast panel.
 
 Mark a capability `settable: false` if it is read-only; the server refuses
 writes to it before your `set` is called. A tablet can only control entities

@@ -141,7 +141,7 @@ async function homeView() {
           h('div', { class: 'row' },
             h('div', {}, h('strong', {}, d.name), h('div', { class: 'small muted' }, `Seen ${ago(d.lastSeen)} · ${d.tiles.length} tiles`)),
             h('div', { class: 'row' },
-              h('button', { onclick: () => (location.hash = `#/device/${d.id}`) }, 'Tiles'),
+              h('button', { onclick: () => (location.hash = `#/device/${d.id}`) }, 'Layout'),
               h('button', { class: 'danger', onclick: async () => {
                 if (!confirm(`Remove ${d.name}? It will have to be paired again.`)) return;
                 await api('DELETE', `/devices/${d.id}`); route();
@@ -198,16 +198,41 @@ async function deviceView(id) {
   const [devices, entities] = await Promise.all([api('GET', '/devices'), api('GET', '/entities')]);
   const device = devices.find((d) => d.id === id);
   if (!device) return render(errorBox(new Error('No such screen.')));
-  const chosen = [...device.tiles];
+  const tiles = [...device.tiles];
+  const more = new Set(device.more);
+  const panels = { ...device.panels };
+  const has = (e, cap) => e.capabilities && cap in e.capabilities;
+
+  // Which entities fit each home panel.
+  const panelDefs = [
+    ['indoor', 'Indoor', (e) => has(e, 'measure_temperature') && e.class !== 'weather'],
+    ['outdoor', 'Outdoor', (e) => has(e, 'measure_temperature') && e.class !== 'weather'],
+    ['wind', 'Wind (optional, if outdoor has none)', (e) => has(e, 'measure_wind_strength')],
+    ['weather', 'Forecast', (e) => e.class === 'weather'],
+    ['speaker', 'Music: this screen\'s room', (e) => e.class === 'speaker'],
+  ];
+  const selects = panelDefs.map(([key, label, fits]) => {
+    const options = entities.filter(fits);
+    const sel = h('select', { id: `p-${key}`, onchange: () => { panels[key] = sel.value || null; } },
+      h('option', { value: '' }, '— none —'),
+      options.map((e) => h('option', { value: e.id, selected: panels[key] === e.id }, `${e.name}${e.zone && e.zone !== e.name ? ` (${e.zone})` : ''}`)));
+    return [h('label', { for: `p-${key}` }, label), sel];
+  });
+
   const list = h('div');
   const draw = () => {
     let zone = null;
-    list.replaceChildren(...entities.flatMap((e) => {
-      const i = chosen.indexOf(e.id);
-      const row = h('div', { class: i >= 0 ? 'pick sel' : 'pick', onclick: () => {
-        i >= 0 ? chosen.splice(i, 1) : chosen.push(e.id);
+    list.replaceChildren(...entities.filter((e) => e.class !== 'weather').flatMap((e) => {
+      const i = tiles.indexOf(e.id);
+      const home = h('button', { class: i >= 0 ? 'chip on' : 'chip', onclick: () => {
+        i >= 0 ? tiles.splice(i, 1) : tiles.push(e.id);
         draw();
-      } }, h('span', { class: 'n' }, i >= 0 ? String(i + 1) : ''), h('span', {}, e.name, h('span', { class: 'small muted' }, ` · ${e.class}`)));
+      } }, i >= 0 ? `Home ${i + 1}` : 'Home');
+      const menu = h('button', { class: more.has(e.id) ? 'chip on' : 'chip', onclick: () => {
+        more.has(e.id) ? more.delete(e.id) : more.add(e.id);
+        draw();
+      } }, 'Menu');
+      const row = h('div', { class: 'pick' }, h('span', { class: 'grow' }, e.name, h('span', { class: 'small muted' }, ` · ${e.class}`)), home, menu);
       const header = e.zone !== zone ? h('div', { class: 'zone' }, (zone = e.zone) || 'No room') : null;
       return header ? [header, row] : [row];
     }));
@@ -216,11 +241,17 @@ async function deviceView(id) {
   const out = h('div');
   render(
     h('h1', {}, device.name),
-    h('p', { class: 'muted' }, 'Tap in the order the tiles should appear. Six fit on an iPad screen.'),
+    h('h2', {}, 'Home panels'),
+    selects,
+    h('h2', {}, 'Tiles and menu pages'),
+    h('p', { class: 'muted' }, '“Home” puts it in the tile row, in the order you tap (six fit). “Menu” shows it on the lights, climate, Flows or music page.'),
     entities.length ? list : h('p', { class: 'notice' }, 'Nothing to show yet. Add an integration first.'),
     h('div', { class: 'actions' },
       h('button', { class: 'primary', onclick: async () => {
-        try { await api('PUT', `/devices/${id}`, { tiles: chosen }); location.hash = '#/'; } catch (e) { out.replaceChildren(errorBox(e)); }
+        try {
+          await api('PUT', `/devices/${id}`, { tiles, more: [...more], panels });
+          location.hash = '#/';
+        } catch (e) { out.replaceChildren(errorBox(e)); }
       } }, 'Save'),
       h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')),
     out,
