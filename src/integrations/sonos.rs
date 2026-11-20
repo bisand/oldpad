@@ -610,7 +610,17 @@ impl Instance for Sonos {
 
     fn image(&self, key: &str) -> Result<(String, Vec<u8>), String> {
         let url = self.state.lock().unwrap().art.iter().find(|(k, _)| k == key).map(|(_, u)| u.clone()).ok_or("no such image")?;
-        let res = request(&url, "GET", "", &[("Accept", "image/*")], None)?;
+        // Logo services hand out redirects to their image CDN; follow a few.
+        let mut url = url;
+        let mut res = request(&url, "GET", "", &[("Accept", "image/*")], None)?;
+        for _ in 0..3 {
+            let Some(next) = res.headers.get("location").filter(|_| matches!(res.status, 301 | 302 | 303 | 307 | 308)) else { break };
+            if !(next.starts_with("http://") || next.starts_with("https://")) {
+                break;
+            }
+            url = next.clone();
+            res = request(&url, "GET", "", &[("Accept", "image/*")], None)?;
+        }
         let kind = res.headers.get("content-type").cloned().unwrap_or_default();
         if res.status != 200 || !kind.starts_with("image/") || res.body.len() > 2_000_000 {
             return Err(format!("image not available (HTTP {})", res.status));
