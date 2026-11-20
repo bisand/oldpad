@@ -244,7 +244,7 @@ async function homeView() {
     h('h2', {}, 'Integrations'),
     integrations.map((i) => h('div', { class: 'card' },
       h('div', { class: 'row' },
-        h('div', {}, h('strong', {}, i.name), h('div', { class: 'small muted' }, i.typeName, ' · ',
+        h('div', {}, h('a', { href: `#/integration-info/${i.id}`, class: 'title' }, i.name), h('div', { class: 'small muted' }, i.typeName, ' · ',
           h('span', { class: i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : '' }, i.status))),
         h('div', { class: 'row' },
           h('button', { onclick: () => (location.hash = `#/integration/${i.id}`) }, 'Edit'),
@@ -403,6 +403,55 @@ async function deviceView(id) {
   );
 }
 
+// What an integration brings: its status, its devices with their current values,
+// and which screens use each one.
+function showValue(v) {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'boolean') return v ? 'on' : 'off';
+  if (typeof v === 'number') return String(Math.round(v * 100) / 100);
+  if (Array.isArray(v)) return `${v.length} items`;
+  if (typeof v === 'object') return '…';
+  return String(v).length > 40 ? `${String(v).slice(0, 40)}…` : String(v);
+}
+
+async function integrationInfoView(id) {
+  const [integrations, entities, devices] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities'), api('GET', '/devices')]);
+  const i = integrations.find((x) => x.id === id);
+  if (!i) return render(errorBox(new Error('No such integration.')));
+  const mine = entities.filter((e) => e.id.startsWith(`${id}:`));
+  const usedOn = (eid) => devices.filter((d) => d.tiles.includes(eid) || d.more.includes(eid) || Object.values(d.panels).includes(eid) || (d.pages || []).some((p) => p.items.includes(eid))).map((d) => d.name);
+  const filter = h('input', { type: 'search', placeholder: `Filter ${mine.length} devices`, 'aria-label': 'Filter devices' });
+  const list = h('div');
+  const draw = () => {
+    const q = filter.value.trim().toLowerCase();
+    let zone = null;
+    list.replaceChildren(...mine.filter((e) => !q || `${e.name} ${e.zone} ${e.class}`.toLowerCase().includes(q)).flatMap((e) => {
+      const caps = Object.entries(e.capabilities || {}).filter(([, c]) => c.value !== null && typeof c.value !== 'object').map(([k, c]) => `${k} ${showValue(c.value)}`);
+      const used = usedOn(e.id);
+      const row = h('div', { class: 'pick' }, h('span', { class: 'grow' }, e.name, h('span', { class: 'small muted' }, ` · ${e.class}`),
+        h('div', { class: 'small muted' }, caps.join(' · ') || 'no values'),
+        used.length ? h('div', { class: 'small ok' }, `On ${used.join(', ')}`) : null));
+      const header = e.zone !== zone ? h('div', { class: 'zone' }, (zone = e.zone) || 'No room') : null;
+      return header ? [header, row] : [row];
+    }));
+  };
+  filter.addEventListener('input', draw);
+  draw();
+  const restart = h('button', { onclick: async () => {
+    restart.disabled = true;
+    await api('POST', `/integrations/${id}/restart`, {});
+    setTimeout(route, 2500);
+  } }, 'Restart');
+  render(
+    h('h1', {}, i.name),
+    h('p', { class: `notice ${i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : ''}` }, `${i.typeName}: ${i.status}`),
+    h('div', { class: 'actions' }, restart, h('button', { onclick: () => (location.hash = `#/integration/${id}`) }, 'Edit settings'), h('button', { onclick: () => (location.hash = '#/') }, 'Back')),
+    (i.accounts || []).length ? [h('h2', {}, 'Accounts'), h('div', { class: 'card' }, i.accounts.map((a) => accountRow(i, a)))] : null,
+    h('h2', {}, 'Devices'),
+    mine.length ? [filter, list] : h('p', { class: 'muted' }, i.status === 'running' ? 'This integration has no devices.' : 'Devices show up here once it is running.'),
+  );
+}
+
 // The integration wizard: 1. pick a type, 2. fill in its fields, 3. test, 4. save.
 async function integrationView(id) {
   const kinds = await api('GET', '/kinds');
@@ -482,6 +531,7 @@ async function route() {
     if (view === 'add-screen') return addScreenView();
     if (view === 'device' && arg) return await deviceView(arg);
     if (view === 'integration' && arg) return await integrationView(arg);
+    if (view === 'integration-info' && arg) return await integrationInfoView(arg);
     return await homeView();
   } catch (e) {
     render(errorBox(e));

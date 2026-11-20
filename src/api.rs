@@ -434,6 +434,11 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 Err(e) => json!({ "ok": false, "message": e }),
             }))
         }
+        ("POST", ["integrations", id, "restart"]) => {
+            let i = app.store.lock().unwrap().data.integrations.iter().find(|i| i.id == *id).cloned().ok_or_else(|| Response::error(404, "No such integration"))?;
+            app.registry.start(i.id.clone(), i.kind, i.config, app.sink(i.id));
+            Ok(Response::ok(json!({ "ok": true })))
+        }
         ("POST", ["integrations", id, "connect"]) => {
             let body = req.json()?;
             let url = app.registry.connect(id, body["account"].as_str().unwrap_or("")).map_err(|e| Response::error(502, &e))?;

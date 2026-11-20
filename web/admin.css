@@ -19,7 +19,7 @@ h2 { font-size: 18px; margin: 28px 0 8px; }
 .small { font-size: 14px; }
 .ok { color: var(--ok); } .bad { color: var(--bad); }
 label { display: block; font-weight: 500; margin: 14px 0 4px; }
-input[type=text], input[type=password], input[type=url], input[type=number] {
+input[type=text], input[type=password], input[type=url], input[type=number], input[type=search] {
   width: 100%; padding: 10px 12px; font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
 }
 .help { font-size: 14px; color: var(--muted); margin: 4px 0 0; }
@@ -48,3 +48,4 @@ select { width: 100%; padding: 10px 12px; font: inherit; border-radius: 8px; bor
 .card > select { margin-top: 10px; }
 .qr { display: block; width: 220px; height: 220px; margin: 12px 0; background: #fff; border-radius: 8px; }
 button.chip.danger { color: var(--bad); }
+a.title { font-weight: 600; color: inherit; }
