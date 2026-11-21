@@ -21,7 +21,7 @@ pub fn kind() -> Kind {
                 kind: FieldKind::Url,
                 required: true,
                 placeholder: "http://192.168.1.60:8123",
-                help: "Its http:// address on your network. https:// is not supported yet.",
+                help: "Its address. Use https:// if it has a certificate from a public authority.",
             },
             Field {
                 key: "token",

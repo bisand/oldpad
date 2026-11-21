@@ -4,7 +4,7 @@
 
 use super::smapi::{self, Account, SPOTIFY_URL};
 use super::{Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
-use crate::client::request;
+use crate::client::{parse_url, request, request_public};
 use crate::util::{escape_xml, percent_encode, unescape_xml};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -679,17 +679,24 @@ impl Instance for Sonos {
     }
 
     fn image(&self, key: &str) -> Result<(String, Vec<u8>), String> {
-        let url = self.state.lock().unwrap().art.iter().find(|(k, _)| k == key).map(|(_, u)| u.clone()).ok_or("no such image")?;
+        let (url, speaker) = {
+            let s = self.state.lock().unwrap();
+            let url = s.art.iter().find(|(k, _)| k == key).map(|(_, u)| u.clone()).ok_or("no such image")?;
+            let host = parse_url(&url)?.host;
+            let speaker = s.rooms.iter().any(|r| r.host == host || r.coordinator == host);
+            (url, speaker)
+        };
+        // Logo URLs come from a public directory: only our speakers may be on the LAN.
         // Logo services hand out redirects to their image CDN; follow a few.
         let mut url = url;
-        let mut res = request(&url, "GET", "", &[("Accept", "image/*")], None)?;
+        let mut res = if speaker { request(&url, "GET", "", &[("Accept", "image/*")], None)? } else { request_public(&url, "GET", "", &[("Accept", "image/*")], None)? };
         for _ in 0..3 {
             let Some(next) = res.headers.get("location").filter(|_| matches!(res.status, 301 | 302 | 303 | 307 | 308)) else { break };
             if !(next.starts_with("http://") || next.starts_with("https://")) {
                 break;
             }
             url = next.clone();
-            res = request(&url, "GET", "", &[("Accept", "image/*")], None)?;
+            res = request_public(&url, "GET", "", &[("Accept", "image/*")], None)?;
         }
         let kind = res.headers.get("content-type").cloned().unwrap_or_default();
         if res.status != 200 || !kind.starts_with("image/") || res.body.len() > 2_000_000 {

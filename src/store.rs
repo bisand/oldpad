@@ -25,6 +25,9 @@ pub struct Session {
     pub hash: String,
     pub admin_id: String,
     pub expires: u64,
+    /// When a passkey was last used for this session. Older sessions count as stale.
+    #[serde(default)]
+    pub verified: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

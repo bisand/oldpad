@@ -2,6 +2,7 @@ use crate::http::Request;
 use crate::integrations::{Event, Registry, Sink};
 use crate::store::{Admin, Device, Store};
 use crate::util::{constant_eq, now, random_code, random_token, sha256_hex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -10,6 +11,8 @@ use std::sync::{Arc, Mutex, Weak};
 
 pub struct Config {
     pub bind: String,
+    /// A second port for the admin only, the one to expose. Unset: one port serves everything.
+    pub admin_bind: Option<String>,
     pub data_dir: PathBuf,
     /// The address the admin's phone uses. Passkeys are bound to it.
     pub public_url: String,
@@ -33,6 +36,7 @@ impl Config {
         let days = |k: &str, d: &str| var(k, d).parse::<u64>().map(|n| n * 86_400).map_err(|_| format!("{k} must be a number of days"));
         Ok(Config {
             bind: var("OLDPAD_BIND", "0.0.0.0:8080"),
+            admin_bind: std::env::var("OLDPAD_ADMIN_BIND").ok().filter(|b| !b.trim().is_empty()),
             data_dir: PathBuf::from(var("OLDPAD_DATA_DIR", "data")),
             rp_id: host.to_string(),
             public_url,
@@ -49,6 +53,11 @@ impl Config {
 pub const PAIRING_TTL: u64 = 300;
 const MAX_PENDING_PAIRINGS: usize = 10;
 const TOUCH_INTERVAL: u64 = 3600;
+const MAX_CHALLENGES: usize = 1000;
+/// Wrong setup codes before the code is replaced (the new one is in the server log).
+const MAX_SETUP_ATTEMPTS: usize = 5;
+/// How recently a passkey must have been used for backups, new admins and the like.
+const FRESH_AUTH: u64 = 300;
 
 pub struct Pairing {
     pub id: String,
@@ -81,6 +90,7 @@ pub struct App {
     clients: Mutex<Vec<Client>>,
     /// Printed at startup while no admin exists; needed to register the first passkey.
     pub setup_code: Mutex<Option<String>>,
+    setup_failures: AtomicUsize,
     /// Invitations for another admin: (code, expires). One use each.
     pub invites: Mutex<Vec<(String, u64)>>,
 }
@@ -97,6 +107,7 @@ impl App {
             tickets: Mutex::new(HashMap::new()),
             clients: Mutex::new(Vec::new()),
             setup_code: Mutex::new(setup_code),
+            setup_failures: AtomicUsize::new(0),
             invites: Mutex::new(Vec::new()),
         })
     }
@@ -154,6 +165,12 @@ impl App {
         self.send_where(|c| c.device_id == device_id, &sse(event, &json!({})));
     }
 
+    /// Closes the streams of screens that no longer exist.
+    pub fn drop_revoked_clients(&self) {
+        let ids: HashSet<String> = self.store.lock().unwrap().data.devices.iter().map(|d| d.id.clone()).collect();
+        self.clients.lock().unwrap().retain(|c| ids.contains(&c.device_id));
+    }
+
     pub fn add_client(&self, device: &Device, tx: Sender<String>) {
         let mut clients = self.clients.lock().unwrap();
         // shortcut: a fixed cap per device; raise it if one tablet ever needs several streams.
@@ -172,11 +189,40 @@ impl App {
 
     // ---------- admin sessions ----------
 
+    /// With a separate admin port, the plain-HTTP tablet port never accepts an admin session.
     pub fn admin_from(&self, req: &Request) -> Option<Admin> {
+        if self.cfg.admin_bind.is_some() && !req.admin_port {
+            return None;
+        }
         let hash = sha256_hex(&req.cookie("oldpad_admin")?);
         let store = self.store.lock().unwrap();
         let session = store.data.sessions.iter().find(|s| constant_eq(&s.hash, &hash) && s.expires > now())?;
         store.data.admins.iter().find(|a| a.id == session.admin_id).cloned()
+    }
+
+    /// Whether this session used a passkey within the last few minutes.
+    pub fn session_is_fresh(&self, req: &Request) -> bool {
+        let Some(token) = req.cookie("oldpad_admin") else { return false };
+        let hash = sha256_hex(&token);
+        let t = now();
+        self.store.lock().unwrap().data.sessions.iter().any(|s| constant_eq(&s.hash, &hash) && s.expires > t && s.verified + FRESH_AUTH > t)
+    }
+
+    /// Fails closed when there is no code. Repeated misses replace it, so it cannot be guessed.
+    pub fn check_setup_code(&self, given: &str) -> bool {
+        let mut code = self.setup_code.lock().unwrap();
+        let Some(current) = code.as_deref() else { return false };
+        if constant_eq(current, given) {
+            self.setup_failures.store(0, Ordering::Relaxed);
+            return true;
+        }
+        if self.setup_failures.fetch_add(1, Ordering::Relaxed) + 1 >= MAX_SETUP_ATTEMPTS {
+            self.setup_failures.store(0, Ordering::Relaxed);
+            let fresh = random_code(8);
+            eprintln!("  too many wrong setup codes. New setup code: {fresh}");
+            *code = Some(fresh);
+        }
+        false
     }
 
     /// Creates a session and returns the Set-Cookie value.
@@ -185,7 +231,7 @@ impl App {
         let mut store = self.store.lock().unwrap();
         let t = now();
         store.data.sessions.retain(|s| s.expires > t);
-        store.data.sessions.push(crate::store::Session { hash: sha256_hex(&token), admin_id: admin_id.into(), expires: t + self.cfg.admin_ttl });
+        store.data.sessions.push(crate::store::Session { hash: sha256_hex(&token), admin_id: admin_id.into(), expires: t + self.cfg.admin_ttl, verified: t });
         store.save()?;
         Ok(self.cookie(&token, self.cfg.admin_ttl))
     }
@@ -234,6 +280,21 @@ impl App {
             return Some(d);
         }
         Some(device.clone())
+    }
+
+    /// What a screen puts on image URLs, since img tags cannot send its token.
+    /// Derived from the device, so it dies with the pairing and proves nothing else.
+    pub fn image_token(device: &Device) -> String {
+        sha256_hex(&format!("image:{}", device.token_hash))
+    }
+
+    pub fn can_fetch_image(&self, req: &Request) -> bool {
+        if self.admin_from(req).is_some() {
+            return true;
+        }
+        let Some(given) = req.query.get("t").filter(|_| !req.admin_port) else { return false };
+        let t = now();
+        self.store.lock().unwrap().data.devices.iter().any(|d| d.expires > t && constant_eq(&Self::image_token(d), given))
     }
 
     pub fn new_ticket(&self, device_id: &str) -> String {
@@ -325,6 +386,11 @@ impl App {
         let mut map = self.challenges.lock().unwrap();
         let t = now();
         map.retain(|_, (_, exp)| *exp > t);
+        // Anyone can ask for a login challenge: the oldest give way rather than memory growing.
+        while map.len() >= MAX_CHALLENGES {
+            let Some(oldest) = map.iter().min_by_key(|(_, (_, exp))| *exp).map(|(k, _)| k.clone()) else { break };
+            map.remove(&oldest);
+        }
         map.insert(id.clone(), (c, t + 180));
         id
     }
@@ -347,6 +413,7 @@ pub mod tests {
         let dir = std::env::temp_dir().join(format!("oldpad-app-{}", random_code(8)));
         let cfg = Config {
             bind: "127.0.0.1:0".into(),
+            admin_bind: None,
             data_dir: dir.clone(),
             public_url: "http://localhost:8080".into(),
             rp_id: "localhost".into(),
@@ -364,6 +431,7 @@ pub mod tests {
             headers: HashMap::from([("authorization".into(), format!("Bearer {token}"))]),
             body: vec![],
             peer: "t".into(),
+            admin_port: false,
         }
     }
 
@@ -396,6 +464,69 @@ pub mod tests {
             app.new_pairing().unwrap();
         }
         assert!(app.new_pairing().is_err());
+    }
+
+    #[test]
+    fn setup_code_fails_closed_and_rotates() {
+        let app = test_app();
+        let first = app.setup_code.lock().unwrap().clone().unwrap();
+        for _ in 0..MAX_SETUP_ATTEMPTS {
+            assert!(!app.check_setup_code("WRONG"));
+        }
+        assert!(!app.check_setup_code(&first), "replaced after too many misses");
+        *app.setup_code.lock().unwrap() = None;
+        assert!(!app.check_setup_code(""), "no code means no setup");
+    }
+
+    #[test]
+    fn revoked_screen_loses_its_stream() {
+        let app = test_app();
+        let p = app.new_pairing().unwrap();
+        let d = app.approve_pairing(&p.code, "T").unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.add_client(&d, tx);
+        app.store.lock().unwrap().data.devices.clear();
+        app.drop_revoked_clients();
+        assert!(matches!(rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Disconnected)));
+    }
+
+    #[test]
+    fn stale_session_must_confirm_before_a_backup() {
+        let app = test_app();
+        let cookie = app.new_session("a").unwrap();
+        let pair = cookie.split(';').next().unwrap().to_string();
+        app.store.lock().unwrap().data.admins.push(Admin { id: "a".into(), name: "A".into(), user_handle: "u".into(), credentials: vec![] });
+        let mut req = bearer("x");
+        req.path = "/api/admin/backup".into();
+        req.headers.insert("cookie".into(), pair);
+        assert_eq!(crate::api::handle(&app, &req).status, 200);
+        app.store.lock().unwrap().data.sessions[0].verified = now() - FRESH_AUTH;
+        assert_eq!(crate::api::handle(&app, &req).status, 403);
+    }
+
+    #[test]
+    fn challenges_are_capped() {
+        let app = test_app();
+        for _ in 0..MAX_CHALLENGES + 50 {
+            app.new_challenge(Challenge::Login);
+        }
+        assert_eq!(app.challenges.lock().unwrap().len(), MAX_CHALLENGES);
+    }
+
+    #[test]
+    fn image_token_needs_a_live_screen_and_the_lan_port() {
+        let app = test_app();
+        let p = app.new_pairing().unwrap();
+        let d = app.approve_pairing(&p.code, "T").unwrap();
+        let mut req = bearer("x");
+        assert!(!app.can_fetch_image(&req));
+        req.query.insert("t".into(), App::image_token(&d));
+        assert!(app.can_fetch_image(&req));
+        req.admin_port = true;
+        assert!(!app.can_fetch_image(&req));
+        req.admin_port = false;
+        app.store.lock().unwrap().data.devices.clear();
+        assert!(!app.can_fetch_image(&req));
     }
 
     #[test]

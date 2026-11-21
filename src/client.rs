@@ -4,7 +4,7 @@
 use crate::util::{b64_encode, random_bytes};
 use std::collections::HashMap;
 use std::io::{ErrorKind, Read, Write};
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{IpAddr, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -38,12 +38,33 @@ pub fn parse_url(url: &str) -> Result<Target, String> {
     Ok(Target { https, host, port, prefix: prefix.trim_end_matches('/').to_string() })
 }
 
-fn connect(t: &Target, timeout: Duration) -> Result<TcpStream, String> {
+/// Whether an address is on the public internet, not this machine or the home network.
+fn is_public(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(a) => {
+            let o = a.octets();
+            !(a.is_private() || a.is_loopback() || a.is_link_local() || a.is_broadcast() || a.is_unspecified() || a.is_multicast() || o[0] == 0 || o[0] >= 240 || (o[0] == 100 && o[1] & 0xc0 == 64))
+        }
+        IpAddr::V6(a) => match a.to_ipv4_mapped() {
+            Some(v4) => is_public(IpAddr::V4(v4)),
+            None => {
+                let s = a.segments()[0];
+                !(a.is_loopback() || a.is_unspecified() || a.is_multicast() || s & 0xfe00 == 0xfc00 || s & 0xffc0 == 0xfe80)
+            }
+        },
+    }
+}
+
+fn connect(t: &Target, timeout: Duration, public_only: bool) -> Result<TcpStream, String> {
     let addr = (t.host.as_str(), t.port)
         .to_socket_addrs()
         .map_err(|e| format!("cannot resolve {}: {e}", t.host))?
         .next()
         .ok_or_else(|| format!("no address for {}", t.host))?;
+    // Checked on the address we connect to, so DNS cannot change the answer afterwards.
+    if public_only && !is_public(addr.ip()) {
+        return Err(format!("{} is not a public address", t.host));
+    }
     let s = TcpStream::connect_timeout(&addr, timeout).map_err(|e| format!("cannot reach {}:{}: {e}", t.host, t.port))?;
     s.set_read_timeout(Some(timeout)).ok();
     s.set_write_timeout(Some(timeout)).ok();
@@ -98,8 +119,43 @@ fn dechunk(mut data: &[u8]) -> Result<Vec<u8>, String> {
     }
 }
 
-trait Stream: Read + Write {}
-impl<T: Read + Write> Stream for T {}
+enum Conn {
+    Plain(TcpStream),
+    Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
+}
+
+impl Conn {
+    fn tcp(&self) -> &TcpStream {
+        match self {
+            Conn::Plain(s) => s,
+            Conn::Tls(s) => &s.sock,
+        }
+    }
+}
+
+impl Read for Conn {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Conn::Plain(s) => s.read(buf),
+            Conn::Tls(s) => s.read(buf),
+        }
+    }
+}
+
+impl Write for Conn {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Conn::Plain(s) => s.write(buf),
+            Conn::Tls(s) => s.write(buf),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Conn::Plain(s) => s.flush(),
+            Conn::Tls(s) => s.flush(),
+        }
+    }
+}
 
 fn tls_config() -> Arc<rustls::ClientConfig> {
     static CONFIG: OnceLock<Arc<rustls::ClientConfig>> = OnceLock::new();
@@ -116,19 +172,28 @@ fn tls_config() -> Arc<rustls::ClientConfig> {
         .clone()
 }
 
-fn open(t: &Target) -> Result<Box<dyn Stream>, String> {
-    let tcp = connect(t, Duration::from_secs(10))?;
+fn open(t: &Target, public_only: bool) -> Result<Conn, String> {
+    let tcp = connect(t, Duration::from_secs(10), public_only)?;
     if !t.https {
-        return Ok(Box::new(tcp));
+        return Ok(Conn::Plain(tcp));
     }
     let name = rustls::pki_types::ServerName::try_from(t.host.clone()).map_err(|_| format!("bad TLS host name {}", t.host))?;
     let conn = rustls::ClientConnection::new(tls_config(), name).map_err(|e| format!("TLS: {e}"))?;
-    Ok(Box::new(rustls::StreamOwned::new(conn, tcp)))
+    Ok(Conn::Tls(Box::new(rustls::StreamOwned::new(conn, tcp))))
 }
 
 pub fn request(base: &str, method: &str, path: &str, headers: &[(&str, &str)], body: Option<&[u8]>) -> Result<HttpResponse, String> {
+    send(base, method, path, headers, body, false)
+}
+
+/// For URLs we did not choose: refuses this machine and the home network.
+pub fn request_public(base: &str, method: &str, path: &str, headers: &[(&str, &str)], body: Option<&[u8]>) -> Result<HttpResponse, String> {
+    send(base, method, path, headers, body, true)
+}
+
+fn send(base: &str, method: &str, path: &str, headers: &[(&str, &str)], body: Option<&[u8]>, public_only: bool) -> Result<HttpResponse, String> {
     let t = parse_url(base)?;
-    let mut s = open(&t)?;
+    let mut s = open(&t, public_only)?;
     let mut req = format!("{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nUser-Agent: {USER_AGENT}\r\n", t.prefix, t.host);
     for (k, v) in headers {
         req.push_str(&format!("{k}: {v}\r\n"));
@@ -169,9 +234,9 @@ pub fn request(base: &str, method: &str, path: &str, headers: &[(&str, &str)], b
     Ok(HttpResponse { status, headers, body })
 }
 
-/// A WebSocket client connection (RFC 6455), text frames only.
+/// A WebSocket client connection (RFC 6455), text frames only, over TCP or TLS.
 pub struct WebSocket {
-    stream: TcpStream,
+    stream: Conn,
     buf: Vec<u8>,
     fragments: Vec<u8>,
 }
@@ -179,10 +244,7 @@ pub struct WebSocket {
 impl WebSocket {
     pub fn connect(base: &str, path: &str) -> Result<WebSocket, String> {
         let t = parse_url(base)?;
-        if t.https {
-            return Err("wss:// is not supported; use the device's http:// LAN address".into());
-        }
-        let mut stream = connect(&t, Duration::from_secs(10))?;
+        let mut stream = open(&t, false)?;
         let key = b64_encode(&random_bytes::<16>());
         let req = format!(
             "GET {}{path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: {USER_AGENT}\r\n\r\n",
@@ -203,14 +265,14 @@ impl WebSocket {
         if status != 101 {
             return Err(format!("websocket upgrade refused with HTTP {status}"));
         }
-        // Sec-WebSocket-Accept is not checked: it needs SHA-1, guards only against
-        // misbehaving proxies, and this connection is plain-text LAN anyway.
+        // Sec-WebSocket-Accept is not checked: it needs SHA-1 and guards only against
+        // misbehaving proxies. It authenticates nothing; TLS does that.
         Ok(WebSocket { stream, buf: buf[start..].to_vec(), fragments: Vec::new() })
     }
 
     /// Short read timeout so the caller's loop can send pings and notice shutdown.
     pub fn set_poll_interval(&self, d: Duration) {
-        self.stream.set_read_timeout(Some(d)).ok();
+        self.stream.tcp().set_read_timeout(Some(d)).ok();
     }
 
     fn send_frame(&mut self, opcode: u8, payload: &[u8]) -> Result<(), String> {
@@ -319,6 +381,17 @@ mod tests {
         assert!(t.https && t.port == 443);
         assert!(parse_url("ftp://x").is_err());
         assert!(parse_url("http://user@x").is_err());
+    }
+
+    #[test]
+    fn public_only_refuses_the_home_network() {
+        for ip in ["127.0.0.1", "10.0.0.1", "192.168.1.5", "172.16.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fe80::1", "fd00::1", "::ffff:192.168.1.5"] {
+            assert!(!is_public(ip.parse().unwrap()), "{ip}");
+        }
+        for ip in ["1.1.1.1", "2606:4700:4700::1111", "::ffff:8.8.8.8"] {
+            assert!(is_public(ip.parse().unwrap()), "{ip}");
+        }
+        assert!(request_public("http://127.0.0.1:9", "GET", "/", &[], None).err().unwrap().contains("not a public"));
     }
 
     #[test]

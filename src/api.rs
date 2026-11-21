@@ -1,6 +1,6 @@
 use crate::app::{App, Challenge, PAIRING_TTL};
 use crate::http::{Request, Response};
-use crate::integrations::{redact, validate};
+use crate::integrations::{redact, validate, FieldKind};
 use crate::store::{Admin, Credential, IntegrationConfig};
 use crate::util::{b64_encode, b64url_encode, constant_eq, escape_xml, now, random_bytes, random_code};
 use crate::webauthn::{self, Rp};
@@ -32,6 +32,9 @@ pub fn handle(app: &Arc<App>, req: &Request) -> Response {
     let seg = req.segments();
     let s: Vec<&str> = seg.iter().map(String::as_str).collect();
     let m = req.method.as_str();
+    if app.cfg.admin_bind.is_some() && !req.admin_port && matches!(s.as_slice(), ["admin" | "admin.js" | "admin.css"] | ["api", "admin", ..]) {
+        return Response::error(404, "Not found");
+    }
     match (m, s.as_slice()) {
         ("GET", []) => asset("text/html; charset=utf-8", TABLET_HTML),
         ("GET", ["tablet.js"]) => asset("text/javascript; charset=utf-8", TABLET_JS),
@@ -40,12 +43,16 @@ pub fn handle(app: &Arc<App>, req: &Request) -> Response {
         ("GET", ["admin.js"]) => asset("text/javascript; charset=utf-8", ADMIN_JS),
         ("GET", ["admin.css"]) => asset("text/css; charset=utf-8", ADMIN_CSS),
         ("GET", ["healthz"]) => Response::new(200, "text/plain", "ok"),
-        // Album art and the like, by a key the integration put in a capability. No sign-in:
-        // img tags can't send one, and only images an integration is showing can be fetched.
-        ("GET", ["api", "image", iid, key]) => match app.registry.image(iid, key) {
-            Ok((kind, bytes)) => Response::new(200, &kind, bytes).header("Cache-Control", "max-age=86400"),
-            Err(e) => Response::error(404, &e),
-        },
+        // Album art and map tiles. img tags can't send a token, so screens add `?t=`; admins have their cookie.
+        ("GET", ["api", "image", iid, key]) => {
+            if !app.can_fetch_image(req) {
+                return Response::error(401, "Not paired");
+            }
+            match app.registry.image(iid, key) {
+                Ok((kind, bytes)) => Response::new(200, &kind, bytes).header("Cache-Control", "private, max-age=86400").header("Content-Security-Policy", "default-src 'none'; sandbox"),
+                Err(e) => Response::error(404, &e),
+            }
+        }
         (_, ["api", "admin", rest @ ..]) => admin(app, req, m, rest).unwrap_or_else(|e| e),
         (_, ["api", rest @ ..]) => tablet(app, req, m, rest).unwrap_or_else(|e| e),
         _ => Response::error(404, "Not found"),
@@ -70,6 +77,10 @@ fn qr_svg(text: &str) -> String {
 }
 
 fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response, Response> {
+    // The admin port offers admins a preview of a screen, and nothing a tablet uses.
+    if req.admin_port && matches!(s, ["pair", ..] | ["events"]) {
+        return Err(Response::error(404, "Not found"));
+    }
     match (m, s) {
         ("POST", ["pair"]) => {
             let p = app.new_pairing().map_err(|e| Response::error(429, e))?;
@@ -91,7 +102,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
             if preview.is_some() && m != "GET" {
                 return Err(Response::error(403, "Preview is read only"));
             }
-            let device = preview.or_else(|| app.device_from(req)).ok_or_else(|| Response::error(401, "Not paired"))?;
+            let device = preview.or_else(|| app.device_from(req).filter(|_| !req.admin_port)).ok_or_else(|| Response::error(401, "Not paired"))?;
             match (m, s) {
                 ("GET", ["tablet"]) => {
                     let get = |id: &String| {
@@ -104,7 +115,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     let p = &device.panels;
                     let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
                     Ok(Response::ok(json!({
-                        "device": { "id": device.id, "name": device.name, "favRows": device.fav_rows.unwrap_or(1) },
+                        "device": { "id": device.id, "name": device.name, "favRows": device.fav_rows.unwrap_or(1), "imageToken": App::image_token(&device) },
                         "settings": app.store.lock().unwrap().data.settings,
                         "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
                         "more": device.more.iter().map(get).collect::<Vec<_>>(),
@@ -186,6 +197,14 @@ fn str_field<'a>(v: &'a Value, key: &str, max: usize) -> Result<&'a str, Respons
     Ok(s)
 }
 
+/// For what would hand over the house: secrets, new admins, removing someone's access.
+fn require_fresh(app: &App, req: &Request) -> Result<(), Response> {
+    if app.session_is_fresh(req) {
+        return Ok(());
+    }
+    Err(Response::json(403, &json!({ "error": "Confirm with your passkey first.", "reauth": true })))
+}
+
 fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response, Response> {
     if m != "GET" {
         // Belt and braces next to SameSite=Strict: refuse writes from any other origin.
@@ -210,14 +229,14 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             let body = req.json()?;
             let invite = body["invite"].as_str().map(str::to_string);
             let (admin_id, name, user_handle) = if let Some(a) = &current {
+                require_fresh(app, req)?;
                 (Some(a.id.clone()), a.name.clone(), a.user_handle.clone())
             } else if invite.as_deref().is_some_and(|c| app.invite_valid(c, false)) {
                 (None, str_field(&body, "name", 64)?.to_string(), b64url_encode(&random_bytes::<16>()))
             } else if invite.is_some() {
                 return Err(Response::error(410, "This invitation has expired or was already used. Ask for a new one."));
             } else if needs_setup {
-                let code = app.setup_code.lock().unwrap().clone().unwrap_or_default();
-                if !constant_eq(&code, &body["setupCode"].as_str().unwrap_or("").trim().to_ascii_uppercase()) {
+                if !app.check_setup_code(&body["setupCode"].as_str().unwrap_or("").trim().to_ascii_uppercase()) {
                     return Err(Response::error(403, "Wrong setup code. It is printed in the server log at startup."));
                 }
                 (None, str_field(&body, "name", 64)?.to_string(), b64url_encode(&random_bytes::<16>()))
@@ -288,6 +307,8 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             cred.last_used = now();
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
+            // A confirmation replaces the session it confirms instead of piling up another.
+            let _ = app.end_session(req);
             let cookie = app.new_session(&admin_id).map_err(|e| Response::error(500, e))?;
             return Ok(Response::ok(json!({ "ok": true })).header("Set-Cookie", &cookie));
         }
@@ -396,6 +417,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.notify_device(id, "revoked");
+            app.drop_revoked_clients();
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["people"]) => {
@@ -411,6 +433,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             Ok(Response::ok(json!({ "people": people, "invites": invites })))
         }
         ("POST", ["invites"]) => {
+            require_fresh(app, req)?;
             let code = random_code(10);
             let expires = now() + 24 * 3600;
             let mut invites = app.invites.lock().unwrap();
@@ -427,16 +450,22 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("DELETE", ["passkeys", cred_id]) => {
+            require_fresh(app, req)?;
             let mut store = app.store.lock().unwrap();
             let a = store.data.admins.iter_mut().find(|a| a.credentials.iter().any(|c| c.id == *cred_id)).ok_or_else(|| Response::error(404, "No such passkey"))?;
             if a.credentials.len() == 1 {
                 return Err(Response::error(409, &format!("That is {}'s only passkey. Remove the person instead.", a.name)));
             }
             a.credentials.retain(|c| c.id != *cred_id);
+            // A lost phone may still be signed in: end that person's other sessions.
+            let owner = a.id.clone();
+            let mine = req.cookie("oldpad_admin").map(|t| crate::util::sha256_hex(&t));
+            store.data.sessions.retain(|s| s.admin_id != owner || mine.as_ref() == Some(&s.hash));
             store.save().map_err(|e| Response::error(500, e))?;
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("DELETE", ["people", id]) => {
+            require_fresh(app, req)?;
             let mut store = app.store.lock().unwrap();
             if !store.data.admins.iter().any(|a| a.id == *id) {
                 return Err(Response::error(404, "No such person"));
@@ -473,6 +502,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["backup"]) => {
+            require_fresh(app, req)?;
             let store = app.store.lock().unwrap();
             let d = &store.data;
             // Everything but sign-in sessions. It holds integration secrets: the admin is told so.
@@ -480,6 +510,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             Ok(Response::ok(backup).header("Content-Disposition", "attachment; filename=\"oldpad-backup.json\""))
         }
         ("POST", ["restore"]) => {
+            require_fresh(app, req)?;
             // shortcut: request bodies are capped at 64 KB; raise http::MAX_BODY if a household outgrows it.
             let b = req.json()?;
             if b["oldpad"] != 1 {
@@ -511,6 +542,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             }
             app.start_integrations();
             app.notify_all("refresh");
+            app.drop_revoked_clients();
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["kinds"]) => Ok(Response::ok(json!(app
@@ -531,7 +563,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         }
         ("POST", ["integrations", "test"]) => {
             let body = req.json()?;
-            let (kind, config) = integration_input(app, &body, None)?;
+            let (kind, config) = integration_input(app, req, &body, None)?;
             Ok(Response::ok(match (kind.test)(&config) {
                 Ok(msg) => json!({ "ok": true, "message": msg }),
                 Err(e) => json!({ "ok": false, "message": e }),
@@ -553,7 +585,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             if path_id.is_some_and(|id| !app.store.lock().unwrap().data.integrations.iter().any(|i| i.id == id)) {
                 return Err(Response::error(404, "No such integration"));
             }
-            let (kind, config) = integration_input(app, &body, path_id)?;
+            let (kind, config) = integration_input(app, req, &body, path_id)?;
             let name = str_field(&body, "name", 64)?.to_string();
             let mut store = app.store.lock().unwrap();
             let id = match s {
@@ -596,11 +628,19 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
 
 /// Resolves {type | id, config} into a validated config, reusing stored
 /// secrets when an existing integration is edited.
-fn integration_input<'a>(app: &'a App, body: &Value, id: Option<&str>) -> Result<(&'a crate::integrations::Kind, serde_json::Map<String, Value>), Response> {
+fn integration_input<'a>(app: &'a App, req: &Request, body: &Value, id: Option<&str>) -> Result<(&'a crate::integrations::Kind, serde_json::Map<String, Value>), Response> {
     let existing = id.or(body["id"].as_str()).and_then(|id| app.store.lock().unwrap().data.integrations.iter().find(|i| i.id == id).cloned());
     let kind_id = existing.as_ref().map(|i| i.kind.clone()).or_else(|| body["type"].as_str().map(str::to_string)).unwrap_or_default();
     let kind = app.registry.kind(&kind_id).ok_or_else(|| Response::error(400, "Unknown integration type"))?;
     let input = body["config"].as_object().cloned().unwrap_or_default();
     let config = validate(kind, &input, existing.as_ref().map(|i| &i.config)).map_err(|e| Response::error(400, &e))?;
+    // Pointing a stored key at a new address would send the key there.
+    if let Some(old) = &existing {
+        let keeps_secret = kind.fields.iter().any(|f| f.kind == FieldKind::Secret && config.get(f.key).is_some() && config.get(f.key) == old.config.get(f.key));
+        let moved = kind.fields.iter().any(|f| f.kind == FieldKind::Url && config.get(f.key) != old.config.get(f.key));
+        if keeps_secret && moved {
+            require_fresh(app, req)?;
+        }
+    }
     Ok((kind, config))
 }

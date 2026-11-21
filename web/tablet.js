@@ -241,7 +241,7 @@
         }
       }
       var i, k;
-      layout = { tiles: [], more: [], panels: {}, pages: [], name: data.device ? data.device.name : '', favRows: data.device ? data.device.favRows : 1 };
+      layout = { tiles: [], more: [], panels: {}, pages: [], name: data.device ? data.device.name : '', favRows: data.device ? data.device.favRows : 1, imageToken: data.device ? data.device.imageToken : '' };
       for (i = 0; i < data.tiles.length; i++) { layout.tiles.push(keep(data.tiles[i])); }
       for (i = 0; i < data.more.length; i++) { layout.more.push(keep(data.more[i])); }
       for (k in data.panels) { if (data.panels.hasOwnProperty(k)) { layout.panels[k] = keep(data.panels[k]); } }
@@ -414,7 +414,8 @@
   function tomorrow(s) { return dayStats(s, 1); }
 
   // An image the integration serves through oldpad, by its key.
-  function imgSrc(e, key) { return '/api/image/' + esc(e.id.slice(0, e.id.indexOf(':'))) + '/' + esc(key); }
+  function imgSrc(e, key) { return '/api/image/' + esc(e.id.slice(0, e.id.indexOf(':'))) + '/' + esc(key) + imgAuth(); }
+  function imgAuth() { return layout.imageToken ? '?t=' + esc(layout.imageToken) : ''; }
 
   // The favourites in the admin's order; the front page shows only those marked for it.
   function favsHtml(lead, title, max, frontOnly) {
@@ -876,7 +877,7 @@
     var iid = e.id.slice(0, e.id.indexOf(':')), html = '', tx, ty, s, p, dir, moving, kind, c;
     for (ty = Math.floor(top / 256); ty <= Math.floor((top + h) / 256); ty++) {
       for (tx = Math.floor(left / 256); tx <= Math.floor((left + w) / 256); tx++) {
-        html += '<img class="tile-img" alt="" src="/api/image/' + esc(iid) + '/' + layer + '-' + z + '-' + ty + '-' + tx + '" data-l="' + Math.round(tx * 256 - left) + 'px" data-t="' + Math.round(ty * 256 - top) + 'px">';
+        html += '<img class="tile-img" alt="" src="/api/image/' + esc(iid) + '/' + layer + '-' + z + '-' + ty + '-' + tx + imgAuth() + '" data-l="' + Math.round(tx * 256 - left) + 'px" data-t="' + Math.round(ty * 256 - top) + 'px">';
       }
     }
     c = merc(home[0], home[1], z);

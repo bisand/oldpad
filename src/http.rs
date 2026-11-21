@@ -6,9 +6,30 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
 pub const MAX_HEAD: usize = 16 * 1024;
 pub const MAX_BODY: usize = 64 * 1024;
+/// A whole request must arrive within this, however slowly it trickles in.
+const REQUEST_DEADLINE: Duration = Duration::from_secs(10);
+
+/// Reads from the socket until a fixed moment, not per read.
+struct Deadline<'a> {
+    stream: &'a TcpStream,
+    until: Instant,
+}
+
+impl Read for Deadline<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        self.stream.set_read_timeout(Some(left))?;
+        let mut stream = self.stream;
+        stream.read(buf)
+    }
+}
 
 #[derive(Debug)]
 pub struct Request {
@@ -18,6 +39,8 @@ pub struct Request {
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
     pub peer: String,
+    /// Arrived on the internet-facing admin port (`OLDPAD_ADMIN_BIND`).
+    pub admin_port: bool,
 }
 
 impl Request {
@@ -146,7 +169,7 @@ pub fn parse_query(q: &str) -> HashMap<String, String> {
 
 /// Reads one request. Errors come back as the response to send.
 pub fn read_request(stream: &TcpStream, peer: String) -> Result<Request, Response> {
-    let mut reader = BufReader::new(stream.take((MAX_HEAD + MAX_BODY) as u64));
+    let mut reader = BufReader::new(Deadline { stream, until: Instant::now() + REQUEST_DEADLINE }.take((MAX_HEAD + MAX_BODY) as u64));
     let mut head_len = 0;
     let mut lines = Vec::new();
     loop {
@@ -202,6 +225,7 @@ pub fn read_request(stream: &TcpStream, peer: String) -> Result<Request, Respons
         headers,
         body,
         peer,
+        admin_port: false,
     })
 }
 

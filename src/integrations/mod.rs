@@ -212,6 +212,18 @@ pub fn get_str<'a>(config: &'a Map<String, Value>, key: &str) -> &'a str {
     config.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
+fn picture_type(kind: &str) -> Option<&'static str> {
+    match kind.split(';').next().unwrap_or("").trim().to_ascii_lowercase().as_str() {
+        // Home Assistant says image/jpg.
+        "image/jpeg" | "image/jpg" => Some("image/jpeg"),
+        "image/png" => Some("image/png"),
+        "image/gif" => Some("image/gif"),
+        "image/webp" => Some("image/webp"),
+        "image/x-icon" | "image/vnd.microsoft.icon" => Some("image/x-icon"),
+        _ => None,
+    }
+}
+
 struct Running {
     instance: Option<Arc<dyn Instance>>,
     status: String,
@@ -342,8 +354,11 @@ impl Registry {
         inst.set(eid, capability, value)
     }
 
+    /// Raster types only: an SVG served from our origin could run script.
     pub fn image(&self, id: &str, key: &str) -> Result<(String, Vec<u8>), String> {
-        self.instance(id).ok_or("integration is not running")?.image(key)
+        let (kind, bytes) = self.instance(id).ok_or("integration is not running")?.image(key)?;
+        let kind = picture_type(&kind).ok_or("not a picture")?;
+        Ok((kind.to_string(), bytes))
     }
 
     /// A camera's picture. Only plain image types: it ends up in a `data:` URL on the tablet.
@@ -354,14 +369,7 @@ impl Registry {
             return Err("not a camera".into());
         }
         let (kind, bytes) = inst.snapshot(eid)?;
-        let kind = match kind.split(';').next().unwrap_or("").trim().to_ascii_lowercase().as_str() {
-            // Home Assistant says image/jpg.
-            "image/jpeg" | "image/jpg" => "image/jpeg",
-            "image/png" => "image/png",
-            "image/gif" => "image/gif",
-            _ => return Err("the camera did not send a picture".into()),
-        }
-        .to_string();
+        let kind = picture_type(&kind).ok_or("the camera did not send a picture")?.to_string();
         if bytes.is_empty() || bytes.len() > MAX_SNAPSHOT {
             return Err("the camera's picture is empty or too large".into());
         }
@@ -404,6 +412,13 @@ mod tests {
 
     fn map(v: Value) -> Map<String, Value> {
         v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn only_raster_pictures_are_served() {
+        assert_eq!(picture_type("IMAGE/JPG; x=1"), Some("image/jpeg"));
+        assert_eq!(picture_type("image/svg+xml"), None);
+        assert_eq!(picture_type("text/html"), None);
     }
 
     #[test]

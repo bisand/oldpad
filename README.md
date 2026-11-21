@@ -44,7 +44,8 @@ on your phone, enter the code and create your passkey. Then open
 | Variable | Default | |
 | --- | --- | --- |
 | `OLDPAD_PUBLIC_URL` | `http://localhost:8080` | The address your phone uses. Must be `https://` (passkeys require it) unless it is `localhost`. Put a TLS-terminating proxy in front. |
-| `OLDPAD_BIND` | `0.0.0.0:8080` | Where to listen. Tablets connect here over plain HTTP. |
+| `OLDPAD_BIND` | `0.0.0.0:8080` | Where to listen. Tablets connect here over plain HTTP. Never expose this port. |
+| `OLDPAD_ADMIN_BIND` | unset | A separate port for the admin page, e.g. `127.0.0.1:8081`. Required before exposing oldpad to the internet. |
 | `OLDPAD_DATA_DIR` | `data` | One JSON file with admins, screens and integrations. Keep it private. |
 | `OLDPAD_DEVICE_TTL_DAYS` | `90` | A screen unused this long must pair again. |
 | `OLDPAD_ADMIN_TTL_DAYS` | `30` | Phone sign-in lifetime. |
@@ -54,6 +55,19 @@ on your phone, enter the code and create your passkey. Then open
 **On the iPad:** open the page in Safari, *Share → Add to Home Screen*, start
 it from there (full screen), and lock it with *Settings → General →
 Accessibility → Guided Access*.
+
+## Exposing it to the internet
+
+Expose **only the admin port**, behind an HTTPS proxy or tunnel:
+
+```bash
+OLDPAD_PUBLIC_URL=https://dash.example.com OLDPAD_BIND=192.168.1.10:8080 OLDPAD_ADMIN_BIND=127.0.0.1:8081 ./target/release/oldpad
+```
+
+- Send `https://dash.example.com` to `127.0.0.1:8081`, set HSTS and rate limits at the proxy.
+- Keep the tablet port on the LAN, ideally on its own VLAN. Tablets use plain HTTP, and pairing only works there.
+- The admin port serves no tablet API, and the tablet port serves no admin page.
+- Backups, new admins, removing access and moving a stored key to a new address ask for a fresh passkey check.
 
 ## Why it is built this way
 

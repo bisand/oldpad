@@ -28,8 +28,31 @@ async function api(method, path, body) {
     credentials: 'same-origin',
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 403 && data.reauth) {
+    await confirmPasskey();
+    return api(method, path, body);
+  }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
+}
+
+// Backups, new admins and the like need a recent passkey. A button, because
+// Safari only opens the passkey sheet from a tap.
+function confirmPasskey() {
+  return new Promise((resolve, reject) => {
+    const out = h('div');
+    const close = () => box.remove();
+    const go = h('button', { class: 'primary', onclick: async () => {
+      go.disabled = true;
+      try { await signIn(); close(); resolve(); } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
+    } }, 'Confirm with passkey');
+    const cancel = h('button', { onclick: () => { close(); reject(new Error('Cancelled.')); } }, 'Cancel');
+    const box = h('div', { class: 'reauth', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Confirm it is you' },
+      h('div', { class: 'reauth-card' }, h('h2', {}, 'Confirm it is you'),
+        h('p', {}, 'This action needs a fresh passkey check.'), h('div', { class: 'actions' }, go, cancel), out));
+    document.body.append(box);
+    go.focus();
+  });
 }
 
 function ago(ts) {
@@ -303,7 +326,12 @@ async function settingsView() {
     h('p', { class: 'muted' }, 'Screens, their layouts, integrations, people and settings in one file. It includes integration secrets such as the Homey key and the Spotify sign-in, so keep it somewhere private.'),
     h('div', { class: 'actions' },
       h('button', { onclick: async () => {
-        const res = await fetch('/api/admin/backup', { credentials: 'same-origin' });
+        const get = () => fetch('/api/admin/backup', { credentials: 'same-origin' });
+        let res = await get();
+        if (res.status === 403) {
+          try { await confirmPasskey(); } catch (e) { out.replaceChildren(errorBox(e)); return; }
+          res = await get();
+        }
         if (!res.ok) { out.replaceChildren(errorBox(new Error(`HTTP ${res.status}`))); return; }
         const a = h('a', { href: URL.createObjectURL(await res.blob()), download: `oldpad-backup-${new Date().toISOString().slice(0, 10)}.json` });
         document.body.append(a); a.click(); a.remove();

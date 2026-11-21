@@ -48,7 +48,7 @@ fn phone_and_tablet_end_to_end() {
     let base = format!("http://{}", listener.local_addr().unwrap());
     let setup_code = app.setup_code.lock().unwrap().clone().unwrap();
     let server = app.clone();
-    std::thread::spawn(move || crate::serve(server, listener));
+    std::thread::spawn(move || crate::serve(server, listener, false));
 
     let rp = Rp { id: "localhost", origin: "http://localhost:8080" };
     let key = SigningKey::from_slice(&[3u8; 32]).unwrap();
@@ -174,7 +174,9 @@ fn phone_and_tablet_end_to_end() {
     assert!(shot["data"].as_str().unwrap().starts_with("iVBOR"));
     let mut stranger = Client { base: base.clone(), cookie: None, bearer: None };
     assert_eq!(stranger.call("GET", &camera, None).0, 401, "no sign-in, no picture");
-    assert_eq!(stranger.call("GET", &format!("/api/image/{iid}/door"), None).0, 404, "not on the open image route");
+    assert_eq!(stranger.call("GET", &format!("/api/image/{iid}/door"), None).0, 401, "images need a paired screen");
+    let image_token = tablet.call("GET", "/api/tablet", None).1["device"]["imageToken"].as_str().unwrap().to_string();
+    assert_eq!(stranger.call("GET", &format!("/api/image/{iid}/door?t={image_token}"), None).0, 404, "a camera is not on the image route");
     assert_eq!(tablet.call("GET", &format!("/api/tablet/camera?id={iid}:lamp"), None).0, 502, "on this screen, but a lamp has no picture");
     assert_eq!(phone.call("PUT", &dev, Some(json!({ "more": [plug, speaker, kitchen] }))).0, 200);
 

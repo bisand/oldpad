@@ -6,30 +6,45 @@ on:
   push:
     branches: [main]
   pull_request:
+# Tests and builds run project and dependency code, so they get no publishing rights.
 permissions:
   contents: read
-  packages: write
 jobs:
-  build:
+  test:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
       - name: Test
         run: cargo test --locked
+  publish:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
       - name: Build and push
-        if: github.event_name == 'push'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          image=ghcr.io/${{ github.repository }}
+          image=ghcr.io/$(echo "$REPOSITORY" | tr '[:upper:]' '[:lower:]')
           sha=$(git rev-parse --short HEAD)
-          echo "$TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           # shortcut: amd64 only (the homelab cluster); add arm64 for Raspberry Pi users.
           docker build \
-            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.source="https://github.com/$REPOSITORY" \
             --label org.opencontainers.image.licenses=MIT \
             --build-arg OLDPAD_COMMIT="$sha" \
             -t "$image:sha-$sha" -t "$image:main" .
+          # Log in only after the build, so nothing in it can reach the credentials.
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
           docker push "$image:sha-$sha"
           docker push "$image:main"
           docker inspect --format '{{index .RepoDigests 0}}' "$image:sha-$sha" >> "$GITHUB_STEP_SUMMARY"
