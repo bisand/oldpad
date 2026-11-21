@@ -1,6 +1,7 @@
 //! Weather forecast from MET Norway (api.met.no), free and worldwide.
 //! One entity, `forecast`: the current conditions plus an hourly series the
-//! tablet turns into its forecast strip in its own time zone.
+//! tablet turns into its forecast strip in its own time zone, and MET's official
+//! weather warnings (MetAlerts) for that place.
 
 use super::{Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
 use crate::client::request;
@@ -78,10 +79,54 @@ fn fetch(lat: f64, lon: f64) -> Result<Entity, String> {
     Ok(Entity { id: "forecast".into(), name: "Forecast".into(), zone: "Weather".into(), class: "weather".into(), capabilities: caps })
 }
 
+/// Real warnings for this place, most serious first:
+/// `{id, level (2 yellow, 3 orange, 4 red), name, area, from, until, text, advice}`, times in epoch seconds.
+fn parse_alerts(v: &Value) -> Vec<Value> {
+    let features = v["features"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut out: Vec<(i64, i64, Value)> = features
+        .iter()
+        .filter(|f| f["properties"]["status"] == "Actual" && f["properties"]["type"] != "Cancel")
+        .filter_map(|f| {
+            let p = &f["properties"];
+            // An unreadable level still warns: better yellow than nothing.
+            let level = p["awareness_level"].as_str().and_then(|s| s.split(';').next()?.trim().parse::<i64>().ok()).unwrap_or(2);
+            if level < 2 {
+                return None;
+            }
+            let level = level.min(4);
+            let time = |t: &Value| t.as_str().and_then(super::spot::parse_time);
+            let from = time(&f["when"]["interval"][0]);
+            let until = time(&f["when"]["interval"][1]).or_else(|| time(&p["eventEndingTime"]));
+            let name = p["eventAwarenessName"].as_str().or(p["event"].as_str()).unwrap_or("");
+            let alert = json!({ "id": p["id"], "level": level, "name": name, "area": p["area"], "from": from, "until": until, "text": p["description"], "advice": p["instruction"] });
+            Some((level, from.unwrap_or(0), alert))
+        })
+        .collect();
+    out.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    out.into_iter().take(10).map(|x| x.2).collect()
+}
+
+fn fetch_alerts(lat: f64, lon: f64) -> Result<Value, String> {
+    let path = format!("/weatherapi/metalerts/2.0/current.json?lat={lat:.4}&lon={lon:.4}");
+    let res = request("https://api.met.no", "GET", &path, &[], None)?;
+    if res.status != 200 {
+        return Err(format!("api.met.no answered HTTP {} for warnings", res.status));
+    }
+    let v = res.json()?;
+    if !v["features"].is_array() {
+        return Err("unexpected warnings format".into());
+    }
+    Ok(json!(parse_alerts(&v)))
+}
+
 fn test(config: &Map<String, Value>) -> Result<String, String> {
     let (lat, lon) = coords(config)?;
     let e = fetch(lat, lon)?;
-    Ok(format!("Got the forecast: {}°C now, {}.", e.capabilities["measure_temperature"].value, e.capabilities["weather_symbol"].value.as_str().unwrap_or("?")))
+    let warnings = match fetch_alerts(lat, lon) {
+        Ok(a) => format!("{} weather warnings here.", a.as_array().map_or(0, Vec::len)),
+        Err(e) => format!("Weather warnings are unavailable: {e}."),
+    };
+    Ok(format!("Got the forecast: {}°C now, {}. {warnings}", e.capabilities["measure_temperature"].value, e.capabilities["weather_symbol"].value.as_str().unwrap_or("?")))
 }
 
 struct Met {
@@ -91,18 +136,45 @@ struct Met {
 
 fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
     let (lat, lon) = coords(config)?;
-    let entity = Arc::new(Mutex::new(fetch(lat, lon)?));
+    let mut first = fetch(lat, lon)?;
+    // Warnings are extra: without them the forecast still works.
+    let alerts = fetch_alerts(lat, lon).unwrap_or_else(|e| {
+        eprintln!("met: {e}");
+        json!([])
+    });
+    first.capabilities.insert("alerts".into(), Capability::new(alerts, false));
+    let entity = Arc::new(Mutex::new(first));
     let stopped = Arc::new(AtomicBool::new(false));
     let (ent, stop) = (entity.clone(), stopped.clone());
     std::thread::spawn(move || {
+        let mut round = 0u32;
         while !stop.load(Ordering::Relaxed) {
-            // MET updates hourly at most; 20 minutes keeps us well inside their limits.
-            std::thread::sleep(Duration::from_secs(20 * 60));
-            match fetch(lat, lon) {
-                Ok(fresh) => {
-                    *ent.lock().unwrap() = fresh.clone();
-                    for (capability, c) in fresh.capabilities {
-                        sink(Event::Changed { entity: "forecast".into(), capability, value: c.value });
+            // Warnings every 5 minutes. The forecast updates hourly at most, so every 20 is plenty.
+            std::thread::sleep(Duration::from_secs(5 * 60));
+            round += 1;
+            if round.is_multiple_of(4) {
+                match fetch(lat, lon) {
+                    Ok(mut fresh) => {
+                        let mut current = ent.lock().unwrap();
+                        fresh.capabilities.insert("alerts".into(), current.capabilities["alerts"].clone());
+                        *current = fresh.clone();
+                        drop(current);
+                        for (capability, c) in fresh.capabilities {
+                            sink(Event::Changed { entity: "forecast".into(), capability, value: c.value });
+                        }
+                    }
+                    Err(e) => eprintln!("met: {e}"),
+                }
+            }
+            // A failed check keeps the warnings we have: an outage must not look like all clear.
+            match fetch_alerts(lat, lon) {
+                Ok(alerts) => {
+                    let mut current = ent.lock().unwrap();
+                    let c = current.capabilities.get_mut("alerts").expect("set at start");
+                    if c.value != alerts {
+                        c.value = alerts.clone();
+                        drop(current);
+                        sink(Event::Changed { entity: "forecast".into(), capability: "alerts".into(), value: alerts });
                     }
                 }
                 Err(e) => eprintln!("met: {e}"),
@@ -134,6 +206,38 @@ mod tests {
         assert_eq!(parse_time("2026-11-20T10:00:00Z"), Some(1_795_168_800));
         assert_eq!(parse_time("2024-02-29T12:30:15Z"), Some(1_709_209_815));
         assert_eq!(parse_time("2026-11-20T10:00:00+01:00"), None);
+    }
+
+    #[test]
+    fn reads_warnings() {
+        let alert = |id: &str, level: &str, status: &str, kind: &str| json!({
+            "when": {"interval": ["2026-11-21T23:00:00+00:00", "2026-11-22T17:00:00+00:00"]},
+            "properties": {"id": id, "awareness_level": level, "status": status, "type": kind, "eventAwarenessName": "Kuling", "event": "gale",
+                "area": "Slettnes fyr - Vardø", "description": "Stiv kuling.", "instruction": "La båten ligge."}
+        });
+        let list = parse_alerts(&json!({"features": [
+            alert("yellow", "2; yellow; Moderate", "Actual", "Alert"),
+            alert("red", "4; red; Extreme", "Actual", "Update"),
+            alert("orange", "3; orange; Severe", "Actual", "Alert"),
+            alert("green", "1; green; Minor", "Actual", "Alert"),
+            alert("drill", "4; red; Extreme", "Exercise", "Alert"),
+            alert("test", "4; red; Extreme", "Test", "Alert"),
+            alert("over", "3; orange; Severe", "Actual", "Cancel"),
+            alert("odd", "?", "Actual", "Alert"),
+        ]}));
+        let ids: Vec<&str> = list.iter().map(|a| a["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["red", "orange", "yellow", "odd"], "most serious first, no drills or cancelled ones");
+        assert_eq!(list[3]["level"], 2, "an unreadable level still warns");
+        let a = &list[1];
+        assert_eq!((a["name"].as_str(), a["area"].as_str(), a["advice"].as_str()), (Some("Kuling"), Some("Slettnes fyr - Vardø"), Some("La båten ligge.")));
+        assert_eq!(a["until"].as_i64().unwrap() - a["from"].as_i64().unwrap(), 18 * 3600);
+    }
+
+    #[test]
+    #[ignore] // network: MET_LAT=70.4 MET_LON=31.1 cargo test alerts_live -- --ignored --nocapture
+    fn alerts_live() {
+        let at = |k: &str, d: f64| std::env::var(k).ok().and_then(|s| s.parse().ok()).unwrap_or(d);
+        println!("{}", fetch_alerts(at("MET_LAT", 59.91), at("MET_LON", 10.75)).unwrap());
     }
 
     #[test]

@@ -349,6 +349,23 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 .sheet.wide .card { margin: 30px 0 0; padding: 0 4px; border: 0; background: none; }
 @media (max-width: 900px) { .sheet.wide { width: auto; margin-left: 0; } }
 
+/* ---------- weather warnings ---------- */
+.alert-bar { position: relative; margin-bottom: 12px; padding: 11px 14px 11px 46px; border-radius: 12px; border-left: 6px solid #f2c94c; background: #2b2717; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alert-bar .ic { position: absolute; left: 12px; top: 10px; width: 24px; height: 24px; }
+.alert-bar b { font-size: 17px; margin-right: 6px; }
+.alert-bar em { position: absolute; right: 0; top: 0; bottom: 0; padding: 12px 14px 0 18px; font-style: normal; font-weight: 600; background: #2b2717; }
+.alert-bar.l3 { border-color: #f2994a; background: #33241a; } .alert-bar.l3 em { background: #33241a; }
+.alert-bar.l4 { border-color: #eb5757; background: #3a1d1e; } .alert-bar.l4 em { background: #3a1d1e; }
+.day .alert-bar { background: #fff6d6; color: #1c1d21; } .day .alert-bar em { background: #fff6d6; }
+.day .alert-bar.l3 { background: #ffe8d6; } .day .alert-bar.l3 em { background: #ffe8d6; }
+.day .alert-bar.l4 { background: #ffdfdf; } .day .alert-bar.l4 em { background: #ffdfdf; }
+.alert { margin-top: 14px; padding-left: 14px; border-left: 5px solid #f2c94c; }
+.alert.l3 { border-color: #f2994a; } .alert.l4 { border-color: #eb5757; }
+.alert-h { font-size: 20px; font-weight: 600; }
+.alert-h .ic { width: 20px; height: 20px; vertical-align: -3px; }
+.alert p { margin: 6px 0 0; font-size: 16px; line-height: 1.35; }
+.alerts > .sub { margin-top: 16px; font-size: 12px; }
+
 /* ---------- calendar ---------- */
 .cal-day { margin-top: 14px; padding-bottom: 4px; font-size: 14px; font-weight: 600; color: #8b8f98; }
 .day .cal-day { color: #6f747d; }

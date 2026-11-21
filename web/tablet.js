@@ -24,14 +24,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -90,6 +90,7 @@
     clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
     dots: 'M5 12h.01M12 12h.01M19 12h.01',
     boat: 'M3 16h18l-2.5 4h-13zM12 3v11M12 4l6 9h-6',
+    alert: 'M12 4 2.5 20h19zM12 10v5M12 17.5v.01',
     calendar: 'M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4',
     cog: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.7 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.7 1-.5 2.4h-3.4l-.5-2.4-1.7-1-2.3.8-1.7-2.9 1.8-1.6v-2L4.1 8.5l1.7-2.9 2.3.8 1.7-1z'
   };
@@ -576,6 +577,9 @@
 
   function sheetHtml() {
     var e = sheet && entities[sheet], list = controls(e), html = '', i;
+    if (sheet === 'alerts') {
+      return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + alertsCard() + '</div></div>';
+    }
     if (e && (e['class'] === 'price' || e['class'] === 'departures' || e['class'] === 'calendar')) {
       return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + (e['class'] === 'price' ? priceCard(e) : e['class'] === 'calendar' ? calendarCard([e]) : departuresCard(e)) + '</div></div>';
     }
@@ -652,6 +656,45 @@
         '<span class="ct">' + esc(ev.x.t || T.busy) + (ev.x.place ? '<span class="sub">' + esc(ev.x.place) + '</span>' : '') + '</span></div>';
     }
     return '<div class="card calendar">' + html + (evs.length ? '' : '<p class="muted">' + T.noEvents + '</p>') + '</div>';
+  }
+
+  // ------------------------------------------------------------- weather warnings
+
+  // Warnings not yet over; `on` once they are in force.
+  function activeAlerts() {
+    var all = val(panel('weather'), 'alerts') || [], now = new Date().getTime() / 1000, out = [], i, a;
+    for (i = 0; i < all.length; i++) {
+      a = all[i];
+      if (!a.until || a.until > now) { out.push({ a: a, on: !a.from || a.from <= now }); }
+    }
+    return out;
+  }
+  function alertTime(sec) {
+    var d = new Date(sec * 1000), day = dayOf(d), name = calDayName(day);
+    // "til i morgen", while a weekday keeps its capital in English.
+    if (NB || day <= dayOf(new Date()) + 86400) { name = name.charAt(0).toLowerCase() + name.slice(1); }
+    return name + ' ' + hm(sec);
+  }
+  function alertWhen(w) {
+    if (!w.on) { return T.fromT + ' ' + alertTime(w.a.from); }
+    return w.a.until ? T.untilT + ' ' + alertTime(w.a.until) : '';
+  }
+  function alertBanner() {
+    var list = activeAlerts(), w = list[0];
+    if (!w || page === 'settings') { return ''; }
+    return '<div class="alert-bar l' + esc(w.a.level) + '" data-act="alerts">' + icon('alert') + '<b>' + esc(w.a.name) + '</b> ' +
+      '<span>' + esc(T.levels[w.a.level]) + ' · ' + esc(alertWhen(w)) + ' · ' + esc(w.a.area) + '</span>' +
+      (list.length > 1 ? '<em>+' + (list.length - 1) + ' ' + T.more + '</em>' : '') + '</div>';
+  }
+  function alertsCard() {
+    var list = activeAlerts(), html = '', i, w;
+    for (i = 0; i < list.length; i++) {
+      w = list[i];
+      html += '<div class="alert l' + esc(w.a.level) + '"><div class="alert-h">' + icon('alert') + ' ' + esc(w.a.name) + '</div>' +
+        '<div class="sub">' + esc(T.levels[w.a.level]) + ' · ' + esc(alertWhen(w)) + ' · ' + esc(w.a.area) + '</div>' +
+        (w.a.text ? '<p>' + esc(w.a.text) + '</p>' : '') + (w.a.advice ? '<p class="muted">' + esc(w.a.advice) + '</p>' : '') + '</div>';
+    }
+    return '<div class="card alerts"><div class="sheet-h">' + T.warnings + '</div>' + (html || '<p class="muted">' + T.noWarnings + '</p>') + '<p class="sub">' + T.source + '</p></div>';
   }
 
   // ------------------------------------------------------------- electricity price
@@ -983,7 +1026,7 @@
     }
     rail += '<a data-act="page" data-page="settings" class="cog' + (page === 'settings' ? ' on' : '') + '">' + icon('cog') + '</a>';
     $('rail').innerHTML = rail;
-    $('page').innerHTML = pageHtml() + sheetHtml();
+    $('page').innerHTML = alertBanner() + pageHtml() + sheetHtml();
     place($('page'));
     tick();
   }
@@ -1015,6 +1058,9 @@
     if (act === 'page') {
       page = el.getAttribute('data-page');
       sheet = null;
+      render();
+    } else if (act === 'alerts') {
+      sheet = 'alerts';
       render();
     } else if (act === 'more') {
       sheet = id;
@@ -1188,12 +1234,12 @@
   setInterval(tick, 10000);
   // The forecast strip moves with the clock; redraw it hourly.
   setInterval(render, 3600 * 1000);
-  // Finished events and a new day leave the agenda without the server saying anything.
+  // Finished events, a new day and warnings starting or ending change the page without the server saying anything.
   var calShown = '';
   setInterval(function () {
     var list = [], k, now;
     for (k in entities) { if (entities.hasOwnProperty(k) && entities[k]['class'] === 'calendar') { list.push(entities[k]); } }
-    now = JSON.stringify(calEvents(list)) + dayOf(new Date());
+    now = JSON.stringify(calEvents(list)) + JSON.stringify(activeAlerts()) + dayOf(new Date());
     if (now !== calShown) { if (calShown) { render(); } calShown = now; }
   }, 60000);
   // Long-running kiosks leak; a nightly reload also picks up new versions.
