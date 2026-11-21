@@ -13,7 +13,7 @@ pub fn kind() -> Kind {
     Kind {
         id: "homeassistant",
         name: "Home Assistant",
-        description: "Lights, switches, climate, sensors, media players, scenes and scripts from Home Assistant.",
+        description: "Lights, switches, climate, sensors, media players, cameras, scenes and scripts from Home Assistant.",
         fields: vec![
             Field {
                 key: "address",
@@ -191,6 +191,11 @@ fn map_state(s: &Value, zone: String) -> Option<Entity> {
             caps.insert("speaker_artist".to_string(), Capability::new(a["media_artist"].clone(), false));
             "speaker"
         }
+        // No attributes: `entity_picture` holds an access token for the camera.
+        "camera" => {
+            caps.insert("camera".to_string(), Capability::new(Value::Null, false));
+            "camera"
+        }
         "scene" | "script" => {
             caps.insert("button".to_string(), Capability::new(Value::Null, true));
             "button"
@@ -265,6 +270,19 @@ impl Instance for HomeAssistant {
         let (domain, service, mut data) = service_call(entity, capability, value)?;
         data["entity_id"] = json!(entity);
         self.api.call("POST", &format!("/api/services/{domain}/{service}"), Some(data)).map(drop)
+    }
+
+    fn snapshot(&self, entity: &str) -> Result<(String, Vec<u8>), String> {
+        if !entity.starts_with("camera.") || !entity.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') {
+            return Err("bad id".into());
+        }
+        let auth = format!("Bearer {}", self.api.token);
+        // Sized for a tablet; a full camera frame is too much for an old iPad.
+        let res = request(&self.api.base, "GET", &format!("/api/camera_proxy/{entity}?width=960"), &[("Authorization", &auth), ("Accept", "image/*")], None)?;
+        if res.status != 200 {
+            return Err(format!("Home Assistant answered HTTP {} for {entity}", res.status));
+        }
+        Ok((res.headers.get("content-type").cloned().unwrap_or_default(), res.body))
     }
 
     fn stop(&self) {
@@ -408,6 +426,9 @@ mod tests {
         let m = map_state(&json!({"entity_id": "media_player.s", "state": "playing", "attributes": {"volume_level": 0.5, "media_title": "Sang"}}), String::new()).unwrap();
         assert_eq!((m.class.as_str(), &m.capabilities["speaker_track"].value), ("speaker", &json!("Sang")));
         assert_eq!(map_state(&json!({"entity_id": "scene.natt", "state": "x", "attributes": {}}), String::new()).unwrap().class, "button");
+        let cam = map_state(&json!({"entity_id": "camera.door", "state": "idle", "attributes": {"access_token": "secret", "entity_picture": "/api/camera_proxy/camera.door?token=secret"}}), String::new()).unwrap();
+        assert_eq!(cam.class, "camera");
+        assert!(!serde_json::to_string(&cam).unwrap().contains("secret"), "the camera's token stays on the server");
         for dangerous in ["lock.door", "cover.garage", "alarm_control_panel.home"] {
             assert!(map_state(&json!({"entity_id": dangerous, "state": "locked", "attributes": {}}), String::new()).is_none());
         }
@@ -468,6 +489,10 @@ mod tests {
             }
         }
         inst.set(id, "onoff", &json!(was)).unwrap();
+        let camera = inst.entities().into_iter().find(|e| e.class == "camera").expect("a camera");
+        let (kind, bytes) = inst.snapshot(&camera.id).unwrap();
+        println!("{}: {kind}, {} bytes", camera.id, bytes.len());
+        assert!(kind.starts_with("image/") && !bytes.is_empty());
         inst.stop();
     }
 }

@@ -349,6 +349,19 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 .sheet.wide .card { margin: 30px 0 0; padding: 0 4px; border: 0; background: none; }
 @media (max-width: 900px) { .sheet.wide { width: auto; margin-left: 0; } }
 
+/* ---------- cameras ---------- */
+.cam { position: relative; min-height: 120px; margin-top: 6px; border-radius: 8px; overflow: hidden; background: #000; color: #8b8f98; }
+.cam img { display: block; width: 100%; }
+.cam-none { display: block; padding-top: 42px; text-align: center; }
+.cam-t { position: absolute; right: 6px; bottom: 6px; padding: 1px 6px; border-radius: 4px; font-size: 12px; background: rgba(0, 0, 0, .65); color: #fff; }
+.cam-t.old { background: #c62828; }
+.tile .cam { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 96px; min-height: 0; margin: 0; }
+.tile .cam-none { padding-top: 30px; }
+.tile .cam img { height: 100%; }
+.cams { font-size: 0; margin: 0 -6px; }
+.cams .cam-card { display: inline-block; vertical-align: top; width: 48.5%; margin: 0 6px 12px; font-size: 16px; }
+@media (max-width: 700px) { .cams .cam-card { width: 96%; } }
+
 /* ---------- weather warnings ---------- */
 .alert-bar { position: relative; margin-bottom: 12px; padding: 11px 14px 11px 46px; border-radius: 12px; border-left: 6px solid #f2c94c; background: #2b2717; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .alert-bar .ic { position: absolute; left: 12px; top: 10px; width: 24px; height: 24px; }

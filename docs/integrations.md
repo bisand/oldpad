@@ -39,6 +39,8 @@ trait Instance: Send + Sync {
 
 An instance may also implement `search(entity, query)`, returning `[{id, title, sub, kind}]` whose ids work with `play_favourite` and `add_favourite`. The tablet's music page shows a search box for it. Sonos searches the open radio-browser.info directory, and Spotify once connected.
 
+**Cameras.** Implement `snapshot(entity)`, never `image()`: `/api/image` needs no sign-in. Snapshots are served only to a signed-in screen that was assigned the camera.
+
 **Accounts.** An instance can offer accounts to sign in to (`accounts()` returns `[{id, name, connected}]`); the admin page shows a Connect button for each. `connect(account)` returns the URL where the admin signs in and finishes in the background. Keep what it earns (a token) with `Event::Remember { key, value }`: the key must start with `_`. Such keys are stored with the integration's config, handed to `start` on the next start, kept when the admin edits the fields, and never sent to the browser. Sonos connects Spotify this way, through Sonos's own music-service sign-in (`src/integrations/smapi.rs`).
 
 `start` may block (it runs on its own thread) and should fail with a clear
@@ -68,12 +70,13 @@ vocabulary the tablet understands:
 | `add_favourite` | write-only id of a search result | ☆ on a search result saves it as a favourite |
 | `speaker_group` | id of the room this one plays with (itself when alone or leading) | music page: tick rooms in or out of a group. Set it to another room's id to join that room's group, or to the room's own id to leave. A screen may only group rooms it controls. |
 | `events` | `[{t, at, end, all, place}]`, epoch seconds; `all` means UTC midnights; `t` null for a private event | calendar agenda |
+| `camera` | null; the picture comes from `snapshot()` | camera tile, card and page, refreshed every 10 s while shown |
 | `alerts` | `[{id, level (2–4), name, area, from, until, text, advice}]` on a `weather` entity | warning banner on every page, details on tap |
 | `weather_symbol`, `forecast` | MET symbol code, `[[epoch, °C, symbol], …]` | forecast strip and weather page |
 
 Entity `class` decides which menu page shows it: `light`/`socket` → lights,
 `thermostat`/`heater`/`sensor` → climate, `button` → Flows, `speaker` → music
-panel, `weather` → forecast panel, `calendar` → calendar page.
+panel, `weather` → forecast panel, `calendar` → calendar page, `camera` → cameras page.
 
 Mark a capability `settable: false` if it is read-only; the server refuses
 writes to it before your `set` is called. A tablet can only control entities

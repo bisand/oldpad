@@ -2,7 +2,7 @@ use crate::app::{App, Challenge, PAIRING_TTL};
 use crate::http::{Request, Response};
 use crate::integrations::{redact, validate};
 use crate::store::{Admin, Credential, IntegrationConfig};
-use crate::util::{b64url_encode, constant_eq, escape_xml, now, random_bytes, random_code};
+use crate::util::{b64_encode, b64url_encode, constant_eq, escape_xml, now, random_bytes, random_code};
 use crate::webauthn::{self, Rp};
 use qrcodegen::{QrCode, QrCodeEcc};
 use serde_json::{json, Value};
@@ -114,6 +114,15 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                         })).collect::<Vec<_>>(),
                         "panels": { "indoor": panel(&p.indoor), "outdoor": panel(&p.outdoor), "wind": panel(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker) },
                     })))
+                }
+                // Base64 in JSON, not an img URL: a camera must need the screen's sign-in.
+                ("GET", ["tablet", "camera"]) => {
+                    let id = req.query.get("id").map(String::as_str).unwrap_or("");
+                    if !device.allowed().contains(id) {
+                        return Err(Response::error(403, "Not configured for this screen"));
+                    }
+                    let (kind, bytes) = app.registry.snapshot(id).map_err(|e| Response::error(502, &e))?;
+                    Ok(Response::ok(json!({ "type": kind, "data": b64_encode(&bytes) })))
                 }
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
                 ("POST", ["tablet", "search"]) => {

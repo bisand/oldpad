@@ -91,6 +91,7 @@
     dots: 'M5 12h.01M12 12h.01M19 12h.01',
     boat: 'M3 16h18l-2.5 4h-13zM12 3v11M12 4l6 9h-6',
     alert: 'M12 4 2.5 20h19zM12 10v5M12 17.5v.01',
+    camera: 'M4 8h3.5L9 5.5h6L16.5 8H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',
     calendar: 'M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4',
     cog: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.7 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.7 1-.5 2.4h-3.4l-.5-2.4-1.7-1-2.3.8-1.7-2.9 1.8-1.6v-2L4.1 8.5l1.7-2.9 2.3.8 1.7-1z'
   };
@@ -468,6 +469,7 @@
     if (c === 'price') { return 'bolt'; }
     if (c === 'departures') { return 'clock'; }
     if (c === 'calendar') { return 'calendar'; }
+    if (c === 'camera') { return 'camera'; }
     return 'bolt';
   }
 
@@ -496,6 +498,8 @@
     } else if (cap(e, 'departures')) {
       var dep = nextDeps(e)[0];
       body = dep ? '<div class="value up">' + depWhen(dep) + '<div class="sub">' + esc(dep.line + ' ' + dep.to) + '</div></div>' : '<div class="value sub">' + T.noDeps + '</div>';
+    } else if (cap(e, 'camera')) {
+      body = camHtml(e.id);
     } else if (cap(e, 'events')) {
       var ev = calEvents([e])[0];
       body = ev ? '<div class="value up">' + calShort(ev) + '<div class="sub">' + esc(ev.x.t || T.busy) + '</div></div>' : '<div class="value sub">' + T.noEvents + '</div>';
@@ -580,8 +584,8 @@
     if (sheet === 'alerts') {
       return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + alertsCard() + '</div></div>';
     }
-    if (e && (e['class'] === 'price' || e['class'] === 'departures' || e['class'] === 'calendar')) {
-      return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + (e['class'] === 'price' ? priceCard(e) : e['class'] === 'calendar' ? calendarCard([e]) : departuresCard(e)) + '</div></div>';
+    if (e && (e['class'] === 'price' || e['class'] === 'departures' || e['class'] === 'calendar' || e['class'] === 'camera')) {
+      return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + (e['class'] === 'price' ? priceCard(e) : e['class'] === 'calendar' ? calendarCard([e]) : e['class'] === 'camera' ? camCard(e) : departuresCard(e)) + '</div></div>';
     }
     if (!list.length) { return ''; }
     for (i = 0; i < list.length; i++) { html += controlHtml(e, list[i]); }
@@ -656,6 +660,47 @@
         '<span class="ct">' + esc(ev.x.t || T.busy) + (ev.x.place ? '<span class="sub">' + esc(ev.x.place) + '</span>' : '') + '</span></div>';
     }
     return '<div class="card calendar">' + html + (evs.length ? '' : '<p class="muted">' + T.noEvents + '</p>') + '</div>';
+  }
+
+  // ------------------------------------------------------------- cameras
+
+  // The last picture of each camera on screen. Fetched with the screen's sign-in, one at a
+  // time and only while shown: an old iPad has little memory.
+  var camImages = {}, camBusy = false;
+
+  function camInner(id) {
+    var c = camImages[id], e = entities[id];
+    if (!c) { return '<span class="cam-none">' + icon('camera') + '</span>'; }
+    // The time, in red once it stops updating: a frozen picture must not pass for live.
+    return '<img src="' + c.src + '" alt="' + esc(e ? e.name : '') + '"><span class="cam-t' + (new Date().getTime() - c.at > 30000 ? ' old' : '') + '">' + hm(c.at / 1000) + '</span>';
+  }
+  function camHtml(id) { return '<div class="cam" data-cam="' + esc(id) + '">' + camInner(id) + '</div>'; }
+  function camCard(e) { return '<div class="card cam-card"><div class="sub">' + esc(e.name) + '</div>' + camHtml(e.id) + '</div>'; }
+  function camPaint(id) {
+    var els = $('page').querySelectorAll('[data-cam]'), i;
+    for (i = 0; i < els.length; i++) { if (els[i].getAttribute('data-cam') === id) { els[i].innerHTML = camInner(id); } }
+  }
+  function camLoad(ids) {
+    if (!ids.length) { camBusy = false; return; }
+    var id = ids.shift();
+    request('GET', '/api/tablet/camera?id=' + encodeURIComponent(id) + (PREVIEW ? '&preview=' + PREVIEW : ''), null, {}, function (status, data) {
+      if (status === 200 && data && data.data) {
+        camImages[id] = { src: 'data:' + data.type + ';base64,' + data.data, at: new Date().getTime() };
+      } else if (status === 403) {
+        delete camImages[id]; // taken off this screen
+      }
+      camPaint(id);
+      camLoad(ids);
+    });
+  }
+  function camTick(all) {
+    var els = $('page').querySelectorAll('[data-cam]'), seen = {}, ids = [], i, id;
+    for (i = 0; i < els.length; i++) {
+      id = els[i].getAttribute('data-cam');
+      if (!seen[id]) { seen[id] = true; if (all || !camImages[id]) { ids.push(id); } }
+    }
+    for (id in camImages) { if (camImages.hasOwnProperty(id) && !seen[id]) { delete camImages[id]; } }
+    if (!camBusy && ids.length) { camBusy = true; camLoad(ids); }
   }
 
   // ------------------------------------------------------------- weather warnings
@@ -868,7 +913,8 @@
     { id: 'weather', icon: 'cloud', when: function () { return !!series(); } },
     { id: 'ships', icon: 'boat', when: function () { return byClass(['ais']).length > 0; } },
     { id: 'departures', icon: 'clock', when: function () { return byClass(['departures']).length > 0; } },
-    { id: 'calendar', icon: 'calendar', when: function () { return byClass(['calendar']).length > 0; } }
+    { id: 'calendar', icon: 'calendar', when: function () { return byClass(['calendar']).length > 0; } },
+    { id: 'cameras', icon: 'camera', when: function () { return byClass(['camera']).length > 0; } }
   ];
 
   function homePage() {
@@ -987,7 +1033,7 @@
         if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], favRows(), true); }
       } else {
         it = typeof it === 'string' ? entities[it] || { missing: true } : it;
-        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else if (it['class'] === 'departures') { flush(); html += departuresCard(it); } else if (it['class'] === 'calendar') { flush(); html += calendarCard([it]); } else { run.push(it); }
+        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else if (it['class'] === 'departures') { flush(); html += departuresCard(it); } else if (it['class'] === 'calendar') { flush(); html += calendarCard([it]); } else if (it['class'] === 'camera') { flush(); html += camCard(it); } else { run.push(it); }
       }
     }
     flush();
@@ -1005,6 +1051,7 @@
     if (page === 'ships') { return byClass(['ais']).map(shipsCard).join(''); }
     if (page === 'departures') { return byClass(['departures']).map(departuresCard).join(''); }
     if (page === 'calendar') { return calendarCard(byClass(['calendar'])); }
+    if (page === 'cameras') { return '<div class="cams">' + byClass(['camera']).map(camCard).join('') + '</div>'; }
     if (page === 'settings') { return settingsPage(); }
     return homePage();
   }
@@ -1029,6 +1076,7 @@
     $('page').innerHTML = alertBanner() + pageHtml() + sheetHtml();
     place($('page'));
     tick();
+    camTick(false);
   }
 
   // ------------------------------------------------------------- actions
@@ -1085,7 +1133,7 @@
       c.value = next;
       render();
       set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
-    } else if (act === 'tile' && e && (cap(e, 'prices') || cap(e, 'departures') || cap(e, 'events'))) {
+    } else if (act === 'tile' && e && (cap(e, 'prices') || cap(e, 'departures') || cap(e, 'events') || cap(e, 'camera'))) {
       sheet = id;
       render();
     } else if (act === 'tile' && e && cap(e, 'ships')) {
@@ -1234,6 +1282,7 @@
   setInterval(tick, 10000);
   // The forecast strip moves with the clock; redraw it hourly.
   setInterval(render, 3600 * 1000);
+  setInterval(function () { camTick(true); }, 10000);
   // Finished events, a new day and warnings starting or ending change the page without the server saying anything.
   var calShown = '';
   setInterval(function () {

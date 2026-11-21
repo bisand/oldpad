@@ -106,6 +106,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
         speaker("kitchen", "Kitchen", "speaker", true, 0.2, "Radio One"),
         speaker("bath", "Bathroom", "bath", false, 0.15, ""),
         entity("night", "Good night", "Scenes", "button", vec![("button", Capability::new(Value::Null, true))]),
+        entity("door", "Front door", "Garden", "camera", vec![("camera", Capability::new(Value::Null, false))]),
     ]));
     group_volumes(&mut entities.lock().unwrap());
     let stopped = Arc::new(AtomicBool::new(false));
@@ -150,6 +151,12 @@ fn group_volumes(list: &mut [Entity]) -> Vec<(String, Value)> {
 }
 
 impl Instance for Demo {
+    fn snapshot(&self, _entity: &str) -> Result<(String, Vec<u8>), String> {
+        // One transparent pixel.
+        const PNG: [u8; 67] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1F, 0x15, 0xC4, 0x89, 0, 0, 0, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0, 1, 0, 0, 5, 0, 1, 0x0D, 0x0A, 0x2D, 0xB4, 0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
+        Ok(("image/png".into(), PNG.to_vec()))
+    }
+
     fn entities(&self) -> Vec<Entity> {
         self.entities.lock().unwrap().clone()
     }

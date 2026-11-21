@@ -372,6 +372,7 @@ const MENU_PAGES = [
   ['ships', 'Ships', ['ais'], 'ships nearby (AIS)'],
   ['departures', 'Departures', ['departures'], 'departure boards (Entur)'],
   ['calendar', 'Calendar', ['calendar'], 'calendars (iCal)'],
+  ['cameras', 'Cameras', ['camera'], 'camera snapshots'],
 ];
 const CARDS = [['card:clock', 'Clock'], ['card:climate', 'Indoor / outdoor'], ['card:forecast', 'Forecast'], ['card:music', 'Music']];
 const PAGE_ICONS = ['home', 'music', 'bulb', 'thermo', 'bolt', 'cloud', 'sun', 'moon', 'chart', 'radio', 'flame', 'plug'];

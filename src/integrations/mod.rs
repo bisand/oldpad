@@ -111,6 +111,11 @@ pub trait Instance: Send + Sync {
     fn image(&self, _key: &str) -> Result<(String, Vec<u8>), String> {
         Err("no images here".into())
     }
+    /// The latest picture from a camera entity: `(content type, bytes)`. Private, unlike
+    /// `image`: only reached through the signed-in route, for screens assigned that camera.
+    fn snapshot(&self, _entity: &str) -> Result<(String, Vec<u8>), String> {
+        Err("no camera here".into())
+    }
     /// Accounts the admin can connect, e.g. music services: `[{id, name, connected}]`.
     fn accounts(&self) -> Vec<Value> {
         vec![]
@@ -219,6 +224,7 @@ const RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(30);
 #[cfg(test)]
 const RETRY_FIRST: std::time::Duration = std::time::Duration::from_millis(20);
 const RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(600);
+const MAX_SNAPSHOT: usize = 3 * 1024 * 1024; // an old iPad holds it in memory as base64
 
 /// Running instances, keyed by integration id. Entity ids seen by the rest of
 /// oldpad are "<integration id>:<entity id>".
@@ -338,6 +344,28 @@ impl Registry {
 
     pub fn image(&self, id: &str, key: &str) -> Result<(String, Vec<u8>), String> {
         self.instance(id).ok_or("integration is not running")?.image(key)
+    }
+
+    /// A camera's picture. Only plain image types: it ends up in a `data:` URL on the tablet.
+    pub fn snapshot(&self, full_id: &str) -> Result<(String, Vec<u8>), String> {
+        let (iid, eid) = full_id.split_once(':').ok_or("bad entity id")?;
+        let inst = self.instance(iid).ok_or("integration is not running")?;
+        if !inst.entities().iter().any(|e| e.id == eid && e.capabilities.contains_key("camera")) {
+            return Err("not a camera".into());
+        }
+        let (kind, bytes) = inst.snapshot(eid)?;
+        let kind = match kind.split(';').next().unwrap_or("").trim().to_ascii_lowercase().as_str() {
+            // Home Assistant says image/jpg.
+            "image/jpeg" | "image/jpg" => "image/jpeg",
+            "image/png" => "image/png",
+            "image/gif" => "image/gif",
+            _ => return Err("the camera did not send a picture".into()),
+        }
+        .to_string();
+        if bytes.is_empty() || bytes.len() > MAX_SNAPSHOT {
+            return Err("the camera's picture is empty or too large".into());
+        }
+        Ok((kind, bytes))
     }
 
     pub fn accounts(&self, id: &str) -> Vec<Value> {

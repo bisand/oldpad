@@ -164,6 +164,20 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!((state["pages"][0]["items"][1]["name"].as_str(), state["more"][0]["name"].as_str()), (Some("Natta"), Some("Coffee maker")), "trimmed; empty means its own name");
     assert_eq!(phone.call("GET", "/api/admin/devices", None).1[0]["names"], json!({ night.clone(): "Natta" }));
 
+    // --- cameras: only for a signed-in screen that was given the camera
+    let door = format!("{iid}:door");
+    let camera = format!("/api/tablet/camera?id={door}");
+    assert_eq!(tablet.call("GET", &camera, None).0, 403, "not on this screen");
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "more": [plug, speaker, kitchen, door] }))).0, 200);
+    let (s, shot) = tablet.call("GET", &camera, None);
+    assert_eq!((s, shot["type"].as_str()), (200, Some("image/png")));
+    assert!(shot["data"].as_str().unwrap().starts_with("iVBOR"));
+    let mut stranger = Client { base: base.clone(), cookie: None, bearer: None };
+    assert_eq!(stranger.call("GET", &camera, None).0, 401, "no sign-in, no picture");
+    assert_eq!(stranger.call("GET", &format!("/api/image/{iid}/door"), None).0, 404, "not on the open image route");
+    assert_eq!(tablet.call("GET", &format!("/api/tablet/camera?id={iid}:lamp"), None).0, 502, "on this screen, but a lamp has no picture");
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "more": [plug, speaker, kitchen] }))).0, 200);
+
     // --- live stream: flip the lamp, the event arrives on the stream
     let (_, ticket) = tablet.call("POST", "/api/tablet/ticket", Some(json!({})));
     let mut sse = TcpStream::connect(base.trim_start_matches("http://")).unwrap();
