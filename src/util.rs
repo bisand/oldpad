@@ -37,6 +37,17 @@ pub fn random_code(len: usize) -> String {
     out
 }
 
+/// Six digits, shown only on the screen being paired.
+pub fn random_pin() -> String {
+    loop {
+        let n = u32::from_be_bytes(random_bytes::<4>());
+        // Rejection sampling keeps the distribution uniform.
+        if n < u32::MAX - u32::MAX % 1_000_000 {
+            return format!("{:06}", n % 1_000_000);
+        }
+    }
+}
+
 pub fn sha256(data: &[u8]) -> [u8; 32] {
     Sha256::digest(data).into()
 }

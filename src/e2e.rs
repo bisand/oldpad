@@ -127,7 +127,7 @@ fn phone_and_tablet_end_to_end() {
     let secret = pair["secret"].as_str().unwrap().to_string();
     assert_eq!(tablet.call_with("GET", &poll, None, &[("X-Pair-Secret", &secret)]).1["status"], "pending");
 
-    let (s, approved) = phone.call("POST", &format!("/api/admin/pair/{}", pair["code"].as_str().unwrap()), Some(json!({ "name": "Kitchen" })));
+    let (s, approved) = phone.call("POST", &format!("/api/admin/pair/{}", pair["code"].as_str().unwrap()), Some(json!({ "name": "Kitchen", "pin": pair["pin"] })));
     assert_eq!(s, 200);
     let device_id = approved["id"].as_str().unwrap().to_string();
     let (_, got) = tablet.call_with("GET", &poll, None, &[("X-Pair-Secret", &secret)]);

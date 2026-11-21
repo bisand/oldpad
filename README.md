@@ -39,13 +39,13 @@ OLDPAD_PUBLIC_URL=https://dash.example.com ./target/release/oldpad
 
 On first start oldpad prints a **setup code**. Open `OLDPAD_PUBLIC_URL/admin`
 on your phone, enter the code and create your passkey. Then open
-`http://<server>:8080/` on the tablet and scan the code it shows.
+`OLDPAD_PUBLIC_URL` on the tablet and scan the code it shows.
 
 | Variable | Default | |
 | --- | --- | --- |
 | `OLDPAD_PUBLIC_URL` | `http://localhost:8080` | The address your phone uses. Must be `https://` (passkeys require it) unless it is `localhost`. Put a TLS-terminating proxy in front. |
-| `OLDPAD_BIND` | `0.0.0.0:8080` | Where to listen. Tablets connect here over plain HTTP. Never expose this port. |
-| `OLDPAD_ADMIN_BIND` | unset | A separate port for the admin page, e.g. `127.0.0.1:8081`. Required before exposing oldpad to the internet. |
+| `OLDPAD_BIND` | `0.0.0.0:8080` | Where to listen, in plain HTTP: put an HTTPS proxy in front. |
+| `OLDPAD_ADMIN_BIND` | unset | Optional separate port for the admin page, for setups that keep tablets on a private network. |
 | `OLDPAD_DATA_DIR` | `data` | One JSON file with admins, screens and integrations. Keep it private. |
 | `OLDPAD_DEVICE_TTL_DAYS` | `90` | A screen unused this long must pair again. |
 | `OLDPAD_ADMIN_TTL_DAYS` | `30` | Phone sign-in lifetime. |
@@ -58,22 +58,18 @@ Accessibility → Guided Access*.
 
 ## Exposing it to the internet
 
-Expose **only the admin port**, behind an HTTPS proxy or tunnel:
+Admin and tablets share one HTTPS address, for example `https://dash.example.com`:
 
-```bash
-OLDPAD_PUBLIC_URL=https://dash.example.com OLDPAD_BIND=192.168.1.10:8080 OLDPAD_ADMIN_BIND=127.0.0.1:8081 ./target/release/oldpad
-```
-
-- Send `https://dash.example.com` to `127.0.0.1:8081`, set HSTS and rate limits at the proxy.
-- Keep the tablet port on the LAN, ideally on its own VLAN. Tablets use plain HTTP, and pairing only works there.
-- The admin port serves no tablet API, and the tablet port serves no admin page.
-- Backups, new admins, removing access and moving a stored key to a new address ask for a fresh passkey check.
+- Put a TLS-terminating proxy in front, and permanently redirect all HTTP to HTTPS.
+- Old iPads do not trust Let's Encrypt's root. Install **ISRG Root X1** on each one before enabling the redirect, and compare its fingerprint with the one Let's Encrypt publishes.
+- The proxy must buffer requests (except `/api/events`), rate-limit by client address, and set HSTS.
+- Pairing needs the number shown on the screen. Backups, new admins, approving a screen, removing access and moving a stored key to a new address ask for a fresh passkey check.
 
 ## Why it is built this way
 
-- **Old tablets get plain HTTP.** iOS 9 and older do not trust today's Let's
-  Encrypt root, so the tablet talks plain HTTP on your LAN. It holds only a
-  token scoped to its own tiles; the Homey API key never leaves the server.
+- **Old tablets need one extra root certificate.** iOS 9 and older do not trust
+  today's Let's Encrypt root, so ISRG Root X1 is installed once. A tablet holds only
+  a token scoped to its own tiles; the Homey API key never leaves the server.
 - **The tablet page is ES5 and inline-block CSS.** No `fetch`, no flexbox, no
   frameworks. `cargo test` fails if modern JavaScript slips in.
 - **Few dependencies, on purpose.** HTTP, WebSocket, CBOR and the passkey

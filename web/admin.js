@@ -369,11 +369,12 @@ async function pairView(code) {
     return;
   }
   const name = h('input', { type: 'text', id: 'name', value: 'Kitchen', maxlength: '64' });
+  const pin = h('input', { type: 'text', id: 'pin', inputmode: 'numeric', autocomplete: 'off', maxlength: '6', placeholder: '123456' });
   const out = h('div');
   const go = h('button', { class: 'primary', onclick: async () => {
     go.disabled = true;
     try {
-      const { id } = await api('POST', `/pair/${encodeURIComponent(code)}`, { name: name.value });
+      const { id } = await api('POST', `/pair/${encodeURIComponent(code)}`, { name: name.value, pin: pin.value });
       location.hash = `#/device/${id}`;
     } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
   } }, 'Approve');
@@ -381,6 +382,8 @@ async function pairView(code) {
     h('h1', {}, 'Pair a screen'),
     h('p', {}, 'Check that the screen shows this code:'),
     h('p', { class: 'code' }, code.toUpperCase()),
+    h('p', { class: 'notice' }, 'Only continue if that screen is in front of you. If someone sent you this link, cancel.'),
+    h('label', { for: 'pin' }, 'Number shown on the screen'), pin,
     h('label', { for: 'name' }, 'Name this screen'), name,
     h('p', { class: 'help' }, 'Usually the room it hangs in.'),
     h('div', { class: 'actions' }, go, h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')), out,

@@ -10,8 +10,8 @@ written to run on iOS 5 and later. This sets the rules for the tablet page:
 - **ES5 only**, `XMLHttpRequest` instead of `fetch`, no framework. Enforced by
   `tests/es5.rs`.
 - **Inline-block layout**: no flexbox (iOS 5 has only the 2009 syntax), no grid.
-- **Plain HTTP on the LAN.** iOS 9 does not trust ISRG Root X1, so Let's
-  Encrypt certificates fail. The phone uses the normal HTTPS address.
+- **HTTPS with one added root.** iOS 9 does not trust ISRG Root X1, so it is
+  installed once on each old iPad. Tablets and phones share one HTTPS address.
 - Few repaints, no heavy animation.
 - Installed with *Add to Home Screen* (`apple-mobile-web-app-capable`) and
   locked with Guided Access.

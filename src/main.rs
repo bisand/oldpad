@@ -48,15 +48,13 @@ fn main() {
     let app = app::App::new(cfg, store);
 
     eprintln!("oldpad {} listening on {}", env!("CARGO_PKG_VERSION"), app.cfg.bind);
-    eprintln!("  tablets: open http://<this machine>:{}/ on the tablet", listener.local_addr().map(|a| a.port()).unwrap_or(0));
+    eprintln!("  tablets: open {}/ on the tablet", app.cfg.public_url);
     eprintln!("  admin:   {}/admin", app.cfg.public_url);
     if let Some(code) = app.setup_code.lock().unwrap().as_deref() {
         eprintln!("  first-time setup code: {code}  (enter it at {}/admin to register your passkey)", app.cfg.public_url);
     }
-    match &app.cfg.admin_bind {
-        Some(bind) => eprintln!("  admin port: {bind} (point your HTTPS proxy here; keep the tablet port on the LAN)"),
-        None if app.cfg.secure_cookies() => eprintln!("  warning: tablets and admin share one port. Set OLDPAD_ADMIN_BIND before exposing oldpad to the internet."),
-        None => {}
+    if let Some(bind) = &app.cfg.admin_bind {
+        eprintln!("  admin port: {bind}");
     }
     app.start_integrations();
 

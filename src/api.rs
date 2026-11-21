@@ -86,7 +86,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
             let p = app.new_pairing().map_err(|e| Response::error(429, e))?;
             let url = format!("{}/admin#/pair/{}", app.cfg.public_url, p.code);
             Ok(Response::ok(json!({
-                "id": p.id, "secret": p.secret, "code": p.code, "url": url, "qr": qr_svg(&url), "expiresIn": PAIRING_TTL,
+                "id": p.id, "secret": p.secret, "code": p.code, "pin": p.pin, "url": url, "qr": qr_svg(&url), "expiresIn": PAIRING_TTL,
             })))
         }
         ("GET", ["pair", id]) => Ok(Response::ok(app.poll_pairing(id, req.header("x-pair-secret").unwrap_or("")))),
@@ -330,8 +330,9 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             Ok(Response::ok(json!({ "status": match p { None => "expired", Some(p) if p.token.is_some() => "approved", _ => "pending" } })))
         }
         ("POST", ["pair", code]) => {
+            require_fresh(app, req)?;
             let body = req.json()?;
-            let device = app.approve_pairing(code, str_field(&body, "name", 64)?).map_err(|e| Response::error(if e == crate::store::SAVE_FAILED { 500 } else { 410 }, e))?;
+            let device = app.approve_pairing(code, body["pin"].as_str().unwrap_or(""), str_field(&body, "name", 64)?).map_err(|e| Response::error(if e == crate::store::SAVE_FAILED { 500 } else { 410 }, e))?;
             Ok(Response::ok(json!({ "id": device.id })))
         }
         ("GET", ["devices"]) => {

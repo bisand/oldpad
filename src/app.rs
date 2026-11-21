@@ -1,7 +1,7 @@
 use crate::http::Request;
 use crate::integrations::{Event, Registry, Sink};
 use crate::store::{Admin, Device, Store};
-use crate::util::{constant_eq, now, random_code, random_token, sha256_hex};
+use crate::util::{constant_eq, now, random_code, random_pin, random_token, sha256_hex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -52,6 +52,7 @@ impl Config {
 
 pub const PAIRING_TTL: u64 = 300;
 const MAX_PENDING_PAIRINGS: usize = 10;
+const MAX_PIN_MISSES: u8 = 3;
 const TOUCH_INTERVAL: u64 = 3600;
 const MAX_CHALLENGES: usize = 1000;
 /// Wrong setup codes before the code is replaced (the new one is in the server log).
@@ -63,6 +64,9 @@ pub struct Pairing {
     pub id: String,
     pub secret: String,
     pub code: String,
+    /// Shown on the screen but not in its link, so a forwarded link alone cannot be approved.
+    pub pin: String,
+    pub misses: u8,
     pub expires: u64,
     /// Set once an admin approves; handed to the tablet exactly once.
     pub token: Option<String>,
@@ -322,24 +326,35 @@ impl App {
         let mut list = self.pairings.lock().unwrap();
         let t = now();
         list.retain(|p| p.expires > t);
-        if list.iter().filter(|p| p.token.is_none()).count() >= MAX_PENDING_PAIRINGS {
-            return Err("Too many pairings in progress. Try again in a few minutes.");
-        }
-        let p = Pairing { id: random_token(), secret: random_token(), code: random_code(8), expires: t + PAIRING_TTL, token: None };
-        list.push(Pairing { id: p.id.clone(), secret: p.secret.clone(), code: p.code.clone(), expires: p.expires, token: None });
+        // Anyone can start one: the oldest gives way, so strangers cannot hold every slot.
+        if list.iter().filter(|p| p.token.is_none()).count() >= MAX_PENDING_PAIRINGS
+            && let Some(oldest) = list.iter().enumerate().filter(|(_, p)| p.token.is_none()).min_by_key(|(_, p)| p.expires).map(|(i, _)| i) {
+                list.remove(oldest);
+            }
+        let p = Pairing { id: random_token(), secret: random_token(), code: random_code(8), pin: random_pin(), misses: 0, expires: t + PAIRING_TTL, token: None };
+        list.push(Pairing { id: p.id.clone(), secret: p.secret.clone(), code: p.code.clone(), pin: p.pin.clone(), misses: 0, expires: p.expires, token: None });
         Ok(p)
     }
 
     /// Admin approval: creates the device and parks its token for the tablet to collect.
-    pub fn approve_pairing(&self, code: &str, name: &str) -> Result<Device, &'static str> {
+    pub fn approve_pairing(&self, code: &str, pin: &str, name: &str) -> Result<Device, &'static str> {
         let mut list = self.pairings.lock().unwrap();
-        let p = list
-            .iter_mut()
-            .find(|p| constant_eq(&p.code, &code.to_ascii_uppercase()) && p.expires > now())
+        let i = list
+            .iter()
+            .position(|p| constant_eq(&p.code, &code.to_ascii_uppercase()) && p.expires > now())
             .ok_or("This code has expired or does not exist. Start pairing again on the tablet.")?;
-        if p.token.is_some() {
+        if list[i].token.is_some() {
             return Err("This tablet is already approved.");
         }
+        if !constant_eq(&list[i].pin, pin.trim()) {
+            list[i].misses += 1;
+            if list[i].misses >= MAX_PIN_MISSES {
+                list.remove(i);
+                return Err("Wrong number too many times. Start pairing again on the tablet.");
+            }
+            return Err("That number does not match the screen.");
+        }
+        let p = &mut list[i];
         let token = random_token();
         let t = now();
         let device = Device {
@@ -441,8 +456,8 @@ pub mod tests {
         let p = app.new_pairing().unwrap();
         assert_eq!(app.poll_pairing(&p.id, &p.secret)["status"], "pending");
         assert_eq!(app.poll_pairing(&p.id, "wrong")["status"], "expired");
-        app.approve_pairing(&p.code.to_lowercase(), "Kitchen").unwrap();
-        assert!(app.approve_pairing(&p.code, "Again").is_err());
+        app.approve_pairing(&p.code.to_lowercase(), &p.pin, "Kitchen").unwrap();
+        assert!(app.approve_pairing(&p.code, &p.pin, "Again").is_err());
 
         let first = app.poll_pairing(&p.id, &p.secret);
         let token = first["token"].as_str().unwrap().to_string();
@@ -458,12 +473,27 @@ pub mod tests {
     }
 
     #[test]
-    fn pending_pairings_are_capped() {
+    fn pending_pairings_are_capped_without_locking_anyone_out() {
         let app = test_app();
+        let first = app.new_pairing().unwrap();
         for _ in 0..MAX_PENDING_PAIRINGS {
             app.new_pairing().unwrap();
         }
-        assert!(app.new_pairing().is_err());
+        let list = app.pairings.lock().unwrap();
+        assert_eq!(list.len(), MAX_PENDING_PAIRINGS);
+        assert!(list.iter().all(|p| p.id != first.id), "the oldest gave way");
+    }
+
+    #[test]
+    fn a_link_alone_cannot_approve_a_screen() {
+        let app = test_app();
+        let p = app.new_pairing().unwrap();
+        let wrong = if p.pin == "000000" { "000001" } else { "000000" };
+        assert!(app.approve_pairing(&p.code, wrong, "T").is_err());
+        assert!(app.approve_pairing(&p.code, "", "T").is_err());
+        assert!(app.approve_pairing(&p.code, wrong, "T").is_err());
+        assert!(app.approve_pairing(&p.code, &p.pin, "T").is_err(), "three misses end the pairing");
+        assert!(app.store.lock().unwrap().data.devices.is_empty());
     }
 
     #[test]
@@ -482,7 +512,7 @@ pub mod tests {
     fn revoked_screen_loses_its_stream() {
         let app = test_app();
         let p = app.new_pairing().unwrap();
-        let d = app.approve_pairing(&p.code, "T").unwrap();
+        let d = app.approve_pairing(&p.code, &p.pin, "T").unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
         app.add_client(&d, tx);
         app.store.lock().unwrap().data.devices.clear();
@@ -517,7 +547,7 @@ pub mod tests {
     fn image_token_needs_a_live_screen_and_the_lan_port() {
         let app = test_app();
         let p = app.new_pairing().unwrap();
-        let d = app.approve_pairing(&p.code, "T").unwrap();
+        let d = app.approve_pairing(&p.code, &p.pin, "T").unwrap();
         let mut req = bearer("x");
         assert!(!app.can_fetch_image(&req));
         req.query.insert("t".into(), App::image_token(&d));
