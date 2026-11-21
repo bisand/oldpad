@@ -1,7 +1,7 @@
 # Writing an integration
 
-An integration connects oldpad to a home automation system. Homey Pro is the
-first; `src/integrations/demo.rs` is the smallest complete example.
+An integration connects oldpad to a home automation system, such as Homey Pro
+or Home Assistant. `src/integrations/demo.rs` is the smallest complete example.
 
 ## The shape of one
 
