@@ -569,6 +569,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 app.registry.stop(&id);
             }
             app.start_integrations();
+            app.forget_unused_tokens();
             app.notify_all("refresh");
             app.drop_revoked_clients();
             Ok(Response::ok(json!({ "ok": true })))
@@ -632,6 +633,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.registry.start(id.clone(), kind.id.into(), config, app.sink(id.clone()));
+            app.forget_unused_tokens();
             Ok(Response::ok(json!({ "id": id })))
         }
         ("DELETE", ["integrations", id]) => {
@@ -640,6 +642,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.registry.stop(id);
+            app.forget_unused_tokens();
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("GET", ["entities"]) => Ok(Response::ok(json!(app.registry.entities()))),

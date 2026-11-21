@@ -150,12 +150,19 @@ impl App {
                     if let Some(i) = store.data.integrations.iter_mut().find(|i| i.id == integration_id) {
                         i.config.insert(key, value);
                         if let Err(e) = store.save() {
-                            eprintln!("integration {integration_id}: could not save: {e}");
+                            eprintln!("integration {integration_id}: could not save its renewed sign-in, so it may need a new token after a restart: {e}");
                         }
                     }
                 }
             }
         })
+    }
+
+    /// Drops rotated Netatmo tokens of integrations that are gone or have a new one.
+    pub fn forget_unused_tokens(&self) {
+        // The store lock must be released first: see `netatmo::keep_tokens`.
+        let live: Vec<String> = self.store.lock().unwrap().data.integrations.iter().filter(|i| i.kind == "netatmo").map(|i| crate::integrations::get_str(&i.config, "refresh_token").to_string()).collect();
+        crate::integrations::netatmo::keep_tokens(&live);
     }
 
     fn send_where(&self, pred: impl Fn(&Client) -> bool, msg: &str) {
