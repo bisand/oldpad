@@ -64,7 +64,7 @@ function ago(ts) {
 }
 
 function errorBox(err) {
-  return h('p', { class: 'notice bad' }, err.message || String(err));
+  return h('p', { class: 'notice bad', role: 'alert' }, err.message || String(err));
 }
 
 // ------------------------------------------------------------- passkeys
@@ -121,45 +121,125 @@ async function signIn() {
   await api('POST', '/login/verify', { challenge: opts.challenge, credential });
 }
 
+// ------------------------------------------------------------- shared pieces
+
+function toast(message, bad = false) {
+  let box = document.getElementById('toasts');
+  if (!box) { box = h('div', { id: 'toasts' }); document.body.append(box); }
+  const t = h('div', { class: `toast${bad ? ' bad' : ''}`, role: bad ? 'alert' : 'status' }, message);
+  box.append(t);
+  setTimeout(() => t.remove(), bad ? 7000 : 3000);
+}
+
+// A confirmation that fits the page; resolves to true or false.
+function ask({ title, body, action = 'OK', danger = false }) {
+  return new Promise((resolve) => {
+    const before = document.activeElement;
+    const key = (e) => { if (e.key === 'Escape') done(false); };
+    const done = (answer) => {
+      box.remove();
+      document.removeEventListener('keydown', key);
+      before?.focus?.();
+      resolve(answer);
+    };
+    const no = h('button', { type: 'button', onclick: () => done(false) }, 'Cancel');
+    const yes = h('button', { type: 'button', class: danger ? 'danger solid' : 'primary', onclick: () => done(true) }, action);
+    const box = h('div', { class: 'reauth', role: 'alertdialog', 'aria-modal': 'true', 'aria-label': title, onclick: (e) => { if (e.target === box) done(false); } },
+      h('div', { class: 'reauth-card' }, h('h2', {}, title), body ? h('p', {}, body) : null, h('div', { class: 'actions end' }, no, yes)));
+    document.body.append(box);
+    document.addEventListener('keydown', key);
+    no.focus();
+  });
+}
+
+// A button that shows it is busy and reports failure, whatever the action does.
+function btn(label, fn, attrs = {}) {
+  const b = h('button', { type: 'button', ...attrs, onclick: async () => {
+    b.disabled = true;
+    try { await fn(); } catch (e) { if (e.message !== 'Cancelled.') toast(e.message || String(e), true); }
+    b.disabled = !!attrs.disabled;
+  } }, label);
+  return b;
+}
+
+// Redraws the current view without jumping to the top.
+async function refresh() {
+  const y = window.scrollY;
+  await route();
+  window.scrollTo(0, y);
+}
+
+function pageHead(title, sub, ...actions) {
+  document.title = `${title} · oldpad`;
+  return h('div', { class: 'page-top' },
+    h('div', { class: 'grow' }, h('h1', {}, title), sub ? h('p', { class: 'muted small' }, sub) : null),
+    actions.length ? h('div', { class: 'page-actions' }, actions) : null);
+}
+
+const back = (href, label) => h('a', { class: 'back', href }, `‹ ${label}`);
+const linkButton = (label, href, cls = '', extra = {}) => h('a', { class: `button ${cls}`, href, ...extra }, label);
+const field = (label, id, input, help) => h('div', { class: 'field' }, h('label', { for: id }, label), input, help ? h('p', { class: 'help' }, help) : null);
+const badge = (kind, text) => h('span', { class: `badge ${kind}` }, text);
+const empty = (title, text, action) => h('div', { class: 'card empty-state' }, h('h2', {}, title), h('p', { class: 'muted' }, text), action);
+
+function moreMenu(label, ...items) {
+  return h('details', { class: 'menu' }, h('summary', { 'aria-label': label, title: 'More' }, '⋯'), h('div', { class: 'menu-list' }, items));
+}
+document.addEventListener('click', (e) => {
+  for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target) || e.target.closest('.menu-list button')) m.open = false;
+});
+
+function statusOf(status) {
+  if (status === 'running') return { kind: 'ok', text: 'Connected' };
+  if (status === 'starting') return { kind: 'wait', text: 'Starting' };
+  if (status.startsWith('error')) return { kind: 'bad', text: 'Needs attention', detail: status.replace(/^error:\s*/, '') };
+  return { kind: '', text: 'Stopped' };
+}
+
+function authPage(title, lead, ...content) {
+  document.title = `${title} · oldpad`;
+  render(h('div', { class: 'auth' }, h('div', { class: 'card' }, h('h1', {}, title), lead ? h('p', { class: 'muted' }, lead) : null, content)));
+}
+
+const onSubmit = (fn, ...children) => h('form', { novalidate: true, onsubmit: (e) => { e.preventDefault(); fn(); } }, children);
+
 // ------------------------------------------------------------- views
 
 function setupView() {
-  const name = h('input', { type: 'text', id: 'name', autocomplete: 'name', placeholder: 'Your name' });
+  const name = h('input', { type: 'text', id: 'name', autocomplete: 'name', placeholder: 'Your name', maxlength: '64' });
   const code = h('input', { type: 'text', id: 'code', autocapitalize: 'characters', autocomplete: 'off', placeholder: 'ABCD2345' });
   const out = h('div');
-  const go = h('button', { class: 'primary', onclick: async () => {
+  const go = h('button', { type: 'submit', class: 'primary wide-button' }, 'Create passkey');
+  const submit = async () => {
     go.disabled = true;
     try {
       await register({ name: name.value, setupCode: code.value });
       route();
     } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
-  } }, 'Create passkey');
+  };
   const pairing = location.hash.startsWith('#/pair/');
-  render(
-    h('h1', {}, 'Welcome to oldpad'),
-    pairing ? h('p', { class: 'notice' }, 'Before you can approve this screen, create the admin account. You will come straight back to the pairing afterwards.') : null,
-    h('p', {}, 'Create the first admin. You will sign in with a passkey (Face ID, Touch ID or your device PIN) — there is no password.'),
-    h('label', { for: 'name' }, 'Your name'), name,
-    h('label', { for: 'code' }, 'Setup code'), code,
-    h('p', { class: 'help' }, 'Printed in the server log when oldpad starts for the first time (kubectl logs, docker logs). This is not the code shown on the screen you are pairing.'),
-    h('div', { class: 'actions' }, go), out,
-  );
+  authPage('Welcome to oldpad', 'Create the first admin. You sign in with Face ID, Touch ID or your device PIN. There is no password.',
+    pairing ? h('p', { class: 'notice' }, 'Create the admin account first. You will come straight back to the pairing afterwards.') : null,
+    onSubmit(submit,
+      field('Your name', 'name', name),
+      field('Setup code', 'code', code, 'Printed in the server log when oldpad starts for the first time (kubectl logs, docker logs). This is not the code shown on a screen.'),
+      h('div', { class: 'actions' }, go), out));
 }
 
 function loginView() {
   const out = h('div');
-  const go = h('button', { class: 'primary', onclick: async () => {
+  const go = h('button', { class: 'primary wide-button', onclick: async () => {
     go.disabled = true;
     try { await signIn(); route(); } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
   } }, 'Sign in with passkey');
-  render(h('h1', {}, 'Sign in'), h('div', { class: 'actions' }, go), out);
+  authPage('Sign in', 'Use Face ID, Touch ID or your device PIN.', h('div', { class: 'actions' }, go), out);
 }
 
 // A music service or similar the integration can sign in to. The sign-in page opens
 // in a new tab; the server collects the token itself, so we only wait and refresh.
 function accountRow(i, a) {
   const status = h('span', { class: a.connected ? 'ok' : 'muted' }, a.connected ? 'Connected' : 'Not connected');
-  const go = h('button', { onclick: async () => {
+  const go = h('button', { type: 'button', onclick: async () => {
     const tab = window.open('about:blank', '_blank'); // before awaiting, or it counts as a popup
     go.disabled = true;
     try {
@@ -169,7 +249,7 @@ function accountRow(i, a) {
       for (let n = 0; n < 100; n++) {
         await new Promise((r) => setTimeout(r, 3000));
         const now = (await api('GET', '/integrations')).find((x) => x.id === i.id);
-        if (now?.accounts?.find((x) => x.id === a.id)?.connected) { route(); return; }
+        if (now?.accounts?.find((x) => x.id === a.id)?.connected) { refresh(); return; }
       }
       status.textContent = 'Sign-in timed out. Try again.';
     } catch (e) {
@@ -183,108 +263,175 @@ function accountRow(i, a) {
 
 const day = (ts) => new Date(ts * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
+function personCard(p, many) {
+  return h('article', { class: 'card' },
+    h('div', { class: 'card-head' },
+      h('div', { class: 'grow' }, h('h2', { class: 'card-title' }, p.name), h('div', { class: 'small muted' }, `${p.passkeys.length} passkey${p.passkeys.length === 1 ? '' : 's'}`)),
+      p.me ? badge('ok', 'You') : null),
+    h('ul', { class: 'plain' }, p.passkeys.map((k) => h('li', { class: 'row account' },
+      h('div', { class: 'small' }, `Added ${day(k.created)}`, h('div', { class: 'muted' }, k.lastUsed ? `Last used ${ago(k.lastUsed)}` : 'Not used yet')),
+      p.passkeys.length > 1 ? btn('Remove', async () => {
+        if (!await ask({ title: 'Remove this passkey?', body: 'The device it lives on can no longer sign in, and its sessions end.', action: 'Remove', danger: true })) return;
+        await api('DELETE', `/passkeys/${encodeURIComponent(k.id)}`);
+        toast('Passkey removed');
+        await refresh();
+      }, { class: 'chip danger', 'aria-label': `Remove passkey added ${day(k.created)}` }) : null))),
+    h('div', { class: 'card-actions' },
+      p.me ? btn('Add passkey on this device', async () => { await register({}); toast('Passkey added'); await refresh(); }) : null,
+      !p.me && many ? btn('Remove person', async () => {
+        if (!await ask({ title: `Remove ${p.name}?`, body: 'They can no longer sign in, and any open sessions end.', action: 'Remove', danger: true })) return;
+        await api('DELETE', `/people/${p.id}`);
+        toast(`${p.name} removed`);
+        await refresh();
+      }, { class: 'danger' }) : null));
+}
+
 function peopleSection({ people, invites }) {
   return [
-    h('h2', {}, 'People'),
-    people.map((p) => h('div', { class: 'card' },
-      h('div', { class: 'row' },
-        h('strong', {}, p.name, p.me ? h('span', { class: 'small muted' }, ' · you') : null),
-        p.me
-          ? h('button', { onclick: async () => { try { await register({}); route(); } catch (e) { alert(e.message); } } }, 'Add passkey on this device')
-          : h('button', { class: 'danger', onclick: async () => {
-              if (!confirm(`Remove ${p.name}? They can no longer sign in.`)) return;
-              try { await api('DELETE', `/people/${p.id}`); route(); } catch (e) { alert(e.message); }
-            } }, 'Remove')),
-      p.passkeys.map((k) => h('div', { class: 'row account' },
-        h('div', { class: 'small' }, `Passkey added ${day(k.created)}`, h('span', { class: 'muted' }, k.lastUsed ? ` · last used ${ago(k.lastUsed)}` : '')),
-        p.passkeys.length > 1 ? h('button', { class: 'chip danger', onclick: async () => {
-          if (!confirm('Remove this passkey? The device it lives on can no longer sign in.')) return;
-          try { await api('DELETE', `/passkeys/${encodeURIComponent(k.id)}`); route(); } catch (e) { alert(e.message); }
-        } }, 'Remove') : null)))),
-    invites.length ? h('p', { class: 'small muted' }, `${invites.length} open invitation${invites.length > 1 ? 's' : ''}, valid until ${new Date(Math.max(...invites) * 1000).toLocaleString()}. `,
-      h('button', { class: 'chip', onclick: async () => { await api('DELETE', '/invites'); route(); } }, 'Cancel invitations')) : null,
-    h('div', { class: 'actions' },
-      h('button', { class: 'primary', onclick: () => (location.hash = '#/invite-new') }, 'Invite someone'),
-      h('button', { onclick: async () => { await api('POST', '/logout', {}); route(); } }, 'Sign out')),
+    pageHead('People', 'Everyone here can manage screens and integrations.',
+      btn('Sign out', async () => { await api('POST', '/logout', {}); route(); }),
+      linkButton('Invite someone', '#/invite-new', 'primary')),
+    invites.length ? h('div', { class: 'notice row' },
+      h('span', {}, `${invites.length} open invitation${invites.length > 1 ? 's' : ''}, valid until ${new Date(Math.max(...invites) * 1000).toLocaleString()}`),
+      btn('Cancel', async () => { await api('DELETE', '/invites'); toast('Invitations cancelled'); await refresh(); }, { class: 'chip', 'aria-label': 'Cancel invitations' })) : null,
+    h('div', { class: 'grid' }, people.map((p) => personCard(p, people.length > 1))),
   ];
 }
 
 // A one-time link for another adult: they open it on their phone and make their own passkey.
 async function inviteNewView() {
-  const inv = await api('POST', '/invites', {});
-  const link = h('input', { type: 'text', readonly: true, value: inv.url, onfocus: (e) => e.target.select() });
-  render(
-    h('h1', {}, 'Invite someone'),
-    h('p', {}, 'Let them scan this code with their phone, or send them the link. They choose a name and make their own passkey. The link works once, for 24 hours.'),
-    h('img', { class: 'qr', alt: 'QR code for the invitation link', src: `data:image/svg+xml;base64,${btoa(inv.qr)}` }),
-    link,
-    h('div', { class: 'actions' },
-      navigator.share ? h('button', { class: 'primary', onclick: () => navigator.share({ title: 'oldpad', url: inv.url }).catch(() => {}) }, 'Share link') : null,
-      h('button', { onclick: async () => { await navigator.clipboard.writeText(inv.url); alert('Copied.'); } }, 'Copy link'),
-      h('button', { onclick: () => (location.hash = '#/people') }, 'Done')),
-  );
+  let inv;
+  try { inv = await api('POST', '/invites', {}); } catch (e) {
+    if (e.message !== 'Cancelled.') toast(e.message, true);
+    location.hash = '#/people';
+    return;
+  }
+  const link = h('input', { type: 'text', id: 'invite-link', readonly: true, value: inv.url, onfocus: (e) => e.target.select() });
+  render(h('div', { class: 'narrow' },
+    back('#/people', 'People'),
+    pageHead('Invite someone', 'The link works once, for 24 hours.'),
+    h('div', { class: 'card center' },
+      h('p', {}, 'Let them scan this with their phone, or send them the link. They choose a name and make their own passkey.'),
+      h('img', { class: 'qr', alt: 'QR code for the invitation link', src: `data:image/svg+xml;base64,${btoa(inv.qr)}` }),
+      field('Invitation link', 'invite-link', link),
+      h('div', { class: 'actions center' },
+        navigator.share ? btn('Share link', () => navigator.share({ title: 'oldpad', url: inv.url }).catch(() => {}), { class: 'primary' }) : null,
+        btn('Copy link', async () => { await navigator.clipboard.writeText(inv.url); toast('Link copied'); }, navigator.share ? {} : { class: 'primary' }),
+        linkButton('Done', '#/people')))));
 }
 
 function inviteView(code) {
   const name = h('input', { type: 'text', id: 'name', autocomplete: 'name', placeholder: 'Your name', maxlength: '64' });
   const out = h('div');
-  const go = h('button', { class: 'primary', onclick: async () => {
+  const go = h('button', { type: 'submit', class: 'primary wide-button' }, 'Create passkey');
+  const submit = async () => {
     go.disabled = true;
     try { await register({ name: name.value, invite: code }); location.hash = '#/'; route(); } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
-  } }, 'Create passkey');
-  render(
-    h('h1', {}, 'Join oldpad'),
-    h('p', {}, 'You were invited to help run the screens in this home. You will sign in with a passkey (Face ID, Touch ID or your device PIN) — there is no password.'),
-    h('label', { for: 'name' }, 'Your name'), name,
-    h('div', { class: 'actions' }, go), out,
-  );
+  };
+  authPage('Join oldpad', 'You were invited to help run the screens in this home. You sign in with Face ID, Touch ID or your device PIN.',
+    onSubmit(submit, field('Your name', 'name', name), h('div', { class: 'actions' }, go), out));
+}
+
+// Which layout a screen shows: its own, or another screen's.
+function layoutChoice(d, devices) {
+  const users = devices.filter((x) => x.follows === d.id);
+  if (users.length) return h('p', { class: 'small muted shared' }, `Layout shared with ${users.map((x) => x.name).join(', ')}`);
+  const others = devices.filter((x) => x.id !== d.id && !x.follows);
+  if (!others.length) return null;
+  const id = `layout-${d.id}`;
+  const pick = h('select', { id, onchange: async () => {
+    const follows = pick.value || null;
+    const reset = () => { pick.value = d.follows || ''; };
+    if (follows) {
+      const leader = others.find((x) => x.id === follows);
+      const yes = await ask({ title: `Use ${leader.name}'s layout?`, body: `${d.name} will show the same layout. If you stop sharing later, it keeps a copy of that layout instead of its current one.`, action: 'Use layout' });
+      if (!yes) return reset();
+    }
+    try { await api('PUT', `/devices/${d.id}`, { follows }); toast(follows ? 'Layout shared' : 'Now has its own layout'); await refresh(); } catch (e) { toast(e.message, true); reset(); }
+  } }, h('option', { value: '' }, 'Its own'),
+    others.map((x) => h('option', { value: x.id, selected: d.follows === x.id }, `Same as ${x.name}`)));
+  return field('Layout', id, pick);
+}
+
+function screenCard(d, devices) {
+  const leader = devices.find((x) => x.id === d.follows);
+  const pages = d.pages?.length || 0;
+  const summary = `${d.tiles.length} tile${d.tiles.length === 1 ? '' : 's'}${pages ? ` · ${pages} page${pages > 1 ? 's' : ''}` : ''}`;
+  return h('article', { class: 'card' },
+    h('div', { class: 'card-head' },
+      h('div', { class: 'grow' }, h('h2', { class: 'card-title' }, d.name),
+        h('div', { class: 'small muted' }, leader ? `Uses ${leader.name}'s layout` : summary, d.online ? '' : ` · seen ${ago(d.lastSeen)}`)),
+      badge(d.online ? 'ok' : '', d.online ? 'Online' : 'Offline')),
+    layoutChoice(d, devices),
+    h('div', { class: 'card-actions' },
+      linkButton(leader ? 'Details' : 'Edit layout', `#/device/${d.id}`, 'primary'),
+      linkButton('Preview', `/?preview=${encodeURIComponent(d.id)}`, '', { target: '_blank', rel: 'noopener' }),
+      moreMenu(`More actions for ${d.name}`,
+        btn('Reload screen', async () => {
+          await api('POST', `/devices/${d.id}/reload`, {});
+          toast(`${d.name} is reloading`);
+          setTimeout(refresh, 4000);
+        }, { disabled: !d.online }),
+        btn('Remove screen', async () => {
+          const users = devices.filter((x) => x.follows === d.id);
+          const yes = await ask({ title: `Remove ${d.name}?`, body: `It will have to be paired again.${users.length ? ` ${users[0].name} takes over the shared layout.` : ''}`, action: 'Remove', danger: true });
+          if (!yes) return;
+          await api('DELETE', `/devices/${d.id}`);
+          toast(`${d.name} removed`);
+          await refresh();
+        }, { class: 'danger' }))));
 }
 
 async function screensView() {
   const devices = await api('GET', '/devices');
+  const online = devices.filter((d) => d.online).length;
+  const add = linkButton('Add screen', '#/add-screen', 'primary');
   render(
-    h('h1', {}, 'Screens'),
+    pageHead('Screens', devices.length ? `${online} of ${devices.length} online` : null, add),
     devices.length
-      ? devices.map((d) => h('div', { class: 'card' },
-          h('div', { class: 'row' },
-            h('div', {}, h('strong', {}, d.name), h('div', { class: 'small muted' },
-              h('span', { class: d.online ? 'ok' : '' }, d.online ? '● Online' : `Offline · seen ${ago(d.lastSeen)}`),
-              ` · ${d.tiles.length} tiles${d.pages?.length ? ` · ${d.pages.length} own page${d.pages.length > 1 ? 's' : ''}` : ''}`)),
-            h('div', { class: 'row' },
-              h('a', { class: 'button', href: `/?preview=${encodeURIComponent(d.id)}`, target: '_blank' }, 'Preview'),
-              h('button', { disabled: !d.online, title: 'Reload the page on the screen', onclick: async (ev) => {
-                ev.target.disabled = true;
-                await api('POST', `/devices/${d.id}/reload`, {});
-                setTimeout(route, 4000);
-              } }, 'Reload'),
-              h('button', { onclick: () => (location.hash = `#/device/${d.id}`) }, 'Layout'),
-              h('button', { class: 'danger', onclick: async () => {
-                if (!confirm(`Remove ${d.name}? It will have to be paired again.`)) return;
-                await api('DELETE', `/devices/${d.id}`); route();
-              } }, 'Remove')))))
-      : h('p', { class: 'muted' }, 'No screens yet.'),
-    h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/add-screen') }, 'Add screen')),
+      ? h('div', { class: 'grid' }, devices.map((d) => screenCard(d, devices)))
+      : empty('No screens yet', 'Open oldpad on a tablet, then pair it with this device.', linkButton('Add your first screen', '#/add-screen', 'primary')),
   );
+}
+
+function integrationCard(i, entities) {
+  const st = statusOf(i.status);
+  const count = entities.filter((e) => e.id.startsWith(`${i.id}:`)).length;
+  const hasFavs = entities.some((e) => e.id.startsWith(`${i.id}:`) && e.capabilities?.arrange_favourites);
+  return h('article', { class: 'card' },
+    h('div', { class: 'card-head' },
+      h('div', { class: 'grow' }, h('h2', { class: 'card-title' }, h('a', { href: `#/integration-info/${i.id}` }, i.name)),
+        h('div', { class: 'small muted' }, i.typeName, i.status === 'running' ? ` · ${count} device${count === 1 ? '' : 's'}` : '')),
+      badge(st.kind, st.text)),
+    st.detail ? h('p', { class: 'small bad detail' }, st.detail) : null,
+    (i.accounts || []).map((a) => accountRow(i, a)),
+    h('div', { class: 'card-actions' },
+      linkButton('Details', `#/integration-info/${i.id}`, 'primary'),
+      linkButton('Edit', `#/integration/${i.id}`),
+      moreMenu(`More actions for ${i.name}`,
+        hasFavs ? h('a', { href: `#/favourites/${i.id}` }, 'Favourites') : null,
+        btn('Restart', async () => {
+          await api('POST', `/integrations/${i.id}/restart`, {});
+          toast(`Restarting ${i.name}`);
+          setTimeout(refresh, 2500);
+        }),
+        btn('Remove', async () => {
+          if (!await ask({ title: `Remove ${i.name}?`, body: 'Its tiles will show as unavailable on your screens.', action: 'Remove', danger: true })) return;
+          await api('DELETE', `/integrations/${i.id}`);
+          toast(`${i.name} removed`);
+          await refresh();
+        }, { class: 'danger' }))));
 }
 
 async function integrationsView() {
   const [integrations, entities] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities')]);
-  const hasFavs = (id) => entities.some((e) => e.id.startsWith(`${id}:`) && e.capabilities?.arrange_favourites);
+  const trouble = integrations.filter((i) => i.status.startsWith('error')).length;
   render(
-    h('h1', {}, 'Integrations'),
-    integrations.map((i) => h('div', { class: 'card' },
-      h('div', { class: 'row' },
-        h('div', {}, h('a', { href: `#/integration-info/${i.id}`, class: 'title' }, i.name), h('div', { class: 'small muted' }, i.typeName, ' · ',
-          h('span', { class: i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : '' }, i.status))),
-        h('div', { class: 'row' },
-          hasFavs(i.id) ? h('button', { onclick: () => (location.hash = `#/favourites/${i.id}`) }, 'Favourites') : null,
-          h('button', { onclick: () => (location.hash = `#/integration/${i.id}`) }, 'Edit'),
-          h('button', { class: 'danger', onclick: async () => {
-            if (!confirm(`Remove ${i.name}? Its tiles will show as unavailable.`)) return;
-            await api('DELETE', `/integrations/${i.id}`); route();
-          } }, 'Remove'))),
-      (i.accounts || []).map((a) => accountRow(i, a)))),
-    h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: () => (location.hash = '#/integration/new') }, 'Add integration')),
+    pageHead('Integrations', integrations.length ? (trouble ? `${trouble} need${trouble === 1 ? 's' : ''} attention` : `${integrations.length} connected services`) : null,
+      linkButton('Add integration', '#/integration/new', 'primary')),
+    integrations.length
+      ? h('div', { class: 'grid' }, integrations.map((i) => integrationCard(i, entities)))
+      : empty('Nothing connected yet', 'Connect Homey, Home Assistant, Sonos, weather and more.', linkButton('Add your first integration', '#/integration/new', 'primary')),
   );
 }
 
@@ -295,99 +442,156 @@ async function peopleView() {
 async function settingsView() {
   const info = await api('GET', '/settings');
   const st = { ...info.settings };
-  const hours = (key) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = Number(e.target.value); } },
+  const here = location.hash;
+  let dirty = false;
+  const changed = () => { dirty = true; save.disabled = false; saved.textContent = 'Unsaved changes'; hoursRow.classList.toggle('hidden', st.theme !== 'auto'); };
+  const hours = (key) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = Number(e.target.value); changed(); } },
     Array.from({ length: 24 }, (_, i) => h('option', { value: i, selected: st[key] === i }, `${String(i).padStart(2, '0')}:00`)));
-  const choice = (key, options) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = e.target.value; } },
+  const choice = (key, options) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = e.target.value; changed(); } },
     options.map(([v, label]) => h('option', { value: v, selected: st[key] === v }, label)));
-  const out = h('div');
+  const hoursRow = h('div', { class: `two${st.theme === 'auto' ? '' : ' hidden'}` }, field('Day starts', 's-day_start', hours('day_start')), field('Night starts', 's-day_end', hours('day_end')));
+  const saved = h('span', { class: 'small muted', role: 'status' });
+  const save = h('button', { type: 'button', class: 'primary', disabled: true, onclick: async () => {
+    save.disabled = true;
+    try {
+      await api('PUT', '/settings', st);
+      dirty = false;
+      saved.textContent = '';
+      toast('Saved. Screens reload by themselves.');
+    } catch (e) { save.disabled = false; toast(e.message, true); }
+  } }, 'Save');
   const file = h('input', { type: 'file', accept: 'application/json,.json', id: 'restore', class: 'hidden', onchange: async () => {
     const f = file.files[0];
     if (!f) return;
     try {
       const backup = JSON.parse(await f.text());
-      if (!confirm(`Restore this backup from ${backup.exported ? new Date(backup.exported * 1000).toLocaleString() : 'an unknown date'}? Screens, integrations and settings are replaced; people in it are added.`)) return;
-      await api('POST', '/restore', backup);
-      out.replaceChildren(h('p', { class: 'notice ok' }, 'Restored. Screens reload by themselves.'));
-    } catch (e) { out.replaceChildren(errorBox(e)); }
+      const when = backup.exported ? new Date(backup.exported * 1000).toLocaleString() : 'an unknown date';
+      if (await ask({ title: 'Restore this backup?', body: `From ${when}. Screens, integrations and settings are replaced. People in it are added.`, action: 'Restore', danger: true })) {
+        await api('POST', '/restore', backup);
+        toast('Restored. Screens reload by themselves.');
+      }
+    } catch (e) { if (e.message !== 'Cancelled.') toast(e instanceof SyntaxError ? 'That file is not an oldpad backup.' : e.message, true); }
     file.value = '';
   } });
+  const download = btn('Download backup', async () => {
+    const get = () => fetch('/api/admin/backup', { credentials: 'same-origin' });
+    let res = await get();
+    if (res.status === 403) { await confirmPasskey(); res = await get(); }
+    if (!res.ok) throw new Error(`Could not make the backup (HTTP ${res.status}).`);
+    const url = URL.createObjectURL(await res.blob());
+    const a = h('a', { href: url, download: `oldpad-backup-${new Date().toISOString().slice(0, 10)}.json` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  });
+  leaveGuard = () => {
+    if (!dirty || confirm('Leave without saving your changes?')) return true;
+    ignoreHash = true;
+    location.hash = here;
+    return false;
+  };
+  window.onbeforeunload = () => (dirty ? true : undefined);
   render(
-    h('h1', {}, 'Settings'),
-    h('h2', {}, 'Screens'),
-    h('label', { for: 's-theme' }, 'Theme'),
-    choice('theme', [['auto', 'Light by day, dark at night'], ['day', 'Always light'], ['night', 'Always dark']]),
-    h('div', { class: 'row' }, h('div', {}, h('label', { for: 's-day_start' }, 'Day starts'), hours('day_start')), h('div', {}, h('label', { for: 's-day_end' }, 'Night starts'), hours('day_end'))),
-    h('label', { for: 's-language' }, 'Language'),
-    choice('language', [['auto', 'Each screen\'s own language'], ['nb', 'Norsk'], ['en', 'English']]),
-    h('div', { class: 'actions' }, h('button', { class: 'primary', onclick: async () => {
-      try { await api('PUT', '/settings', st); out.replaceChildren(h('p', { class: 'notice ok' }, 'Saved. Screens reload by themselves.')); } catch (e) { out.replaceChildren(errorBox(e)); }
-    } }, 'Save')),
-    h('h2', {}, 'Backup'),
-    h('p', { class: 'muted' }, 'Screens, their layouts, integrations, people and settings in one file. It includes integration secrets such as the Homey key and the Spotify sign-in, so keep it somewhere private.'),
-    h('div', { class: 'actions' },
-      h('button', { onclick: async () => {
-        const get = () => fetch('/api/admin/backup', { credentials: 'same-origin' });
-        let res = await get();
-        if (res.status === 403) {
-          try { await confirmPasskey(); } catch (e) { out.replaceChildren(errorBox(e)); return; }
-          res = await get();
-        }
-        if (!res.ok) { out.replaceChildren(errorBox(new Error(`HTTP ${res.status}`))); return; }
-        const a = h('a', { href: URL.createObjectURL(await res.blob()), download: `oldpad-backup-${new Date().toISOString().slice(0, 10)}.json` });
-        document.body.append(a); a.click(); a.remove();
-      } }, 'Download backup'),
-      h('button', { onclick: () => file.click() }, 'Restore from backup…'), file),
-    out,
-    h('h2', {}, 'About'),
-    h('p', { class: 'small muted' }, `oldpad ${info.version}${info.commit ? ` (${info.commit})` : ''} · ${info.publicUrl} · ${info.counts.screens} screens, ${info.counts.integrations} integrations, ${info.counts.people} people`),
+    pageHead('Settings', 'For all screens in this home.'),
+    h('div', { class: 'grid settings' },
+      h('section', { class: 'card' },
+        h('h2', { class: 'card-title' }, 'Appearance'),
+        field('Theme', 's-theme', choice('theme', [['auto', 'Light by day, dark at night'], ['day', 'Always light'], ['night', 'Always dark']])),
+        hoursRow,
+        field('Language', 's-language', choice('language', [['auto', 'Each screen\'s own language'], ['nb', 'Norsk'], ['en', 'English']])),
+        h('div', { class: 'card-actions' }, save, saved)),
+      h('section', { class: 'card' },
+        h('h2', { class: 'card-title' }, 'Backup'),
+        h('p', { class: 'muted small' }, 'Screens, layouts, integrations, people and settings in one file.'),
+        h('p', { class: 'notice small' }, 'The file contains integration secrets, such as the Homey key. Keep it somewhere private.'),
+        h('div', { class: 'card-actions' }, download, btn('Restore…', () => file.click()), file)),
+      h('section', { class: 'card' },
+        h('h2', { class: 'card-title' }, 'About'),
+        h('dl', { class: 'facts' },
+          h('dt', {}, 'Version'), h('dd', {}, `${info.version}${info.commit ? ` (${info.commit})` : ''}`),
+          h('dt', {}, 'Address'), h('dd', {}, info.publicUrl),
+          h('dt', {}, 'Screens'), h('dd', {}, String(info.counts.screens)),
+          h('dt', {}, 'Integrations'), h('dd', {}, String(info.counts.integrations)),
+          h('dt', {}, 'People'), h('dd', {}, String(info.counts.people))))),
   );
 }
 
 // Pairing starts on the new screen; this explains how and takes the code it shows.
 function addScreenView() {
   const code = h('input', { type: 'text', id: 'p-code', maxlength: '8', autocapitalize: 'characters', autocomplete: 'off', placeholder: 'ABCD2345' });
-  const go = () => { const c = code.value.trim().toUpperCase(); if (c) location.hash = `#/pair/${encodeURIComponent(c)}`; };
-  code.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
-  render(
-    h('h1', {}, 'Add screen'),
-    h('ol', {},
-      h('li', {}, 'On the tablet, open ', h('strong', {}, location.origin.replace('https://', 'http://')), '.'),
-      h('li', {}, 'It shows a QR code. Scan it with this phone — or type the code shown under it here:')),
-    h('label', { for: 'p-code' }, 'Code from the screen'),
-    code,
-    h('div', { class: 'actions' },
-      h('button', { class: 'primary', onclick: go }, 'Continue'),
-      h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')),
-  );
+  const go = () => { const c = code.value.trim().toUpperCase(); if (c) location.hash = `#/pair/${encodeURIComponent(c)}`; else code.focus(); };
+  render(h('div', { class: 'narrow' },
+    back('#/', 'Screens'),
+    pageHead('Add screen'),
+    h('div', { class: 'card' },
+      h('ol', { class: 'steps' },
+        h('li', {}, 'On the tablet, open ', h('strong', { class: 'break' }, location.origin), '.', h('p', { class: 'help' }, 'An iPad on iOS 9 or older needs the ISRG Root X1 certificate installed first.')),
+        h('li', {}, 'Scan the QR code it shows with this phone, or type the code below it.')),
+      onSubmit(go, field('Code from the screen', 'p-code', code),
+        h('div', { class: 'actions' }, h('button', { type: 'submit', class: 'primary' }, 'Continue'), linkButton('Cancel', '#/'))))));
 }
 
 async function pairView(code) {
   const { status } = await api('GET', `/pair/${encodeURIComponent(code)}`);
   if (status !== 'pending') {
-    render(h('h1', {}, 'Pair a screen'), h('p', { class: 'notice' },
-      status === 'approved' ? 'This screen is already paired.' : 'This code has expired. Start again on the screen.'));
+    document.title = 'Pair a screen · oldpad';
+    render(h('div', { class: 'narrow' }, back('#/', 'Screens'), pageHead('Pair a screen'), h('div', { class: 'card' },
+      h('p', {}, status === 'approved' ? 'This screen is already paired.' : 'This code has expired. Start again on the screen.'),
+      h('div', { class: 'actions' }, linkButton('Enter another code', '#/add-screen', 'primary')))));
     return;
   }
-  const name = h('input', { type: 'text', id: 'name', value: 'Kitchen', maxlength: '64' });
-  const pin = h('input', { type: 'text', id: 'pin', inputmode: 'numeric', autocomplete: 'off', maxlength: '6', placeholder: '123456' });
+  const devices = await api('GET', '/devices');
+  const leaders = devices.filter((d) => !d.follows);
+  let kind = 'new';
+  const name = h('input', { type: 'text', id: 'name', placeholder: 'Kitchen', maxlength: '64', oninput: () => check() });
+  const naming = field('Name this screen', 'name', name, 'Usually the room it hangs in.');
+  const pin = h('input', { type: 'text', id: 'pin', class: 'pin', inputmode: 'numeric', autocomplete: 'off', maxlength: '6', placeholder: '000000',
+    oninput: () => { pin.value = pin.value.replace(/\D/g, ''); check(); } });
+  const pickFollow = h('select', { id: 'follow' }, leaders.map((d) => h('option', { value: d.id }, d.name)));
+  const pickReplace = h('select', { id: 'replace' }, devices.map((d) => h('option', { value: d.id }, d.name)));
+  const followField = field('Use the layout of', 'follow', pickFollow, 'Changes to that layout appear on both screens.');
+  const replaceField = field('Screen to replace', 'replace', pickReplace, 'Keeps its name and layout. Its previous sign-in stops working immediately.');
   const out = h('div');
-  const go = h('button', { class: 'primary', onclick: async () => {
+  const go = h('button', { type: 'submit', class: 'primary wide-button', disabled: true }, 'Approve screen');
+  const check = () => { go.disabled = !/^\d{6}$/.test(pin.value) || (kind !== 'replace' && !name.value.trim()); };
+  const show = () => {
+    followField.classList.toggle('hidden', kind !== 'follow');
+    replaceField.classList.toggle('hidden', kind !== 'replace');
+    naming.classList.toggle('hidden', kind === 'replace');
+    check();
+  };
+  const option = (value, title, text) => h('label', { class: 'choice' },
+    h('input', { type: 'radio', name: 'pair-kind', value, checked: value === 'new', onchange: () => { kind = value; show(); } }),
+    h('span', {}, h('strong', {}, title), h('span', { class: 'small muted' }, text)));
+  const submit = async () => {
+    if (go.disabled) return;
     go.disabled = true;
     try {
-      const { id } = await api('POST', `/pair/${encodeURIComponent(code)}`, { name: name.value, pin: pin.value });
-      location.hash = `#/device/${id}`;
-    } catch (e) { out.replaceChildren(errorBox(e)); go.disabled = false; }
-  } }, 'Approve');
-  render(
-    h('h1', {}, 'Pair a screen'),
-    h('p', {}, 'Check that the screen shows this code:'),
-    h('p', { class: 'code' }, code.toUpperCase()),
-    h('p', { class: 'notice' }, 'Only continue if that screen is in front of you. If someone sent you this link, cancel.'),
-    h('label', { for: 'pin' }, 'Number shown on the screen'), pin,
-    h('label', { for: 'name' }, 'Name this screen'), name,
-    h('p', { class: 'help' }, 'Usually the room it hangs in.'),
-    h('div', { class: 'actions' }, go, h('button', { onclick: () => (location.hash = '#/') }, 'Cancel')), out,
-  );
+      const body = kind === 'replace' ? { replace: pickReplace.value, pin: pin.value }
+        : { name: name.value, pin: pin.value, ...(kind === 'follow' ? { follow: pickFollow.value } : {}) };
+      const { id } = await api('POST', `/pair/${encodeURIComponent(code)}`, body);
+      toast('Screen paired');
+      location.hash = kind === 'new' ? `#/device/${id}` : '#/';
+    } catch (e) {
+      if (e.message !== 'Cancelled.') out.replaceChildren(errorBox(e));
+      check();
+    }
+  };
+  document.title = 'Pair a screen · oldpad';
+  render(h('div', { class: 'narrow' },
+    back('#/', 'Screens'),
+    pageHead('Pair a screen'),
+    h('div', { class: 'notice' }, h('strong', {}, 'Is the screen in front of you?'), ' If someone sent you this link, cancel.'),
+    h('div', { class: 'card' }, onSubmit(submit,
+      h('p', { class: 'small muted' }, 'Screen code'), h('p', { class: 'code' }, code.toUpperCase()),
+      field('Number shown on the screen', 'pin', pin),
+      h('fieldset', { class: 'choices' }, h('legend', {}, 'What is this screen?'),
+        option('new', 'A new screen', 'Starts with an empty layout'),
+        leaders.length ? option('follow', 'A new screen, same layout', 'Shares a layout you already made') : null,
+        devices.length ? option('replace', 'A replacement', 'Takes over an existing screen') : null),
+      followField, replaceField, naming,
+      h('div', { class: 'actions' }, go, linkButton('Cancel', '#/')), out))));
+  show();
+  pin.focus();
 }
 
 // ---------------------------------------------------------------- screen editor
@@ -423,6 +627,25 @@ async function deviceView(id) {
   const [devices, entities] = await Promise.all([api('GET', '/devices'), api('GET', '/entities')]);
   const device = devices.find((d) => d.id === id);
   if (!device) return render(errorBox(new Error('No such screen.')));
+  if (device.follows) {
+    const leader = devices.find((d) => d.id === device.follows);
+    const title = h('input', { type: 'text', id: 'name', value: device.name, maxlength: '64' });
+    return render(h('div', { class: 'narrow' },
+      back('#/', 'Screens'),
+      pageHead(device.name, 'Shares a layout'),
+      h('p', { class: 'notice' }, `This screen shows the layout of ${leader?.name ?? 'another screen'}. Changes there appear here too.`),
+      h('div', { class: 'card' },
+        field('Screen name', 'name', title),
+        h('div', { class: 'card-actions' },
+          btn('Save name', async () => { await api('PUT', `/devices/${id}`, { name: title.value }); toast('Saved'); await refresh(); }, { class: 'primary' }),
+          linkButton('Edit shared layout', `#/device/${device.follows}`),
+          btn('Stop sharing', async () => {
+            if (!await ask({ title: 'Stop sharing?', body: 'This screen keeps a copy of the layout, and later changes no longer reach it.', action: 'Stop sharing' })) return;
+            await api('PUT', `/devices/${id}`, { follows: null });
+            toast('Now has its own layout');
+            await refresh();
+          })))));
+  }
   main.classList.add('wide');
   const ent = new Map(entities.map((e) => [e.id, e]));
   const s = { name: device.name, tiles: [...device.tiles], more: [...device.more], panels: { ...device.panels }, pages: structuredClone(device.pages || []), favRows: device.favRows ?? 1, names: { ...(device.names || {}) } };
@@ -747,37 +970,43 @@ function showValue(v) {
 async function integrationInfoView(id) {
   const [integrations, entities, devices] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities'), api('GET', '/devices')]);
   const i = integrations.find((x) => x.id === id);
-  if (!i) return render(errorBox(new Error('No such integration.')));
+  if (!i) return render(back('#/integrations', 'Integrations'), errorBox(new Error('No such integration.')));
+  const st = statusOf(i.status);
   const mine = entities.filter((e) => e.id.startsWith(`${id}:`));
   const usedOn = (eid) => devices.filter((d) => d.tiles.includes(eid) || d.more.includes(eid) || Object.values(d.panels).includes(eid) || (d.pages || []).some((p) => p.items.includes(eid))).map((d) => d.name);
   const filter = h('input', { type: 'search', placeholder: `Filter ${mine.length} devices`, 'aria-label': 'Filter devices' });
-  const list = h('div');
+  const list = h('div', { class: 'device-list' });
   const draw = () => {
     const q = filter.value.trim().toLowerCase();
     let zone = null;
-    list.replaceChildren(...mine.filter((e) => !q || `${e.name} ${e.zone} ${e.class}`.toLowerCase().includes(q)).flatMap((e) => {
-      const caps = Object.entries(e.capabilities || {}).filter(([, c]) => c.value !== null && typeof c.value !== 'object').map(([k, c]) => `${k} ${showValue(c.value)}`);
+    const shown = mine.filter((e) => !q || `${e.name} ${e.zone} ${e.class}`.toLowerCase().includes(q));
+    list.replaceChildren(...(shown.length ? shown.flatMap((e) => {
+      const caps = Object.entries(e.capabilities || {}).filter(([, c]) => c.value !== null && typeof c.value !== 'object').map(([k, c]) => `${k.replace(/_/g, ' ')} ${showValue(c.value)}`);
       const used = usedOn(e.id);
-      const row = h('div', { class: 'pick' }, h('span', { class: 'grow' }, e.name, h('span', { class: 'small muted' }, ` · ${e.class}`),
-        h('div', { class: 'small muted' }, caps.join(' · ') || 'no values'),
-        used.length ? h('div', { class: 'small ok' }, `On ${used.join(', ')}`) : null));
+      const row = h('div', { class: 'info-row' },
+        h('div', { class: 'row' }, h('strong', {}, e.name), h('span', { class: 'small muted' }, e.class)),
+        h('div', { class: 'small muted' }, caps.join(' · ') || 'No values'),
+        used.length ? h('div', { class: 'small ok' }, `On ${used.join(', ')}`) : null);
       const header = e.zone !== zone ? h('div', { class: 'zone' }, (zone = e.zone) || 'No room') : null;
       return header ? [header, row] : [row];
-    }));
+    }) : [h('p', { class: 'muted' }, 'No devices match.')]));
   };
   filter.addEventListener('input', draw);
   draw();
-  const restart = h('button', { onclick: async () => {
-    restart.disabled = true;
-    await api('POST', `/integrations/${id}/restart`, {});
-    setTimeout(route, 2500);
-  } }, 'Restart');
+  const favSpeaker = mine.find((e) => e.capabilities?.arrange_favourites);
   render(
-    h('h1', {}, i.name),
-    h('p', { class: `notice ${i.status === 'running' ? 'ok' : i.status.startsWith('error') ? 'bad' : ''}` }, `${i.typeName}: ${i.status}`),
-    h('div', { class: 'actions' }, restart, h('button', { onclick: () => (location.hash = `#/integration/${id}`) }, 'Edit settings'), h('button', { onclick: () => (location.hash = '#/integrations') }, 'Back')),
+    back('#/integrations', 'Integrations'),
+    pageHead(i.name, i.typeName,
+      btn('Restart', async () => {
+        await api('POST', `/integrations/${id}/restart`, {});
+        toast(`Restarting ${i.name}`);
+        setTimeout(refresh, 2500);
+      }),
+      linkButton('Edit settings', `#/integration/${id}`, 'primary')),
+    h('p', {}, badge(st.kind, st.text)),
+    st.detail ? h('p', { class: 'notice bad' }, st.detail) : null,
     (i.accounts || []).length ? [h('h2', {}, 'Accounts'), h('div', { class: 'card' }, i.accounts.map((a) => accountRow(i, a)))] : null,
-    mine.some((e) => e.capabilities?.arrange_favourites) ? favouritesSection(id, mine.find((e) => e.capabilities.arrange_favourites)) : null,
+    favSpeaker ? favouritesSection(id, favSpeaker) : null,
     h('h2', {}, 'Devices'),
     mine.length ? [filter, list] : h('p', { class: 'muted' }, i.status === 'running' ? 'This integration has no devices.' : 'Devices show up here once it is running.'),
   );
@@ -787,35 +1016,33 @@ async function integrationInfoView(id) {
 function favouritesSection(iid, speaker) {
   let favs = speaker.capabilities.favourites.value.map((f) => ({ ...f }));
   const list = h('div', { class: 'card' });
-  const note = h('div');
   const save = async () => {
     draw();
     try {
       await api('POST', '/set', { id: speaker.id, capability: 'arrange_favourites', value: { order: favs.map((f) => f.id), front: favs.filter((f) => f.front).map((f) => f.id) } });
-      note.replaceChildren();
-    } catch (e) { note.replaceChildren(errorBox(e)); }
+    } catch (e) { toast(e.message, true); }
   };
   const move = (i, by) => { const [f] = favs.splice(i, 1); favs.splice(i + by, 0, f); save(); };
   const draw = () => list.replaceChildren(...(favs.length ? favs.map((f, i) => h('div', { class: 'fav-row' },
     f.art ? h('img', { src: `/api/image/${iid}/${f.art}`, alt: '' }) : h('span', { class: 'noart' }, f.title.slice(0, 1)),
     h('span', { class: 'grow' }, f.title),
-    h('button', { class: `chip${f.front ? ' on' : ''}`, title: 'Show on the front page', 'aria-pressed': String(f.front), onclick: () => { f.front = !f.front; save(); } }, 'Front'),
-    h('button', { class: 'chip', 'aria-label': `Move ${f.title} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
-    h('button', { class: 'chip', 'aria-label': `Move ${f.title} down`, disabled: i === favs.length - 1, onclick: () => move(i, 1) }, '↓'),
-    h('button', { class: 'chip danger', 'aria-label': `Remove ${f.title}`, onclick: async () => {
-      if (!confirm(`Remove "${f.title}" from Sonos favourites? This removes it in the Sonos app too.`)) return;
+    h('button', { type: 'button', class: `chip${f.front ? ' on' : ''}`, title: 'Show on the front page', 'aria-pressed': String(f.front), onclick: () => { f.front = !f.front; save(); } }, 'Front'),
+    h('button', { type: 'button', class: 'chip', 'aria-label': `Move ${f.title} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+    h('button', { type: 'button', class: 'chip', 'aria-label': `Move ${f.title} down`, disabled: i === favs.length - 1, onclick: () => move(i, 1) }, '↓'),
+    h('button', { type: 'button', class: 'chip danger', 'aria-label': `Remove ${f.title}`, onclick: async () => {
+      if (!await ask({ title: `Remove “${f.title}”?`, body: 'This removes it from Sonos favourites in the Sonos app too.', action: 'Remove', danger: true })) return;
       try {
         await api('POST', '/set', { id: speaker.id, capability: 'remove_favourite', value: f.id });
         favs = favs.filter((x) => x !== f);
         draw();
-      } catch (e) { note.replaceChildren(errorBox(e)); }
+      } catch (e) { toast(e.message, true); }
     } }, '✕'))) : [h('p', { class: 'muted' }, 'No favourites yet. Star music or radio in a screen\'s search to add some.')]));
   draw();
   return [
     h('h2', {}, 'Favourites'),
     h('p', { class: 'muted small' }, 'The front page shows the ones marked Front, in this order. The music page shows them all.'),
-    h('div', { class: 'actions' }, h('button', { class: 'chip', onclick: () => { favs.sort((a, b) => a.title.localeCompare(b.title)); save(); } }, 'Sort A–Z')),
-    note, list,
+    h('div', { class: 'actions tight' }, h('button', { type: 'button', class: 'chip', onclick: () => { favs.sort((a, b) => a.title.localeCompare(b.title)); save(); } }, 'Sort A–Z')),
+    list,
   ];
 }
 
@@ -823,20 +1050,20 @@ async function favouritesView(id) {
   const [integrations, entities] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities')]);
   const i = integrations.find((x) => x.id === id);
   const speaker = entities.find((e) => e.id.startsWith(`${id}:`) && e.capabilities?.arrange_favourites);
-  if (!i || !speaker) return render(errorBox(new Error('No favourites here. Is the integration running?')));
-  render(h('h1', {}, `${i.name}: favourites`), favouritesSection(id, speaker).slice(1), h('div', { class: 'actions' }, h('button', { onclick: () => (location.hash = '#/integrations') }, 'Back')));
+  if (!i || !speaker) return render(back('#/integrations', 'Integrations'), errorBox(new Error('No favourites here. Is the integration running?')));
+  render(h('div', { class: 'narrow' }, back(`#/integration-info/${id}`, i.name), pageHead('Favourites', i.name), favouritesSection(id, speaker).slice(1)));
 }
 
 // The integration wizard: 1. pick a type, 2. fill in its fields, 3. test, 4. save.
 async function integrationView(id) {
   const kinds = await api('GET', '/kinds');
   const existing = id === 'new' ? null : (await api('GET', '/integrations')).find((i) => i.id === id);
-  if (id !== 'new' && !existing) return render(errorBox(new Error('No such integration.')));
+  if (id !== 'new' && !existing) return render(back('#/integrations', 'Integrations'), errorBox(new Error('No such integration.')));
   if (!existing) {
     render(
-      h('h1', {}, 'Add integration'),
-      h('p', { class: 'muted' }, 'Step 1 of 2 — what do you want to connect?'),
-      h('div', { class: 'kinds' }, kinds.map((k) => h('button', { class: 'card kind', onclick: () => integrationForm(k, null) },
+      back('#/integrations', 'Integrations'),
+      pageHead('Add integration', 'Step 1 of 2: what do you want to connect?'),
+      h('div', { class: 'grid' }, kinds.map((k) => h('button', { type: 'button', class: 'card kind', onclick: () => integrationForm(k, null) },
         h('strong', {}, k.name), h('span', { class: 'small muted' }, k.description)))),
     );
   } else {
@@ -846,49 +1073,71 @@ async function integrationView(id) {
 
 function integrationForm(kind, existing) {
   const inputs = {};
+  const here = location.hash;
+  let dirty = false;
   const name = h('input', { type: 'text', id: 'f-name', value: existing ? existing.name : kind.name, maxlength: '64' });
   const fields = kind.fields.map((f) => {
     const type = { secret: 'password', url: 'url', number: 'number', text: 'text' }[f.kind] || 'text';
     const current = existing ? existing.config[f.key] : undefined;
-    const input = f.kind === 'bool'
-      ? h('input', { type: 'checkbox', id: `f-${f.key}`, checked: current === true })
-      : h('input', {
-          type, id: `f-${f.key}`, autocomplete: 'off', spellcheck: 'false',
-          placeholder: f.kind === 'secret' && current ? 'Saved — leave empty to keep' : f.placeholder,
-          value: f.kind === 'secret' || current == null ? '' : String(current),
-        });
+    const label = f.label + (f.required ? '' : ' (optional)');
+    if (f.kind === 'bool') {
+      const box = h('input', { type: 'checkbox', id: `f-${f.key}`, checked: current === true });
+      inputs[f.key] = box;
+      return h('div', { class: 'field' }, h('label', { class: 'check' }, box, label), f.help ? h('p', { class: 'help' }, f.help) : null);
+    }
+    const input = h('input', {
+      type, id: `f-${f.key}`, autocomplete: f.kind === 'secret' ? 'new-password' : 'off', spellcheck: 'false',
+      step: f.kind === 'number' ? 'any' : null,
+      placeholder: f.kind === 'secret' && current ? 'Saved. Leave empty to keep it' : f.placeholder,
+      value: f.kind === 'secret' || current == null ? '' : String(current),
+    });
     inputs[f.key] = input;
-    return [h('label', { for: `f-${f.key}` }, f.label + (f.required ? '' : ' (optional)')), input, f.help ? h('p', { class: 'help' }, f.help) : null];
+    if (f.kind !== 'secret') return field(label, `f-${f.key}`, input, f.help);
+    const reveal = h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', 'aria-label': `Show ${f.label}`, onclick: () => {
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      reveal.textContent = showing ? 'Show' : 'Hide';
+      reveal.setAttribute('aria-pressed', String(!showing));
+    } }, 'Show');
+    return field(label, `f-${f.key}`, h('div', { class: 'with-button' }, input, reveal), f.help);
   });
   const config = () => Object.fromEntries(kind.fields.map((f) => [f.key, f.kind === 'bool' ? inputs[f.key].checked : inputs[f.key].value]));
-  const out = h('div');
-  const test = h('button', { onclick: async () => {
+  const out = h('div', { role: 'status' });
+  const test = h('button', { type: 'button', onclick: async () => {
     test.disabled = true;
-    out.replaceChildren(h('p', { class: 'muted' }, 'Testing…'));
+    out.replaceChildren(h('p', { class: 'notice' }, 'Testing the connection…'));
     try {
       const r = await api('POST', '/integrations/test', { type: kind.id, id: existing?.id, config: config() });
       out.replaceChildren(h('p', { class: `notice ${r.ok ? 'ok' : 'bad'}` }, r.message));
-    } catch (e) { out.replaceChildren(errorBox(e)); }
+    } catch (e) { out.replaceChildren(e.message === 'Cancelled.' ? '' : errorBox(e)); }
     test.disabled = false;
-  } }, 'Test connection');
-  const save = h('button', { class: 'primary', onclick: async () => {
+  } }, 'Test');
+  const save = h('button', { type: 'button', class: 'primary', onclick: async () => {
     save.disabled = true;
     try {
       const body = { type: kind.id, name: name.value, config: config() };
       if (existing) await api('PUT', `/integrations/${existing.id}`, body);
       else await api('POST', '/integrations', body);
+      dirty = false;
+      toast('Saved');
       location.hash = '#/integrations';
-    } catch (e) { out.replaceChildren(errorBox(e)); save.disabled = false; }
-  } }, 'Save');
-  render(
-    h('h1', {}, existing ? `Edit ${existing.name}` : kind.name),
-    existing ? null : h('p', { class: 'muted' }, 'Step 2 of 2 — connection details.'),
-    h('p', {}, kind.description),
-    h('label', { for: 'f-name' }, 'Name'), name,
-    fields,
-    h('div', { class: 'actions' }, test, save, h('button', { onclick: () => (location.hash = '#/integrations') }, 'Cancel')),
-    out,
-  );
+    } catch (e) { if (e.message !== 'Cancelled.') out.replaceChildren(errorBox(e)); save.disabled = false; }
+  } }, existing ? 'Save' : 'Add');
+  leaveGuard = () => {
+    if (!dirty || confirm('Leave without saving your changes?')) return true;
+    ignoreHash = true;
+    location.hash = here;
+    return false;
+  };
+  window.onbeforeunload = () => (dirty ? true : undefined);
+  const title = existing ? `Edit ${existing.name}` : kind.name;
+  const form = h('div', { class: 'card', oninput: () => { dirty = true; } }, field('Name', 'f-name', name), fields);
+  render(h('div', { class: 'narrow' },
+    back(existing ? `#/integration-info/${existing.id}` : '#/integrations', existing ? existing.name : 'Integrations'),
+    pageHead(title, existing ? kind.name : 'Step 2 of 2: connection details'),
+    h('p', { class: 'muted' }, kind.description),
+    form, out,
+    h('div', { class: 'form-bar' }, test, h('span', { class: 'grow' }), linkButton('Cancel', '#/integrations'), save)));
 }
 
 // ------------------------------------------------------------- router
@@ -897,6 +1146,7 @@ async function route() {
   leaveGuard = null;
   window.onbeforeunload = null;
   main.classList.remove('wide');
+  document.title = 'oldpad';
   try {
     const status = await api('GET', '/status');
     document.getElementById('who').textContent = status.admin ? status.admin.name : '';

@@ -1,4 +1,4 @@
-use crate::app::{App, Challenge, PAIRING_TTL};
+use crate::app::{App, Challenge, PairTarget, PAIRING_TTL};
 use crate::http::{Request, Response};
 use crate::integrations::{redact, validate, FieldKind};
 use crate::store::{Admin, Credential, IntegrationConfig};
@@ -98,7 +98,11 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
         }
         _ => {
             // An admin may look at a screen as it is (read only): `?preview=<screen id>`.
-            let preview = req.query.get("preview").filter(|_| app.admin_from(req).is_some()).and_then(|id| app.store.lock().unwrap().data.devices.iter().find(|d| d.id == *id).cloned());
+            let preview = req.query.get("preview").filter(|_| app.admin_from(req).is_some()).and_then(|id| {
+                let store = app.store.lock().unwrap();
+                let d = store.data.devices.iter().find(|d| d.id == *id).map(|d| store.data.effective(d));
+                d
+            });
             if preview.is_some() && m != "GET" {
                 return Err(Response::error(403, "Preview is read only"));
             }
@@ -332,7 +336,18 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         ("POST", ["pair", code]) => {
             require_fresh(app, req)?;
             let body = req.json()?;
-            let device = app.approve_pairing(code, body["pin"].as_str().unwrap_or(""), str_field(&body, "name", 64)?).map_err(|e| Response::error(if e == crate::store::SAVE_FAILED { 500 } else { 410 }, e))?;
+            let target = match (body["replace"].as_str(), body["follow"].as_str()) {
+                (Some(id), None) => PairTarget::Replace(id),
+                (None, Some(id)) => PairTarget::Follow(id),
+                (None, None) => PairTarget::New,
+                _ => return Err(Response::error(400, "Choose one: replace or follow")),
+            };
+            let replacing = matches!(target, PairTarget::Replace(_));
+            let name = if replacing { "" } else { str_field(&body, "name", 64)? };
+            let device = app.approve_pairing(code, body["pin"].as_str().unwrap_or(""), name, target).map_err(|e| Response::error(if e == crate::store::SAVE_FAILED { 500 } else { 410 }, e))?;
+            if replacing {
+                app.end_device_streams(&device.id);
+            }
             Ok(Response::ok(json!({ "id": device.id })))
         }
         ("GET", ["devices"]) => {
@@ -341,13 +356,25 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .data
                 .devices
                 .iter()
-                .map(|d| json!({ "id": d.id, "name": d.name, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
+                .map(|d| store.data.effective(d))
+                .map(|d| json!({ "id": d.id, "name": d.name, "follows": d.follows, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
         ("PUT", ["devices", id]) => {
             let body = req.json()?;
             let mut store = app.store.lock().unwrap();
+            let following = store.data.devices.iter().find(|d| d.id == *id).ok_or_else(|| Response::error(404, "No such device"))?.follows.is_some();
+            let will_follow = body.get("follows").map_or(following, Value::is_string);
+            if will_follow && ["tiles", "more", "panels", "names", "favRows", "pages"].iter().any(|k| body.get(k).is_some()) {
+                return Err(Response::error(409, "This screen uses another screen's layout. Edit that one."));
+            }
+            if let Some(f) = body.get("follows") {
+                if !f.is_null() && !f.is_string() {
+                    return Err(Response::error(400, "Bad follows"));
+                }
+                store.data.set_follows(id, f.as_str()).map_err(|e| Response::error(409, e))?;
+            }
             let d = store.data.devices.iter_mut().find(|d| d.id == *id).ok_or_else(|| Response::error(404, "No such device"))?;
             if body.get("name").is_some() {
                 d.name = str_field(&body, "name", 64)?.to_string();
@@ -401,8 +428,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             let device = d.clone();
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
-            app.update_client_tiles(&device);
-            app.notify_device(&device.id, "reload");
+            app.layout_changed(&device.id);
             Ok(Response::ok(json!({ "ok": true })))
         }
         ("POST", ["devices", id, "reload"]) => {
@@ -414,7 +440,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         }
         ("DELETE", ["devices", id]) => {
             let mut store = app.store.lock().unwrap();
-            store.data.devices.retain(|d| d.id != *id);
+            store.data.remove_device(id);
             store.save().map_err(|e| Response::error(500, e))?;
             drop(store);
             app.notify_device(id, "revoked");
@@ -534,6 +560,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 }
             }
             store.data.devices = devices;
+            store.data.clean_follows();
             store.data.integrations = integrations;
             store.data.settings = settings;
             store.save().map_err(|e| Response::error(500, e))?;

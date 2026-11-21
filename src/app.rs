@@ -72,6 +72,13 @@ pub struct Pairing {
     pub token: Option<String>,
 }
 
+#[derive(Clone, Copy)]
+pub enum PairTarget<'a> {
+    New,
+    Replace(&'a str),
+    Follow(&'a str),
+}
+
 pub enum Challenge {
     /// `invite` is set when someone joins through an admin's invitation.
     Register { admin_id: Option<String>, name: String, user_handle: String, invite: Option<String> },
@@ -169,6 +176,13 @@ impl App {
         self.send_where(|c| c.device_id == device_id, &sse(event, &json!({})));
     }
 
+    /// Cuts off whoever held this screen's previous token: open streams and unused tickets.
+    pub fn end_device_streams(&self, device_id: &str) {
+        self.notify_device(device_id, "revoked");
+        self.clients.lock().unwrap().retain(|c| c.device_id != device_id);
+        self.tickets.lock().unwrap().retain(|_, (id, _)| id != device_id);
+    }
+
     /// Closes the streams of screens that no longer exist.
     pub fn drop_revoked_clients(&self) {
         let ids: HashSet<String> = self.store.lock().unwrap().data.devices.iter().map(|d| d.id.clone()).collect();
@@ -183,6 +197,18 @@ impl App {
             clients.retain(|c| c.device_id != device.id);
         }
         clients.push(Client { device_id: device.id.clone(), tiles: device.allowed(), tx });
+    }
+
+    /// Tells a screen, and every screen sharing its layout, to show the new one.
+    pub fn layout_changed(&self, id: &str) {
+        let group: Vec<Device> = {
+            let store = self.store.lock().unwrap();
+            store.data.devices.iter().filter(|d| d.id == id || d.follows.as_deref() == Some(id)).map(|d| store.data.effective(d)).collect()
+        };
+        for d in &group {
+            self.update_client_tiles(d);
+            self.notify_device(&d.id, "reload");
+        }
     }
 
     pub fn update_client_tiles(&self, device: &Device) {
@@ -275,15 +301,17 @@ impl App {
         let t = now();
         let device = store.data.devices.iter_mut().find(|d| constant_eq(&d.token_hash, &hash) && d.expires > t)?;
         // Sliding expiry: a tablet in daily use never expires. Saved at most hourly.
-        if t - device.last_seen > TOUCH_INTERVAL {
+        let touch = t - device.last_seen > TOUCH_INTERVAL;
+        if touch {
             device.last_seen = t;
             device.expires = t + self.cfg.device_ttl;
-            let d = device.clone();
+        }
+        let d = device.clone();
+        if touch {
             // Bookkeeping, not the tablet's change: a failure is logged and the tablet carries on.
             let _ = store.save();
-            return Some(d);
         }
-        Some(device.clone())
+        Some(store.data.effective(&d))
     }
 
     /// What a screen puts on image URLs, since img tags cannot send its token.
@@ -317,7 +345,8 @@ impl App {
         if exp <= now() {
             return None;
         }
-        self.store.lock().unwrap().data.devices.iter().find(|d| d.id == device_id && d.expires > now()).cloned()
+        let store = self.store.lock().unwrap();
+        store.data.devices.iter().find(|d| d.id == device_id && d.expires > now()).map(|d| store.data.effective(d))
     }
 
     // ---------- pairing ----------
@@ -337,7 +366,8 @@ impl App {
     }
 
     /// Admin approval: creates the device and parks its token for the tablet to collect.
-    pub fn approve_pairing(&self, code: &str, pin: &str, name: &str) -> Result<Device, &'static str> {
+    /// `Replace` takes over a screen (same layout, new token); `Follow` adds one that shows another's layout.
+    pub fn approve_pairing(&self, code: &str, pin: &str, name: &str, target: PairTarget) -> Result<Device, &'static str> {
         let mut list = self.pairings.lock().unwrap();
         let i = list
             .iter()
@@ -357,22 +387,39 @@ impl App {
         let p = &mut list[i];
         let token = random_token();
         let t = now();
-        let device = Device {
-            id: random_code(10),
-            name: name.into(),
-            token_hash: sha256_hex(&token),
-            created: t,
-            last_seen: t,
-            expires: t + self.cfg.device_ttl,
-            tiles: Vec::new(),
-            panels: Default::default(),
-            more: Vec::new(),
-            pages: Vec::new(),
-            fav_rows: None,
-            names: Default::default(),
-        };
         let mut store = self.store.lock().unwrap();
-        store.data.devices.push(device.clone());
+        if let PairTarget::Follow(id) = target
+            && !store.data.devices.iter().any(|d| d.id == id && d.follows.is_none()) {
+                return Err("That layout no longer exists.");
+            }
+        let device = match target {
+            PairTarget::Replace(id) => {
+                let d = store.data.devices.iter_mut().find(|d| d.id == id).ok_or("That screen no longer exists.")?;
+                d.token_hash = sha256_hex(&token);
+                d.last_seen = t;
+                d.expires = t + self.cfg.device_ttl;
+                d.clone()
+            }
+            PairTarget::New | PairTarget::Follow(_) => {
+                let d = Device {
+                    id: random_code(10),
+                    name: name.into(),
+                    token_hash: sha256_hex(&token),
+                    created: t,
+                    last_seen: t,
+                    expires: t + self.cfg.device_ttl,
+                    tiles: Vec::new(),
+                    panels: Default::default(),
+                    more: Vec::new(),
+                    pages: Vec::new(),
+                    fav_rows: None,
+                    names: Default::default(),
+                    follows: if let PairTarget::Follow(id) = target { Some(id.to_string()) } else { None },
+                };
+                store.data.devices.push(d.clone());
+                d
+            }
+        };
         store.save()?;
         p.token = Some(token);
         Ok(device)
@@ -456,8 +503,8 @@ pub mod tests {
         let p = app.new_pairing().unwrap();
         assert_eq!(app.poll_pairing(&p.id, &p.secret)["status"], "pending");
         assert_eq!(app.poll_pairing(&p.id, "wrong")["status"], "expired");
-        app.approve_pairing(&p.code.to_lowercase(), &p.pin, "Kitchen").unwrap();
-        assert!(app.approve_pairing(&p.code, &p.pin, "Again").is_err());
+        app.approve_pairing(&p.code.to_lowercase(), &p.pin, "Kitchen", PairTarget::New).unwrap();
+        assert!(app.approve_pairing(&p.code, &p.pin, "Again", PairTarget::New).is_err());
 
         let first = app.poll_pairing(&p.id, &p.secret);
         let token = first["token"].as_str().unwrap().to_string();
@@ -485,14 +532,40 @@ pub mod tests {
     }
 
     #[test]
+    fn replacing_a_screen_keeps_its_layout_and_kills_the_old_token() {
+        let app = test_app();
+        let p = app.new_pairing().unwrap();
+        let old = app.approve_pairing(&p.code, &p.pin, "Kitchen", PairTarget::New).unwrap();
+        let old_token = app.poll_pairing(&p.id, &p.secret)["token"].as_str().unwrap().to_string();
+        app.store.lock().unwrap().data.devices[0].tiles = vec!["x:lamp".into()];
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.add_client(&old, tx);
+        let ticket = app.new_ticket(&old.id);
+
+        let p = app.new_pairing().unwrap();
+        assert!(app.approve_pairing(&p.code, &p.pin, "", PairTarget::Replace("nope")).is_err());
+        let new = app.approve_pairing(&p.code, &p.pin, "", PairTarget::Replace(&old.id)).unwrap();
+        app.end_device_streams(&new.id);
+        let new_token = app.poll_pairing(&p.id, &p.secret)["token"].as_str().unwrap().to_string();
+
+        assert_eq!((new.id.as_str(), new.name.as_str(), new.tiles.len()), (old.id.as_str(), "Kitchen", 1));
+        assert_eq!(app.store.lock().unwrap().data.devices.len(), 1);
+        assert!(app.device_from(&bearer(&old_token)).is_none());
+        assert!(app.device_from(&bearer(&new_token)).is_some());
+        assert!(app.redeem_ticket(&ticket).is_none());
+        assert!(rx.recv().unwrap().starts_with("event: revoked"));
+        assert!(rx.recv().is_err(), "the old stream is closed");
+    }
+
+    #[test]
     fn a_link_alone_cannot_approve_a_screen() {
         let app = test_app();
         let p = app.new_pairing().unwrap();
         let wrong = if p.pin == "000000" { "000001" } else { "000000" };
-        assert!(app.approve_pairing(&p.code, wrong, "T").is_err());
-        assert!(app.approve_pairing(&p.code, "", "T").is_err());
-        assert!(app.approve_pairing(&p.code, wrong, "T").is_err());
-        assert!(app.approve_pairing(&p.code, &p.pin, "T").is_err(), "three misses end the pairing");
+        assert!(app.approve_pairing(&p.code, wrong, "T", PairTarget::New).is_err());
+        assert!(app.approve_pairing(&p.code, "", "T", PairTarget::New).is_err());
+        assert!(app.approve_pairing(&p.code, wrong, "T", PairTarget::New).is_err());
+        assert!(app.approve_pairing(&p.code, &p.pin, "T", PairTarget::New).is_err(), "three misses end the pairing");
         assert!(app.store.lock().unwrap().data.devices.is_empty());
     }
 
@@ -512,7 +585,7 @@ pub mod tests {
     fn revoked_screen_loses_its_stream() {
         let app = test_app();
         let p = app.new_pairing().unwrap();
-        let d = app.approve_pairing(&p.code, &p.pin, "T").unwrap();
+        let d = app.approve_pairing(&p.code, &p.pin, "T", PairTarget::New).unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
         app.add_client(&d, tx);
         app.store.lock().unwrap().data.devices.clear();
@@ -547,7 +620,7 @@ pub mod tests {
     fn image_token_needs_a_live_screen_and_the_lan_port() {
         let app = test_app();
         let p = app.new_pairing().unwrap();
-        let d = app.approve_pairing(&p.code, &p.pin, "T").unwrap();
+        let d = app.approve_pairing(&p.code, &p.pin, "T", PairTarget::New).unwrap();
         let mut req = bearer("x");
         assert!(!app.can_fetch_image(&req));
         req.query.insert("t".into(), App::image_token(&d));

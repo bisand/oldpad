@@ -233,6 +233,30 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(phone.call("POST", &format!("/api/admin/devices/{device_id}/reload"), Some(json!({}))).0, 200);
     assert!(lines.by_ref().map(Result::unwrap).any(|l| l == "event: refresh"));
 
+    // --- a second pad shares the layout, then a third takes over its place
+    let pair_pad = |phone: &mut Client, extra: Value| {
+        let mut pad = Client { base: base.clone(), cookie: None, bearer: None };
+        let (_, p) = pad.call("POST", "/api/pair", Some(json!({})));
+        let mut body = json!({ "name": "Hall", "pin": p["pin"] });
+        body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let (s, ok) = phone.call("POST", &format!("/api/admin/pair/{}", p["code"].as_str().unwrap()), Some(body));
+        assert_eq!(s, 200, "{ok}");
+        let poll = format!("/api/pair/{}", p["id"].as_str().unwrap());
+        let (_, got) = pad.call_with("GET", &poll, None, &[("X-Pair-Secret", p["secret"].as_str().unwrap())]);
+        pad.bearer = Some(got["token"].as_str().unwrap().to_string());
+        (pad, ok["id"].as_str().unwrap().to_string())
+    };
+    let (mut hall, hall_id) = pair_pad(&mut phone, json!({ "follow": device_id }));
+    let tiles = |c: &mut Client| c.call("GET", "/api/tablet", None).1["tiles"].clone();
+    assert!(!tiles(&mut tablet).as_array().unwrap().is_empty());
+    assert_eq!(tiles(&mut hall), tiles(&mut tablet), "shares the layout");
+    assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{hall_id}"), Some(json!({ "tiles": [] }))).0, 409, "edit the shared layout, not a copy");
+    let (mut hall2, same) = pair_pad(&mut phone, json!({ "replace": hall_id }));
+    assert_eq!(same, hall_id);
+    assert_eq!(hall.call("GET", "/api/tablet", None).0, 401, "the replaced token is dead");
+    assert_eq!(tiles(&mut hall2), tiles(&mut tablet), "the replacement keeps the layout");
+    assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{hall_id}"), None).0, 200);
+
     // --- settings reach the screens; a backup restores what it holds
     assert_eq!(phone.call("PUT", "/api/admin/settings", Some(json!({ "day_start": 25, "day_end": 21, "theme": "auto", "language": "auto" }))).0, 400);
     assert_eq!(phone.call("PUT", "/api/admin/settings", Some(json!({ "day_start": 6, "day_end": 22, "theme": "night", "language": "nb" }))).0, 200);

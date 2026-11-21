@@ -56,6 +56,9 @@ pub struct Device {
     /// Names this screen shows instead of the integration's, by entity id.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub names: std::collections::BTreeMap<String, String>,
+    /// Shows the layout of this other screen instead of its own. One level: a followed screen follows nobody.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follows: Option<String>,
 }
 
 /// A page of the admin's choosing. Items are entity ids, or `card:<name>` for
@@ -115,6 +118,58 @@ pub struct Data {
     pub integrations: Vec<IntegrationConfig>,
     #[serde(default)]
     pub settings: Settings,
+}
+
+impl Data {
+    /// The screen with the layout it actually shows.
+    pub fn effective(&self, d: &Device) -> Device {
+        match d.follows.as_ref().and_then(|id| self.devices.iter().find(|x| x.id == *id)) {
+            Some(l) => Device { tiles: l.tiles.clone(), panels: l.panels.clone(), more: l.more.clone(), pages: l.pages.clone(), fav_rows: l.fav_rows, names: l.names.clone(), ..d.clone() },
+            None => d.clone(),
+        }
+    }
+
+    /// Starts following `target`, or with None stops and keeps a copy of the shared layout.
+    pub fn set_follows(&mut self, id: &str, target: Option<&str>) -> Result<(), &'static str> {
+        let current = self.devices.iter().find(|d| d.id == id).ok_or("No such screen.")?;
+        let copy = self.effective(current);
+        if let Some(t) = target {
+            if t == id || !self.devices.iter().any(|d| d.id == t && d.follows.is_none()) {
+                return Err("That screen's layout cannot be shared.");
+            }
+            if self.devices.iter().any(|d| d.follows.as_deref() == Some(id)) {
+                return Err("Other screens use this layout. Move them first.");
+            }
+        }
+        let d = self.devices.iter_mut().find(|d| d.id == id).ok_or("No such screen.")?;
+        *d = match target {
+            Some(t) => Device { follows: Some(t.to_string()), ..d.clone() },
+            None => Device { follows: None, ..copy },
+        };
+        Ok(())
+    }
+
+    /// Removes a screen. If others follow it, the first inherits the layout and the rest follow that one.
+    pub fn remove_device(&mut self, id: &str) {
+        let followers: Vec<String> = self.devices.iter().filter(|d| d.follows.as_deref() == Some(id)).map(|d| d.id.clone()).collect();
+        if let Some(heir) = followers.first() {
+            let _ = self.set_follows(heir, None);
+            for d in self.devices.iter_mut().filter(|d| followers[1..].contains(&d.id)) {
+                d.follows = Some(heir.clone());
+            }
+        }
+        self.devices.retain(|d| d.id != id);
+    }
+
+    /// A restored backup may name screens that are gone, or chains: those keep their own layout.
+    pub fn clean_follows(&mut self) {
+        let leaders: Vec<String> = self.devices.iter().filter(|d| d.follows.is_none()).map(|d| d.id.clone()).collect();
+        for d in &mut self.devices {
+            if d.follows.as_ref().is_some_and(|f| !leaders.contains(f)) {
+                d.follows = None;
+            }
+        }
+    }
 }
 
 /// Household-wide choices the admin makes on the settings page.
@@ -206,6 +261,32 @@ fn read(file: &Path) -> std::io::Result<Data> {
 mod tests {
     use super::*;
 
+    fn screen(id: &str, tile: &str) -> Device {
+        Device { id: id.into(), name: id.into(), token_hash: id.into(), created: 0, last_seen: 0, expires: 9, tiles: vec![tile.into()], panels: Default::default(), more: vec![], pages: vec![], fav_rows: None, names: Default::default(), follows: None }
+    }
+
+    #[test]
+    fn screens_can_share_a_layout() {
+        let mut d = Data { devices: vec![screen("a", "x:a"), screen("b", "x:b"), screen("c", "x:c")], ..Default::default() };
+        d.set_follows("b", Some("a")).unwrap();
+        d.set_follows("c", Some("a")).unwrap();
+        assert!(d.effective(&d.devices[1]).allowed().contains("x:a"));
+        assert!(!d.effective(&d.devices[1]).allowed().contains("x:b"), "only the shared layout counts");
+        assert!(d.set_follows("a", Some("b")).is_err(), "no chains");
+        assert!(d.set_follows("c", Some("b")).is_err(), "no following a follower");
+        assert!(d.set_follows("a", Some("a")).is_err());
+
+        d.remove_device("a");
+        assert_eq!((d.devices[0].follows.clone(), d.devices[0].tiles.clone()), (None, vec!["x:a".to_string()]), "the first follower inherits");
+        assert_eq!(d.devices[1].follows.as_deref(), Some("b"));
+        d.set_follows("c", None).unwrap();
+        assert_eq!((d.devices[1].follows.clone(), d.devices[1].tiles.clone()), (None, vec!["x:a".to_string()]), "stopping keeps a copy");
+
+        d.devices[1].follows = Some("gone".into());
+        d.clean_follows();
+        assert_eq!(d.devices[1].follows, None);
+    }
+
     #[test]
     fn save_and_reopen() {
         let dir = std::env::temp_dir().join(format!("oldpad-store-{}", crate::util::random_code(8)));
@@ -223,6 +304,7 @@ mod tests {
             pages: vec![],
             fav_rows: None,
             names: Default::default(),
+            follows: None,
         });
         s.save().unwrap();
         let s2 = Store::open(&dir).unwrap();
