@@ -17,6 +17,7 @@ pub mod homeassistant;
 pub mod homey;
 pub mod influx;
 pub mod met;
+pub mod netatmo;
 pub mod smapi;
 pub mod spot;
 pub mod sonos;
@@ -140,7 +141,7 @@ pub struct Kind {
 }
 
 pub fn kinds() -> Vec<Kind> {
-    vec![homey::kind(), homeassistant::kind(), influx::kind(), met::kind(), sonos::kind(), ais::kind(), spot::kind(), entur::kind(), calendar::kind(), caldav::kind(), demo::kind()]
+    vec![homey::kind(), homeassistant::kind(), influx::kind(), netatmo::kind(), met::kind(), sonos::kind(), ais::kind(), spot::kind(), entur::kind(), calendar::kind(), caldav::kind(), demo::kind()]
 }
 
 /// Checks a submitted config against the kind's fields and returns it cleaned:
