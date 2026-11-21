@@ -2,7 +2,7 @@
 //! shape as the iCal integration. The password goes only to the configured HTTPS origin:
 //! redirects and addresses the server names elsewhere are refused.
 
-use super::calendar::{agenda, now, split_url, DAY};
+use super::calendar::{browsable, coming, now, split_url, DAY, DAYS_AHEAD, DAYS_BACK};
 use super::spot::civil_from_days;
 use super::{get_str, Capability, Entity, Event, Field, FieldKind, Instance, Kind, Sink};
 use crate::client::request;
@@ -192,18 +192,18 @@ impl Dav {
         let t = now();
         let query = format!(
             r#"<?xml version="1.0" encoding="utf-8"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="{}" end="{}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"#,
-            stamp(t - 2 * DAY),
-            stamp(t + (days + 2) * DAY)
+            stamp(t - (DAYS_BACK + 1) * DAY),
+            stamp(t + (DAYS_AHEAD + 1) * DAY)
         );
         let xml = self.call("REPORT", path, "1", &query).map_err(String::from)?;
         let data: String = elements(&xml, "calendar-data").into_iter().map(text).collect::<Vec<_>>().join("\r\n");
-        let (_, events) = agenda(data.as_bytes(), t, days);
+        let (_, events) = browsable(data.as_bytes(), t);
         Ok(Entity {
             id: format!("dav-{}", &sha256_hex(path)[..16]),
             name: name.to_string(),
             zone: "Calendar".into(),
             class: "calendar".into(),
-            capabilities: BTreeMap::from([("events".to_string(), Capability::new(json!(events), false))]),
+            capabilities: BTreeMap::from([("events".to_string(), Capability::new(json!(events), false)), ("agenda".to_string(), Capability::new(json!({ "days": days }), false))]),
         })
     }
 
@@ -235,7 +235,7 @@ fn config(c: &Map<String, Value>) -> Result<(Dav, String, i64), String> {
 fn test(c: &Map<String, Value>) -> Result<String, String> {
     let (dav, path, days) = config(c)?;
     let list = dav.load(&path, days)?;
-    Ok(list.iter().map(|e| format!("{}: {} events in the next {days} days", e.name, e.capabilities["events"].value.as_array().map_or(0, Vec::len))).collect::<Vec<_>>().join(". "))
+    Ok(list.iter().map(|e| format!("{}: {} events in the next {days} days", e.name, coming(e, days))).collect::<Vec<_>>().join(". "))
 }
 
 struct CalDav {

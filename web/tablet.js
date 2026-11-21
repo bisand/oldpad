@@ -24,14 +24,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    pairPin: 'Tall å taste inn', failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    calMonth: 'Måned', calWeek: 'Uke', calWork: 'Arbeidsuke', calDay: 'Dag', calList: 'Liste', calComing: 'Kommende', monthsLong: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'], pairPin: 'Tall å taste inn', failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    pairPin: 'Number to type', failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    calMonth: 'Month', calWeek: 'Week', calWork: 'Work week', calDay: 'Day', calList: 'List', calComing: 'Coming up', monthsLong: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], pairPin: 'Number to type', failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -641,11 +641,14 @@
   // What is still to come from these calendars, each under the day it shows on.
   // All-day events are UTC midnights; what already began shows under today.
   function calEvents(list) {
-    var nowDate = new Date(), now = nowDate.getTime() / 1000, today = dayOf(nowDate), out = [], i, j, all, x, gone;
+    var nowDate = new Date(), now = nowDate.getTime() / 1000, today = dayOf(nowDate), out = [], i, j, all, x, gone, limit;
     for (i = 0; i < list.length; i++) {
       all = val(list[i], 'events') || [];
+      // The server sends months for the calendar page; the agenda keeps to its chosen days.
+      limit = now + ((val(list[i], 'agenda') || {}).days || 14) * 86400;
       for (j = 0; j < all.length; j++) {
         x = all[j];
+        if (x.at > limit) { continue; }
         gone = x.all ? x.end <= today : x.end > x.at ? x.end <= now : x.at < now;
         if (!gone) { out.push({ x: x, day: Math.max(x.all ? x.at : dayOf(new Date(x.at * 1000)), today) }); }
       }
@@ -672,6 +675,251 @@
         '<span class="ct">' + esc(ev.x.t || T.busy) + (ev.x.place ? '<span class="sub">' + esc(ev.x.place) + '</span>' : '') + '</span></div>';
     }
     return '<div class="card calendar">' + html + (evs.length ? '' : '<p class="muted">' + T.noEvents + '</p>') + '</div>';
+  }
+
+  // ------------------------------------------------------------- calendar page
+  // Month, week, work week, day and list. Everything is placed in percent, so a view
+  // fills the screen at any size. Days are UTC midnights in seconds, as in dayOf().
+
+  var CAL_VIEWS = ['month', 'week', 'work', 'day', 'list'];
+  var calView = load('oldpad.calview'), calFocus = null, calOpen = null, calHidden = {};
+  if (CAL_VIEWS.indexOf(calView) < 0) { calView = 'month'; }
+
+  function calToday() { return dayOf(new Date()); }
+  function calDate() { return calFocus === null ? calToday() : calFocus; }
+  function calWeekday(day) { return (new Date(day * 1000).getUTCDay() + 6) % 7; } // Monday is 0
+  function calMonday(day) { return day - calWeekday(day) * 86400; }
+  function calWeekNo(day) {
+    var thursday = calMonday(day) + 3 * 86400, year = new Date(thursday * 1000).getUTCFullYear();
+    return Math.floor((thursday - Date.UTC(year, 0, 1) / 1000) / 604800) + 1;
+  }
+  function calShortDay(day) { return T.days[new Date(day * 1000).getUTCDay()].slice(0, 3); }
+  function calLongDate(day) {
+    var d = new Date(day * 1000);
+    return T.days[d.getUTCDay()] + ' ' + d.getUTCDate() + (NB ? '. ' : ' ') + T.monthsLong[d.getUTCMonth()];
+  }
+  function calTime(x) { return x.all ? T.allDay : hm(x.at) + (x.end > x.at ? '–' + hm(x.end) : ''); }
+  function calColor(i) { return ' c' + (i % 6); }
+
+  // Events by the days they cover, all-day first. A hidden calendar is left out.
+  function calIndex(list) {
+    var out = {}, i, j, all, x, first, last, day;
+    for (i = 0; i < list.length; i++) {
+      if (calHidden[list[i].id]) { continue; }
+      all = val(list[i], 'events') || [];
+      for (j = 0; j < all.length; j++) {
+        x = all[j];
+        first = x.all ? x.at : dayOf(new Date(x.at * 1000));
+        last = x.all ? Math.max(x.at, x.end - 86400) : dayOf(new Date(Math.max(x.at, x.end - 1) * 1000));
+        last = Math.min(last, first + 62 * 86400);
+        for (day = first; day <= last; day += 86400) {
+          if (!out[day]) { out[day] = []; }
+          out[day].push({ x: x, c: i, key: i + ':' + j, name: list[i].name });
+        }
+      }
+    }
+    for (day in out) {
+      if (out.hasOwnProperty(day)) {
+        out[day].sort(function (a, b) { return (b.x.all ? 1 : 0) - (a.x.all ? 1 : 0) || a.x.at - b.x.at; });
+      }
+    }
+    return out;
+  }
+
+  function calDays() {
+    var day = calDate(), start = calMonday(day), n, out = [], i;
+    if (calView === 'day') { return [day]; }
+    n = calView === 'work' ? 5 : 7;
+    // On a weekend, the work week that matters is the next one.
+    if (calView === 'work' && calWeekday(day) > 4) { start += 7 * 86400; }
+    for (i = 0; i < n; i++) { out.push(start + i * 86400); }
+    return out;
+  }
+
+  function calTitle() {
+    var day = calDate(), d = new Date(day * 1000), list, a, b;
+    if (calView === 'month') { return T.monthsLong[d.getUTCMonth()] + ' ' + d.getUTCFullYear(); }
+    if (calView === 'day') { return calLongDate(day); }
+    if (calView === 'list') { return day === calToday() ? T.calComing : calLongDate(day); }
+    list = calDays();
+    a = new Date(list[0] * 1000);
+    b = new Date(list[list.length - 1] * 1000);
+    return T.calWeek + ' ' + calWeekNo(list[0]) + ' · ' + a.getUTCDate() + (a.getUTCMonth() === b.getUTCMonth() ? '' : '. ' + T.months[a.getUTCMonth()]) +
+      '–' + b.getUTCDate() + (NB ? '. ' : ' ') + T.months[b.getUTCMonth()];
+  }
+
+  function calHead(list) {
+    var names = [['month', T.calMonth], ['week', T.calWeek], ['work', T.calWork], ['day', T.calDay], ['list', T.calList]], seg = '', legend = '', i;
+    for (i = 0; i < names.length; i++) {
+      seg += '<span class="' + (calView === names[i][0] ? 'on' : '') + '" data-act="calview" data-value="' + names[i][0] + '">' + names[i][1] + '</span>';
+    }
+    if (list.length > 1) {
+      for (i = 0; i < list.length; i++) {
+        legend += '<span class="cal-leg' + calColor(i) + (calHidden[list[i].id] ? ' off' : '') + '" data-act="caltoggle" data-id="' + esc(list[i].id) + '"><i></i>' + esc(list[i].name) + '</span>';
+      }
+      legend = '<div class="cal-legend">' + legend + '</div>';
+    }
+    return '<div class="cal-top"><span class="cal-nav" data-act="calmove" data-dir="-1">‹</span><span class="cal-nav" data-act="calmove" data-dir="1">›</span>' +
+      '<span class="cal-now' + (calDate() === calToday() ? ' on' : '') + '" data-act="caltoday">' + T.today + '</span>' +
+      '<span class="cal-title">' + esc(calTitle()) + '</span><span class="cal-seg">' + seg + '</span></div>' + legend;
+  }
+
+  function calBox(left, top, width, height) {
+    return ' data-l="' + left + '%" data-t="' + top + '%" data-width="' + width + '%" data-w="' + height + '%"';
+  }
+
+  function calMonthView(index) {
+    var focus = new Date(calDate() * 1000), y = focus.getUTCFullYear(), m = focus.getUTCMonth(), first = Date.UTC(y, m, 1) / 1000;
+    var start = calMonday(first), count = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), rows = Math.ceil((calWeekday(first) + count) / 7);
+    var today = calToday(), wide = window.innerWidth > 900, html = '', head = '', weeks = '', r, c, day, list, room, cell, i, w = 100 / 7, h = 100 / rows;
+    // How many events fit in a cell before it says "+2".
+    room = Math.max(1, Math.floor(((window.innerHeight - 170) / rows - 30) / 21));
+    for (c = 0; c < 7; c++) { head += '<span' + calBox(c * w, 0, w, 100) + '>' + calShortDay(start + c * 86400) + '</span>'; }
+    for (r = 0; r < rows; r++) {
+      weeks += '<span' + calBox(0, r * h, 100, h) + '>' + calWeekNo(start + r * 7 * 86400) + '</span>';
+      for (c = 0; c < 7; c++) {
+        day = start + (r * 7 + c) * 86400;
+        list = index[day] || [];
+        cell = '<span class="m-n">' + new Date(day * 1000).getUTCDate() + '</span>';
+        for (i = 0; i < list.length && i < (list.length > room ? room - 1 : room); i++) {
+          cell += '<span class="m-ev' + calColor(list[i].c) + (list[i].x.all ? ' all' : '') + '">' + (wide && !list[i].x.all ? '<b>' + hm(Math.max(list[i].x.at, day)) + '</b> ' : '') + esc(list[i].x.t || T.busy) + '</span>';
+        }
+        if (list.length > room) { cell += '<span class="m-more">+' + (list.length - Math.max(room - 1, 0)) + '</span>'; }
+        html += '<div class="m-cell' + (new Date(day * 1000).getUTCMonth() !== m ? ' out' : '') + (day === today ? ' today' : '') + (c > 4 ? ' end' : '') + '" data-act="calday" data-day="' + day + '"' + calBox(c * w, r * h, w, h) + '>' + cell + '</div>';
+      }
+    }
+    return '<div class="m-head">' + head + '</div><div class="m-weeks">' + weeks + '</div><div class="m-body">' + html + '</div>';
+  }
+
+  // Side by side when events overlap: each cluster shares the width.
+  function calLanes(items) {
+    var ends = [], cluster = [], until = -1, i, j, it;
+    function close() {
+      for (j = 0; j < cluster.length; j++) { cluster[j].lanes = ends.length; }
+      cluster = [];
+      ends = [];
+    }
+    for (i = 0; i < items.length; i++) {
+      it = items[i];
+      if (it.a >= until) { close(); until = it.b; }
+      until = Math.max(until, it.b);
+      for (j = 0; j < ends.length && ends[j] > it.a; j++) { /* the first free lane */ }
+      ends[j] = it.b;
+      it.lane = j;
+      cluster.push(it);
+    }
+    close();
+  }
+
+  function calGrid(index, days) {
+    var h0 = 7, h1 = 18, today = calToday(), nowDate = new Date(), nowMin = nowDate.getHours() * 60 + nowDate.getMinutes();
+    var perDay = [], allRows = 0, head = '', cols = '', lines = '', w = 100 / days.length, i, j, list, timed, all, it, a, b, span, html, top, height, headH;
+    function clip(x, day) {
+      var s = dayOf(new Date(x.at * 1000)) < day ? 0 : new Date(x.at * 1000).getHours() * 60 + new Date(x.at * 1000).getMinutes();
+      var e = dayOf(new Date(x.end * 1000)) > day ? 1440 : new Date(x.end * 1000).getHours() * 60 + new Date(x.end * 1000).getMinutes();
+      return { a: s, b: Math.max(e, s + 30) };
+    }
+    for (i = 0; i < days.length; i++) {
+      list = index[days[i]] || [];
+      timed = [];
+      all = [];
+      for (j = 0; j < list.length; j++) {
+        if (list[j].x.all) { all.push(list[j]); continue; }
+        a = clip(list[j].x, days[i]);
+        timed.push({ it: list[j], a: a.a, b: Math.min(a.b, 1440) });
+        h0 = Math.min(h0, Math.floor(a.a / 60));
+        h1 = Math.max(h1, Math.min(24, Math.ceil(a.b / 60)));
+      }
+      calLanes(timed);
+      perDay.push({ timed: timed, all: all });
+      allRows = Math.max(allRows, Math.min(all.length, 2));
+    }
+    span = (h1 - h0) * 60;
+    headH = 42 + allRows * 25;
+    for (i = 0; i < days.length; i++) {
+      html = '<span class="tg-day' + (days[i] === today ? ' today' : '') + '" data-act="calday" data-day="' + days[i] + '"><b>' + new Date(days[i] * 1000).getUTCDate() + '</b> ' + calShortDay(days[i]) + '</span>';
+      all = perDay[i].all;
+      for (j = 0; j < all.length && j < 2; j++) {
+        html += j === 1 && all.length > 2 ? '<span class="tg-all more" data-act="calday" data-day="' + days[i] + '">+' + (all.length - 1) + '</span>'
+          : '<span class="tg-all' + calColor(all[j].c) + '" data-act="calev" data-ev="' + all[j].key + '">' + esc(all[j].x.t || T.busy) + '</span>';
+      }
+      head += '<div class="tg-col"' + calBox(i * w, 0, w, 100) + '>' + html + '</div>';
+      html = '';
+      for (j = 0; j < perDay[i].timed.length; j++) {
+        it = perDay[i].timed[j];
+        top = (it.a - h0 * 60) / span * 100;
+        height = (it.b - it.a) / span * 100;
+        html += '<div class="tg-ev' + calColor(it.it.c) + '" data-act="calev" data-ev="' + it.it.key + '"' + calBox(it.lane * 100 / it.lanes, top, 100 / it.lanes, height) + '><b>' + esc(it.it.x.t || T.busy) + '</b>' + (it.b - it.a >= 45 ? '<span>' + hm(it.it.x.at) + '</span>' : '') + '</div>';
+      }
+      if (days[i] === today && nowMin >= h0 * 60 && nowMin <= h1 * 60) { html += '<i class="tg-line" data-l="0" data-t="' + (nowMin - h0 * 60) / span * 100 + '%"></i>'; }
+      cols += '<div class="tg-col' + (calWeekday(days[i]) > 4 ? ' end' : '') + '" data-day="' + days[i] + '"' + calBox(i * w, 0, w, 100) + '>' + html + '</div>';
+    }
+    for (i = h0; i < h1; i++) {
+      lines += '<span class="tg-hour" data-l="0" data-t="' + (i - h0) * 60 / span * 100 + '%"><em>' + pad(i) + '</em></span>';
+    }
+    return '<div class="tg"><div class="tg-head" data-w="' + headH + 'px">' + head + '</div><div class="tg-main" data-l="0" data-t="' + headH + 'px">' + lines + '<div class="tg-cols">' + cols + '</div></div></div>';
+  }
+
+  function calRow(item) {
+    return '<div class="cal cal-row" data-act="calev" data-ev="' + item.key + '"><i class="cal-dot' + calColor(item.c) + '"></i><span class="cw">' + calTime(item.x) + '</span>' +
+      '<span class="ct">' + esc(item.x.t || T.busy) + (item.x.place ? '<span class="sub">' + esc(item.x.place) + '</span>' : '') + '</span></div>';
+  }
+
+  function calDayView(index) {
+    var day = calDate(), list = index[day] || [], rows = '', i;
+    for (i = 0; i < list.length; i++) { rows += calRow(list[i]); }
+    return '<div class="dv-grid">' + calGrid(index, [day]) + '</div><div class="dv-list card">' + (rows || '<p class="muted">' + T.noEvents + '</p>') + '</div>';
+  }
+
+  function calListView(index) {
+    var day = calDate(), seen = {}, html = '', n = 0, i, d, list, rows;
+    for (d = day; d < day + 130 * 86400 && n < 80; d += 86400) {
+      list = index[d] || [];
+      rows = '';
+      for (i = 0; i < list.length; i++) {
+        if (!seen[list[i].key]) { seen[list[i].key] = true; rows += calRow(list[i]); n++; }
+      }
+      if (rows) { html += '<div class="cal-day" data-act="calday" data-day="' + d + '">' + esc(calDayName(d)) + '</div>' + rows; }
+    }
+    return '<div class="card calendar">' + (html || '<p class="muted">' + T.noEvents + '</p>') + '</div>';
+  }
+
+  function calDetail() {
+    if (!calOpen) { return ''; }
+    var x = calOpen.x, day = x.all ? x.at : dayOf(new Date(x.at * 1000));
+    return '<div class="sheet-bg" data-act="calclose"><div class="sheet cal-sheet" data-act="none"><span class="x" data-act="calclose">✕</span>' +
+      '<div class="sheet-h"><i class="cal-dot' + calColor(calOpen.c) + '"></i>' + esc(x.t || T.busy) + '</div>' +
+      '<p>' + esc(calLongDate(day)) + '<br>' + calTime(x) + '</p>' +
+      (x.place ? '<p>' + esc(x.place) + '</p>' : '') + '<p class="muted">' + esc(calOpen.name) + '</p></div></div>';
+  }
+
+  function calendarPage() {
+    var list = byClass(['calendar']), index = calIndex(list), body;
+    if (calView === 'list') { body = calListView(index); } else {
+      body = '<div class="cal-fit' + (calView === 'day' ? ' split' : '') + '">' + (calView === 'month' ? calMonthView(index) : calView === 'day' ? calDayView(index) : calGrid(index, calDays())) + '</div>';
+    }
+    return calHead(list) + body + calDetail();
+  }
+
+  // The views fill what is left under the header.
+  function fitCal() {
+    var el = $('page').querySelector('.cal-fit');
+    if (el) { el.style.height = Math.max(340, window.innerHeight - el.getBoundingClientRect().top - 12) + 'px'; }
+  }
+
+  // A step back or forward, within the months the server sends.
+  function calMove(dir) {
+    var day = calDate(), today = calToday(), low = today - 42 * 86400, high = today + 120 * 86400, d, next;
+    if (calView === 'month') {
+      d = new Date(day * 1000);
+      next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + dir, 1) / 1000;
+      if (next > high || next + 31 * 86400 < low) { return; }
+    } else {
+      next = Math.max(low, Math.min(high, day + dir * (calView === 'day' ? 1 : 7) * 86400));
+    }
+    calFocus = next;
+    calOpen = null;
+    render();
   }
 
   // ------------------------------------------------------------- cameras
@@ -822,10 +1070,11 @@
   // The page's CSP allows no inline styles: positions ride on data attributes and place() sets them.
   function rot(deg) { return ' data-rot="' + Math.round(deg) + '"'; }
   function place(root) {
-    var els = root.querySelectorAll('[data-l],[data-rot],[data-w],[data-bg]'), i, el, r;
+    var els = root.querySelectorAll('[data-l],[data-rot],[data-w],[data-width],[data-bg]'), i, el, r;
     for (i = 0; i < els.length; i++) {
       el = els[i];
       if (el.getAttribute('data-w')) { el.style.height = el.getAttribute('data-w'); }
+      if (el.getAttribute('data-width')) { el.style.width = el.getAttribute('data-width'); }
       if (el.getAttribute('data-l')) { el.style.left = el.getAttribute('data-l'); el.style.top = el.getAttribute('data-t'); }
       if (el.getAttribute('data-bg')) { el.style.background = el.getAttribute('data-bg'); el.style.color = el.getAttribute('data-fg') || '#fff'; }
       r = el.getAttribute('data-rot');
@@ -1062,7 +1311,7 @@
     if (page === 'weather') { return weatherPage(); }
     if (page === 'ships') { return byClass(['ais']).map(shipsCard).join(''); }
     if (page === 'departures') { return byClass(['departures']).map(departuresCard).join(''); }
-    if (page === 'calendar') { return calendarCard(byClass(['calendar'])); }
+    if (page === 'calendar') { return calendarPage(); }
     if (page === 'cameras') { return '<div class="cams">' + byClass(['camera']).map(camCard).join('') + '</div>'; }
     if (page === 'settings') { return settingsPage(); }
     return homePage();
@@ -1089,6 +1338,7 @@
     place($('page'));
     tick(); // fills in the clock, which has height in portrait: measure after it
     fitHome();
+    fitCal();
     camTick(false);
   }
 
@@ -1114,7 +1364,7 @@
     for (i = 0; i < inner.length; i++) { inner[i].style.height = h + 'px'; }
   }
 
-  window.addEventListener('resize', fitHome, false);
+  window.addEventListener('resize', function () { if (page === 'calendar') { render(); } else { fitHome(); } }, false);
 
   // ------------------------------------------------------------- actions
 
@@ -1143,6 +1393,34 @@
     if (act === 'page') {
       page = el.getAttribute('data-page');
       sheet = null;
+      calFocus = null;
+      calOpen = null;
+      render();
+    } else if (act === 'calview') {
+      calView = el.getAttribute('data-value');
+      save('oldpad.calview', calView);
+      calOpen = null;
+      render();
+    } else if (act === 'calmove') {
+      calMove(Number(el.getAttribute('data-dir')));
+    } else if (act === 'caltoday') {
+      calFocus = null;
+      render();
+    } else if (act === 'calday') {
+      calFocus = Number(el.getAttribute('data-day'));
+      calView = 'day';
+      save('oldpad.calview', calView);
+      render();
+    } else if (act === 'calev') {
+      all = el.getAttribute('data-ev').split(':');
+      c = byClass(['calendar'])[Number(all[0])];
+      i = c ? (val(c, 'events') || [])[Number(all[1])] : null;
+      if (i) { calOpen = { x: i, c: Number(all[0]), name: c.name }; render(); }
+    } else if (act === 'calclose') {
+      calOpen = null;
+      render();
+    } else if (act === 'caltoggle') {
+      calHidden[id] = !calHidden[id];
       render();
     } else if (act === 'alerts') {
       sheet = 'alerts';
@@ -1304,6 +1582,12 @@
   }, false);
   document.addEventListener('touchend', function (ev) {
     var t = ev.changedTouches[0];
+    // On the calendar, a sideways swipe turns the page.
+    if (touchAt && page === 'calendar' && !calOpen && calView !== 'list' && Math.abs(t.clientX - touchAt.x) > 70 && Math.abs(t.clientY - touchAt.y) < 50) {
+      calMove(t.clientX < touchAt.x ? 1 : -1);
+      touchAt = null;
+      return;
+    }
     if (!touchAt || !actionOf(ev.target) || ev.target.tagName === 'INPUT' || Math.abs(t.clientX - touchAt.x) > 10 || Math.abs(t.clientY - touchAt.y) > 10) { return; }
     touchAt = null;
     ev.preventDefault(); // or the browser sends its own click after this

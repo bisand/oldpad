@@ -14,7 +14,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub(super) const DAY: i64 = 86_400;
-const MAX_EVENTS: usize = 200;
+const MAX_EVENTS: usize = 800;
+/// What the tablet can browse: its month, week and day views go this many days each way.
+pub(super) const DAYS_BACK: i64 = 42;
+pub(super) const DAYS_AHEAD: i64 = 120;
 const MAX_PERIODS: i64 = 40_000; // over a century of a daily repeat
 const REFRESH: Duration = Duration::from_secs(15 * 60);
 
@@ -424,9 +427,24 @@ fn sections(bytes: &[u8]) -> Sections {
 /// The calendar's name and its events from `now` − 2 days to `now` + `days`, sorted:
 /// `{t, at, end, all, place}`, times in epoch seconds. All-day events are UTC midnights,
 /// so the tablet reads their date the same in any time zone.
-pub(super) fn agenda(bytes: &[u8], now: i64, days: i64) -> (Option<String>, Vec<Value>) {
+#[cfg(test)]
+fn agenda(bytes: &[u8], now: i64, days: i64) -> (Option<String>, Vec<Value>) {
+    events_between(bytes, now - 2 * DAY, now + days * DAY)
+}
+
+/// Everything the calendar page can show around `now`.
+pub(super) fn browsable(bytes: &[u8], now: i64) -> (Option<String>, Vec<Value>) {
+    events_between(bytes, now - DAYS_BACK * DAY, now + DAYS_AHEAD * DAY)
+}
+
+/// How many events `Test connection` should report: the ones the agenda shows.
+pub(super) fn coming(e: &Entity, days: i64) -> usize {
+    let t = now();
+    e.capabilities["events"].value.as_array().map_or(0, |l| l.iter().filter(|x| x["end"].as_i64().unwrap_or(0) >= t && x["at"].as_i64().unwrap_or(0) <= t + days * DAY).count())
+}
+
+fn events_between(bytes: &[u8], from: i64, to: i64) -> (Option<String>, Vec<Value>) {
     let parsed = sections(bytes);
-    let (from, to) = (now - 2 * DAY, now + days * DAY);
     let horizon = to + 2 * DAY;
     let tables = parsed.zones.iter().map(|(id, o)| (id.clone(), zone_table(o, horizon))).collect();
     let default = sections(DEFAULT_ZONE);
@@ -539,13 +557,13 @@ fn calendar_id(url: &str) -> String {
 }
 
 fn load(url: &str, days: i64) -> Result<Entity, String> {
-    let (name, events) = agenda(&fetch(url)?, now(), days);
+    let (name, events) = browsable(&fetch(url)?, now());
     Ok(Entity {
         id: calendar_id(url),
         name: name.unwrap_or_else(|| "Calendar".into()),
         zone: "Calendar".into(),
         class: "calendar".into(),
-        capabilities: BTreeMap::from([("events".to_string(), Capability::new(json!(events), false))]),
+        capabilities: BTreeMap::from([("events".to_string(), Capability::new(json!(events), false)), ("agenda".to_string(), Capability::new(json!({ "days": days }), false))]),
     })
 }
 
@@ -565,7 +583,7 @@ fn test(c: &Map<String, Value>) -> Result<String, String> {
     let mut out = Vec::new();
     for url in &urls {
         let e = load(url, days)?;
-        out.push(format!("{}: {} events in the next {days} days", e.name, e.capabilities["events"].value.as_array().map_or(0, Vec::len)));
+        out.push(format!("{}: {} events in the next {days} days", e.name, coming(&e, days)));
     }
     Ok(out.join(". "))
 }
