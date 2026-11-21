@@ -25,6 +25,7 @@ pub mod sonos;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
 #[derive(Serialize, Clone, Copy, PartialEq, Debug)]
@@ -247,6 +248,9 @@ pub struct Registry {
     running: Mutex<HashMap<String, Running>>,
 }
 
+// Never reused: a restart must not share a number with the attempt it replaces.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+
 impl Registry {
     pub fn new() -> Self {
         Registry { kinds: kinds(), running: Mutex::new(HashMap::new()) }
@@ -262,17 +266,17 @@ impl Registry {
     /// device that is offline when oldpad boots is picked up once it is back.
     pub fn start(self: &Arc<Self>, id: String, kind_id: String, config: Map<String, Value>, sink: Sink) {
         self.stop(&id);
-        let generation = {
-            let mut running = self.running.lock().unwrap();
-            let generation = running.values().map(|r| r.generation).max().unwrap_or(0) + 1;
-            running.insert(id.clone(), Running { instance: None, status: "starting".into(), generation });
-            generation
-        };
+        let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.running.lock().unwrap().insert(id.clone(), Running { instance: None, status: "starting".into(), generation });
         let reg = Arc::clone(self);
         std::thread::spawn(move || {
             let Some(kind) = reg.kind(&kind_id) else { return };
             let mut backoff = RETRY_FIRST;
             loop {
+                // A replaced attempt must not spend a one-time token on its old settings.
+                if reg.running.lock().unwrap().get(&id).is_none_or(|s| s.generation != generation) {
+                    return;
+                }
                 let result = (kind.start)(&config, sink.clone());
                 let mut running = reg.running.lock().unwrap();
                 // The integration may have been deleted or restarted while we connected.
@@ -444,6 +448,33 @@ mod tests {
         }
         assert_eq!(TRIES.load(Ordering::SeqCst), 3);
         assert!(!reg.entities().is_empty());
+    }
+
+    #[test]
+    fn a_restart_ends_the_old_retries() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static OLD_TRIES: AtomicUsize = AtomicUsize::new(0);
+        let mut k = kind();
+        k.id = "edited";
+        k.start = |c, s| {
+            if c.contains_key("old") {
+                OLD_TRIES.fetch_add(1, Ordering::SeqCst);
+                return Err("old settings".into());
+            }
+            (super::demo::kind().start)(c, s)
+        };
+        let reg = Arc::new(Registry { kinds: vec![k], running: Mutex::new(HashMap::new()) });
+        reg.start("x".into(), "edited".into(), map(json!({"old": true})), Arc::new(|_| {}));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while OLD_TRIES.load(Ordering::SeqCst) == 0 || reg.status("x") == "starting" {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        reg.start("x".into(), "edited".into(), Map::new(), Arc::new(|_| {}));
+        let tries = OLD_TRIES.load(Ordering::SeqCst);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert_eq!(OLD_TRIES.load(Ordering::SeqCst), tries, "the replaced attempt kept retrying");
+        assert_eq!(reg.status("x"), "running");
     }
 
     #[test]
