@@ -606,7 +606,7 @@ const MENU_PAGES = [
   ['flows', 'Flows', ['button'], 'buttons and Flows'],
   ['ships', 'Ships', ['ais'], 'ships nearby (AIS)'],
   ['departures', 'Departures', ['departures'], 'departure boards (Entur)'],
-  ['calendar', 'Calendar', ['calendar'], 'calendars (iCal)'],
+  ['calendar', 'Calendar', ['calendar'], 'calendars'],
   ['cameras', 'Cameras', ['camera'], 'camera snapshots'],
 ];
 const CARDS = [['card:clock', 'Clock'], ['card:climate', 'Indoor / outdoor'], ['card:forecast', 'Forecast'], ['card:music', 'Music']];

@@ -72,7 +72,7 @@ vocabulary the tablet understands:
 | `events` | `[{t, at, end, all, place}]`, epoch seconds; `all` means UTC midnights; `t` null for a private event | calendar agenda |
 | `camera` | null; the picture comes from `snapshot()` | camera tile, card and page, refreshed every 10 s while shown |
 | `alerts` | `[{id, level (2–4), name, area, from, until, text, advice}]` on a `weather` entity | warning banner on every page, details on tap |
-| `weather_symbol`, `forecast` | MET symbol code, `[[epoch, °C, symbol], …]` | forecast strip and weather page |
+| `weather_symbol`, `forecast` | MET symbol code, `[[epoch, °C, symbol, wind m/s, wind from °], …]` | forecast strip and weather page |
 
 Entity `class` decides which menu page shows it: `light`/`socket` → lights,
 `thermostat`/`heater`/`sensor` → climate, `button` → Flows, `speaker` → music

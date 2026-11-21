@@ -9,6 +9,7 @@
 //! `kinds()` below. See docs/integrations.md.
 
 pub mod ais;
+pub mod caldav;
 pub mod calendar;
 pub mod demo;
 pub mod entur;
@@ -139,7 +140,7 @@ pub struct Kind {
 }
 
 pub fn kinds() -> Vec<Kind> {
-    vec![homey::kind(), homeassistant::kind(), influx::kind(), met::kind(), sonos::kind(), ais::kind(), spot::kind(), entur::kind(), calendar::kind(), demo::kind()]
+    vec![homey::kind(), homeassistant::kind(), influx::kind(), met::kind(), sonos::kind(), ais::kind(), spot::kind(), entur::kind(), calendar::kind(), caldav::kind(), demo::kind()]
 }
 
 /// Checks a submitted config against the kind's fields and returns it cleaned:

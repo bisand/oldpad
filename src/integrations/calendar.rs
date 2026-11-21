@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const DAY: i64 = 86_400;
+pub(super) const DAY: i64 = 86_400;
 const MAX_EVENTS: usize = 200;
 const MAX_PERIODS: i64 = 40_000; // over a century of a daily repeat
 const REFRESH: Duration = Duration::from_secs(15 * 60);
@@ -424,7 +424,7 @@ fn sections(bytes: &[u8]) -> Sections {
 /// The calendar's name and its events from `now` − 2 days to `now` + `days`, sorted:
 /// `{t, at, end, all, place}`, times in epoch seconds. All-day events are UTC midnights,
 /// so the tablet reads their date the same in any time zone.
-fn agenda(bytes: &[u8], now: i64, days: i64) -> (Option<String>, Vec<Value>) {
+pub(super) fn agenda(bytes: &[u8], now: i64, days: i64) -> (Option<String>, Vec<Value>) {
     let parsed = sections(bytes);
     let (from, to) = (now - 2 * DAY, now + days * DAY);
     let horizon = to + 2 * DAY;
@@ -490,7 +490,7 @@ fn agenda(bytes: &[u8], now: i64, days: i64) -> (Option<String>, Vec<Value>) {
 // ------------------------------------------------------------------ fetching
 
 /// Splits an address into what `request` wants. webcal:// is https:// by convention.
-fn split_url(url: &str) -> Result<(String, String), String> {
+pub(super) fn split_url(url: &str) -> Result<(String, String), String> {
     let url = match url.strip_prefix("webcal://") {
         Some(rest) => format!("https://{rest}"),
         None => url.to_string(),
@@ -528,7 +528,7 @@ fn fetch(url: &str) -> Result<Vec<u8>, String> {
     Err("too many calendar redirects".into())
 }
 
-fn now() -> i64 {
+pub(super) fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
