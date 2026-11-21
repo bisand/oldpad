@@ -24,14 +24,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -90,6 +90,7 @@
     clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
     dots: 'M5 12h.01M12 12h.01M19 12h.01',
     boat: 'M3 16h18l-2.5 4h-13zM12 3v11M12 4l6 9h-6',
+    calendar: 'M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4',
     cog: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM10.3 3h3.4l.5 2.4 1.7 1 2.3-.8 1.7 2.9-1.8 1.6v2l1.8 1.6-1.7 2.9-2.3-.8-1.7 1-.5 2.4h-3.4l-.5-2.4-1.7-1-2.3.8-1.7-2.9 1.8-1.6v-2L4.1 8.5l1.7-2.9 2.3.8 1.7-1z'
   };
 
@@ -465,6 +466,7 @@
     if (c === 'ais') { return 'boat'; }
     if (c === 'price') { return 'bolt'; }
     if (c === 'departures') { return 'clock'; }
+    if (c === 'calendar') { return 'calendar'; }
     return 'bolt';
   }
 
@@ -493,6 +495,9 @@
     } else if (cap(e, 'departures')) {
       var dep = nextDeps(e)[0];
       body = dep ? '<div class="value up">' + depWhen(dep) + '<div class="sub">' + esc(dep.line + ' ' + dep.to) + '</div></div>' : '<div class="value sub">' + T.noDeps + '</div>';
+    } else if (cap(e, 'events')) {
+      var ev = calEvents([e])[0];
+      body = ev ? '<div class="value up">' + calShort(ev) + '<div class="sub">' + esc(ev.x.t || T.busy) + '</div></div>' : '<div class="value sub">' + T.noEvents + '</div>';
     } else if (cap(e, 'prices')) {
       var pn = val(e, 'price');
       body = '<div class="value ' + priceLevel(e, pn) + '">' + (typeof pn === 'number' ? num(pn, 2) : '–') + '<span class="unit"> kr</span></div>';
@@ -571,8 +576,8 @@
 
   function sheetHtml() {
     var e = sheet && entities[sheet], list = controls(e), html = '', i;
-    if (e && (e['class'] === 'price' || e['class'] === 'departures')) {
-      return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + (e['class'] === 'price' ? priceCard(e) : departuresCard(e)) + '</div></div>';
+    if (e && (e['class'] === 'price' || e['class'] === 'departures' || e['class'] === 'calendar')) {
+      return '<div class="sheet-bg" data-act="close"><div class="sheet wide" data-act="none"><span class="x" data-act="close">✕</span>' + (e['class'] === 'price' ? priceCard(e) : e['class'] === 'calendar' ? calendarCard([e]) : departuresCard(e)) + '</div></div>';
     }
     if (!list.length) { return ''; }
     for (i = 0; i < list.length; i++) { html += controlHtml(e, list[i]); }
@@ -606,6 +611,47 @@
         '<span class="dw' + (d.rt ? ' rt' : '') + '">' + (d.gone ? T.cancelled : depWhen(d)) + '</span></div>';
     }
     return '<div class="card departures"><div class="sub">' + esc(e.name) + '</div>' + (rows || '<p class="muted">' + T.noDeps + '</p>') + '</div>';
+  }
+
+  // ------------------------------------------------------------- calendar
+
+  // A day as its UTC midnight, so days compare and step the same across daylight saving.
+  function dayOf(d) { return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; }
+
+  // What is still to come from these calendars, each under the day it shows on.
+  // All-day events are UTC midnights; what already began shows under today.
+  function calEvents(list) {
+    var nowDate = new Date(), now = nowDate.getTime() / 1000, today = dayOf(nowDate), out = [], i, j, all, x, gone;
+    for (i = 0; i < list.length; i++) {
+      all = val(list[i], 'events') || [];
+      for (j = 0; j < all.length; j++) {
+        x = all[j];
+        gone = x.all ? x.end <= today : x.end > x.at ? x.end <= now : x.at < now;
+        if (!gone) { out.push({ x: x, day: Math.max(x.all ? x.at : dayOf(new Date(x.at * 1000)), today) }); }
+      }
+    }
+    out.sort(function (a, b) { return a.day - b.day || (b.x.all ? 1 : 0) - (a.x.all ? 1 : 0) || a.x.at - b.x.at; });
+    return out;
+  }
+  function calDayName(day) {
+    var today = dayOf(new Date()), d = new Date(day * 1000);
+    if (day === today) { return T.today; }
+    if (day === today + 86400) { return T.tomorrow; }
+    return T.days[d.getUTCDay()] + ' ' + d.getUTCDate() + (NB ? '. ' : ' ') + T.months[d.getUTCMonth()];
+  }
+  function calShort(ev) {
+    if (ev.day === dayOf(new Date())) { return ev.x.all ? T.today : hm(ev.x.at); }
+    return ev.day === dayOf(new Date()) + 86400 ? T.tomorrow : T.days[new Date(ev.day * 1000).getUTCDay()];
+  }
+  function calendarCard(list) {
+    var evs = calEvents(list), html = list.length === 1 ? '<div class="sub">' + esc(list[0].name) + '</div>' : '', day = null, i, ev;
+    for (i = 0; i < evs.length && i < 40; i++) {
+      ev = evs[i];
+      if (ev.day !== day) { day = ev.day; html += '<div class="cal-day">' + esc(calDayName(day)) + '</div>'; }
+      html += '<div class="cal"><span class="cw">' + (ev.x.all ? T.allDay : hm(ev.x.at) + (ev.x.end > ev.x.at ? '–' + hm(ev.x.end) : '')) + '</span>' +
+        '<span class="ct">' + esc(ev.x.t || T.busy) + (ev.x.place ? '<span class="sub">' + esc(ev.x.place) + '</span>' : '') + '</span></div>';
+    }
+    return '<div class="card calendar">' + html + (evs.length ? '' : '<p class="muted">' + T.noEvents + '</p>') + '</div>';
   }
 
   // ------------------------------------------------------------- electricity price
@@ -778,7 +824,8 @@
     { id: 'flows', icon: 'bolt', when: function () { return byClass(['button']).length > 0; } },
     { id: 'weather', icon: 'cloud', when: function () { return !!series(); } },
     { id: 'ships', icon: 'boat', when: function () { return byClass(['ais']).length > 0; } },
-    { id: 'departures', icon: 'clock', when: function () { return byClass(['departures']).length > 0; } }
+    { id: 'departures', icon: 'clock', when: function () { return byClass(['departures']).length > 0; } },
+    { id: 'calendar', icon: 'calendar', when: function () { return byClass(['calendar']).length > 0; } }
   ];
 
   function homePage() {
@@ -897,7 +944,7 @@
         if (it.card === 'music') { html += musicCard(panel('speaker') || speakers()[0], favRows(), true); }
       } else {
         it = typeof it === 'string' ? entities[it] || { missing: true } : it;
-        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else if (it['class'] === 'departures') { flush(); html += departuresCard(it); } else { run.push(it); }
+        if (it['class'] === 'ais') { flush(); html += shipsCard(it); } else if (it['class'] === 'price') { flush(); html += priceCard(it); } else if (it['class'] === 'departures') { flush(); html += departuresCard(it); } else if (it['class'] === 'calendar') { flush(); html += calendarCard([it]); } else { run.push(it); }
       }
     }
     flush();
@@ -914,6 +961,7 @@
     if (page === 'weather') { return weatherPage(); }
     if (page === 'ships') { return byClass(['ais']).map(shipsCard).join(''); }
     if (page === 'departures') { return byClass(['departures']).map(departuresCard).join(''); }
+    if (page === 'calendar') { return calendarCard(byClass(['calendar'])); }
     if (page === 'settings') { return settingsPage(); }
     return homePage();
   }
@@ -991,7 +1039,7 @@
       c.value = next;
       render();
       set(e, el.getAttribute('data-cap') || 'target_temperature', next, prev);
-    } else if (act === 'tile' && e && (cap(e, 'prices') || cap(e, 'departures'))) {
+    } else if (act === 'tile' && e && (cap(e, 'prices') || cap(e, 'departures') || cap(e, 'events'))) {
       sheet = id;
       render();
     } else if (act === 'tile' && e && cap(e, 'ships')) {
@@ -1140,6 +1188,14 @@
   setInterval(tick, 10000);
   // The forecast strip moves with the clock; redraw it hourly.
   setInterval(render, 3600 * 1000);
+  // Finished events and a new day leave the agenda without the server saying anything.
+  var calShown = '';
+  setInterval(function () {
+    var list = [], k, now;
+    for (k in entities) { if (entities.hasOwnProperty(k) && entities[k]['class'] === 'calendar') { list.push(entities[k]); } }
+    now = JSON.stringify(calEvents(list)) + dayOf(new Date());
+    if (now !== calShown) { if (calShown) { render(); } calShown = now; }
+  }, 60000);
   // Long-running kiosks leak; a nightly reload also picks up new versions.
   setTimeout(function () { window.location.reload(); }, 24 * 3600 * 1000);
 

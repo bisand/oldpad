@@ -67,11 +67,12 @@ vocabulary the tablet understands:
 | `favourites` / `play_favourite` | `[{id,title}]` / write-only id | favourite buttons |
 | `add_favourite` | write-only id of a search result | ☆ on a search result saves it as a favourite |
 | `speaker_group` | id of the room this one plays with (itself when alone or leading) | music page: tick rooms in or out of a group. Set it to another room's id to join that room's group, or to the room's own id to leave. A screen may only group rooms it controls. |
+| `events` | `[{t, at, end, all, place}]`, epoch seconds; `all` means UTC midnights; `t` null for a private event | calendar agenda |
 | `weather_symbol`, `forecast` | MET symbol code, `[[epoch, °C, symbol], …]` | forecast strip and weather page |
 
 Entity `class` decides which menu page shows it: `light`/`socket` → lights,
 `thermostat`/`heater`/`sensor` → climate, `button` → Flows, `speaker` → music
-panel, `weather` → forecast panel.
+panel, `weather` → forecast panel, `calendar` → calendar page.
 
 Mark a capability `settable: false` if it is read-only; the server refuses
 writes to it before your `set` is called. A tablet can only control entities

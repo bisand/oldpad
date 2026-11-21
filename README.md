@@ -10,7 +10,7 @@ page is written for **iOS 5 and later**, so an iPad 1, 2 or mini 1 is plenty.
 In daily use on an iPad 2 with iOS 9.3.5; older versions are untested.
 
 > Status: early. Integrations: Homey Pro, Home Assistant, Sonos,
-> InfluxDB, MET Norway weather, and a demo house. See [docs/design.md](docs/design.md).
+> InfluxDB, MET Norway weather, iCal calendars, and a demo house. See [docs/design.md](docs/design.md).
 
 ## What works today
 
