@@ -53,6 +53,14 @@ fn coords(config: &Map<String, Value>) -> Result<(f64, f64), String> {
     Ok((lat, lon))
 }
 
+/// One forecast hour: `[time, temperature, symbol, wind m/s, wind from degrees]`.
+fn hour(t: &Value) -> Option<Value> {
+    let details = &t["data"]["instant"]["details"];
+    let (time, temp) = (t["time"].as_str().and_then(parse_time)?, details["air_temperature"].as_f64()?);
+    let symbol = t["data"]["next_1_hours"]["summary"]["symbol_code"].as_str().or(t["data"]["next_6_hours"]["summary"]["symbol_code"].as_str()).unwrap_or("");
+    Some(json!([time, temp, symbol, details["wind_speed"], details["wind_from_direction"]]))
+}
+
 fn fetch(lat: f64, lon: f64) -> Result<Entity, String> {
     // MET's terms: at most four decimals, so caches are shared between users.
     let path = format!("/weatherapi/locationforecast/2.0/compact?lat={lat:.4}&lon={lon:.4}");
@@ -63,12 +71,7 @@ fn fetch(lat: f64, lon: f64) -> Result<Entity, String> {
     let v = res.json()?;
     let series = v["properties"]["timeseries"].as_array().ok_or("unexpected forecast format")?;
 
-    let mut hours = Vec::new();
-    for t in series.iter().take(60) {
-        let (Some(time), Some(temp)) = (t["time"].as_str().and_then(parse_time), t["data"]["instant"]["details"]["air_temperature"].as_f64()) else { continue };
-        let symbol = t["data"]["next_1_hours"]["summary"]["symbol_code"].as_str().or(t["data"]["next_6_hours"]["summary"]["symbol_code"].as_str()).unwrap_or("");
-        hours.push(json!([time, temp, symbol]));
-    }
+    let hours: Vec<Value> = series.iter().take(60).filter_map(hour).collect();
     let now = &series.first().ok_or("empty forecast")?["data"];
     let cap = |v: Value| Capability::new(v, false);
     let mut caps = BTreeMap::new();
@@ -199,6 +202,15 @@ impl Instance for Met {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_hour_carries_its_wind() {
+        let t = json!({ "time": "2026-11-21T14:00:00Z", "data": { "instant": { "details": { "air_temperature": 2.5, "wind_speed": 7.4, "wind_from_direction": 225.0 } }, "next_1_hours": { "summary": { "symbol_code": "fair_day" } } } });
+        let h = hour(&t).unwrap();
+        assert_eq!((&h[1], &h[2], &h[3], &h[4]), (&json!(2.5), &json!("fair_day"), &json!(7.4), &json!(225.0)));
+        let calm = json!({ "time": "2026-11-21T14:00:00Z", "data": { "instant": { "details": { "air_temperature": 1.0 } } } });
+        assert!(hour(&calm).unwrap()[3].is_null(), "a missing wind stays empty");
+    }
 
     #[test]
     fn parses_met_times() {

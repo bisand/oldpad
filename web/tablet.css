@@ -70,12 +70,20 @@ body.day { background: #eceef2; color: #1b1d21; }
 .sub { font-size: 14px; }
 
 /* ---------- forecast ---------- */
-.forecast { height: 90px; padding: 10px 14px; font-size: 0; }
+.forecast { height: 90px; padding: 5px 14px; font-size: 0; }
 .slot { display: inline-block; vertical-align: top; width: 11%; text-align: center; font-size: 15px; }
 .slot.now { width: 16%; text-align: left; padding-top: 4px; }
 .slot.now .sub { display: block; margin-top: 2px; font-size: 14px; }
 .slot.tomorrow { width: 18%; text-align: right; }
 .slot .h { display: block; font-size: 13px; margin-bottom: 2px; }
+.forecast:before { content: ''; display: inline-block; height: 100%; vertical-align: middle; }
+.forecast .slot, .forecast .slot.tomorrow { width: 12%; margin-bottom: 0; text-align: center; white-space: nowrap; vertical-align: middle; }
+.forecast .slot.now, .forecast .slot.tomorrow { width: 14%; padding-top: 0; text-align: center; }
+.forecast .slot .h { overflow: hidden; text-overflow: ellipsis; }
+.wind { display: block; margin-top: 1px; font-size: 12px; line-height: 14px; color: #8b8f98; white-space: nowrap; }
+.wind .arr { display: inline-block; margin-right: 3px; font-style: normal; }
+.wind.strong { color: #f2c94c; font-weight: 600; }
+.day .wind { color: #6f747d; } .day .wind.strong { color: #a86400; }
 
 /* ---------- music ---------- */
 .music { height: 160px; }
@@ -132,6 +140,11 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 .tile .steps { position: absolute; left: 8px; bottom: 10px; }
 .tile .value.up { bottom: 58px; }
 .step { display: inline-block; width: 44px; height: 40px; margin-left: 6px; border-radius: 20px; line-height: 38px; text-align: center; font-size: 24px; }
+.tiles.fit1 .tile .zone, .tiles.fit2 .tile .zone { display: none; }
+.tiles.fit2 .tile .in > svg.ic { float: left; margin-right: 6px; }
+.tiles.fit2 .tile .label { margin: 0; line-height: 24px; }
+.tiles.fit2 .tile .value.up { bottom: 54px; }
+.tiles.fit2 .tile.thermo .value .sub { display: none; }
 .tile.pressed .in { opacity: 0.6; }
 .tile.missing .in { opacity: 0.45; }
 .empty { font-size: 18px; text-align: center; padding: 40px 0; }
@@ -150,6 +163,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
 @media (max-width: 900px) {
   .w30, .w70 { width: 100%; }
   .clock, .climate { height: auto; }
+  .clock .date { position: absolute; right: 18px; bottom: 18px; margin: 0; }
   .tile { width: 33.333%; }
   .now-playing { right: 18px; top: 16px; }
   .play { right: 18px; top: auto; bottom: 64px; }

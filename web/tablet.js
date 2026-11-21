@@ -108,6 +108,7 @@
   var entities = {};          // id → entity
   var layout = { tiles: [], more: [], panels: {}, pages: [] };
   var page = 'home';
+  var FORECAST_MIN = 68, TILE_MIN = 130;
   var anchor = null;           // the speaker whose group the music page shows
   var query = '', results = null, searching = false, saved = {};
   var typing = false;          // don't redraw the search box under the keyboard
@@ -379,38 +380,46 @@
     return s && s.length ? s : null;
   }
 
-  function slot(cls, hour, sym, text) {
-    return '<div class="slot ' + cls + '"><span class="h">' + hour + '</span>' + icon(weather(sym).icon) + ' ' + text + '</div>';
+  // Wind for a forecast hour: the arrow points where it blows, amber from "liten kuling".
+  function windHtml(row) {
+    if (!row || typeof row[3] !== 'number') { return '<span class="wind">&nbsp;</span>'; }
+    return '<span class="wind' + (row[3] >= 10.8 ? ' strong' : '') + '">' +
+      (typeof row[4] === 'number' ? '<i class="arr"' + rot(row[4] + 180) + '>↑</i>' : '') + Math.round(row[3]) + ' m/s</span>';
+  }
+
+  function slot(cls, hour, sym, text, row) {
+    return '<div class="slot ' + cls + '"><span class="h">' + hour + '</span>' + icon(weather(sym).icon) + ' ' + text + windHtml(row) + '</div>';
   }
 
   function forecastCard() {
     var f = panel('weather'), s = series();
     if (!f || !s) { return ''; }
     var now = new Date().getTime() / 1000, html = '', n = 0, i, d, w = weather(val(f, 'weather_symbol'));
-    html += '<div class="slot now">' + icon(w.icon) + '<span class="sub">' + esc(w.text) + '</span></div>';
+    html += '<div class="slot now"><span class="h">' + esc(w.text) + '</span>' + icon(w.icon) + windHtml(s[0]) + '</div>';
     for (i = 0; i < s.length && n < 6; i++) {
       d = new Date(s[i][0] * 1000);
       if (s[i][0] > now && d.getHours() % 2 === 0) {
-        html += slot('', pad(d.getHours()), s[i][2], deg(s[i][1]));
+        html += slot('', pad(d.getHours()), s[i][2], deg(s[i][1]), s[i]);
         n++;
       }
     }
     var t = tomorrow(s);
-    if (t) { html += '<div class="slot tomorrow"><span class="h">' + T.tomorrow + '</span>' + icon(weather(t.symbol).icon) + ' ' + deg(t.lo) + '/' + deg(t.hi) + '</div>'; }
+    if (t) { html += '<div class="slot tomorrow"><span class="h">' + T.tomorrow + '</span>' + icon(weather(t.symbol).icon) + ' ' + deg(t.lo) + '/' + deg(t.hi) + windHtml(t.wind) + '</div>'; }
     return '<div class="card forecast">' + html + '</div>';
   }
 
   function dayStats(s, offset) {
     var start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() + offset);
-    var from = start.getTime() / 1000, to = from + 86400, lo = null, hi = null, symbol = null, i;
+    var from = start.getTime() / 1000, to = from + 86400, lo = null, hi = null, symbol = null, wind = null, i;
     for (i = 0; i < s.length; i++) {
       if (s[i][0] >= from && s[i][0] < to) {
         if (lo === null || s[i][1] < lo) { lo = s[i][1]; }
         if (hi === null || s[i][1] > hi) { hi = s[i][1]; }
+        if (typeof s[i][3] === 'number' && (!wind || s[i][3] > wind[3])) { wind = s[i]; } // the day's strongest
         if (new Date(s[i][0] * 1000).getHours() === 12 || symbol === null) { symbol = s[i][2]; }
       }
     }
-    return lo === null ? null : { lo: lo, hi: hi, symbol: symbol, date: start };
+    return lo === null ? null : { lo: lo, hi: hi, symbol: symbol, wind: wind, date: start };
   }
 
   function tomorrow(s) { return dayStats(s, 1); }
@@ -1010,13 +1019,13 @@
     for (i = 0; i < s.length && n < 12; i++) {
       if (s[i][0] > now) {
         d = new Date(s[i][0] * 1000);
-        hours += slot('', pad(d.getHours()), s[i][2], deg(s[i][1]));
+        hours += slot('', pad(d.getHours()), s[i][2], deg(s[i][1]), s[i]);
         n++;
       }
     }
     for (i = 0; i < 4; i++) {
       st = dayStats(s, i);
-      if (st) { days += slot('', i === 0 ? T.today : T.days[st.date.getDay()], st.symbol, deg(st.lo) + ' / ' + deg(st.hi)); }
+      if (st) { days += slot('', i === 0 ? T.today : T.days[st.date.getDay()], st.symbol, deg(st.lo) + ' / ' + deg(st.hi), st.wind); }
     }
     return forecastCard() + '<div class="card"><div class="label-s">' + T.next + '</div><div class="hours">' + hours + '</div></div>' +
       '<div class="card"><div class="label-s">' + T.days3 + '</div><div class="days">' + days + '</div></div>';
@@ -1078,9 +1087,34 @@
     $('rail').innerHTML = rail;
     $('page').innerHTML = alertBanner() + pageHtml() + sheetHtml();
     place($('page'));
-    tick();
+    tick(); // fills in the clock, which has height in portrait: measure after it
+    fitHome();
     camTick(false);
   }
+
+  // Keeps the home page on one screen when something adds height (a weather warning, more
+  // favourites). The forecast gives up its spare room first, then the tiles, down to a tappable size.
+  function fitHome() {
+    var root = $('page'), forecast = root.querySelector('.forecast'), row = root.querySelector('.tiles');
+    var inner = row ? row.querySelectorAll('.tile .in') : [], i, over, cut, rows, h;
+    if (forecast) { forecast.style.height = ''; }
+    if (row) { row.className = row.className.replace(/ fit\d/g, ''); }
+    for (i = 0; i < inner.length; i++) { inner[i].style.height = ''; }
+    if (page !== 'home') { return; }
+    over = root.offsetHeight - window.innerHeight;
+    if (over > 0 && forecast && window.innerWidth > 900) {
+      cut = Math.min(over, Math.max(0, forecast.offsetHeight - FORECAST_MIN));
+      forecast.style.height = (forecast.offsetHeight - cut) + 'px';
+      over -= cut;
+    }
+    if (over <= 0 || !inner.length) { return; }
+    rows = Math.max(1, Math.round(row.offsetHeight / (inner[0].offsetHeight + 12)));
+    h = Math.max(TILE_MIN, inner[0].offsetHeight - Math.ceil(over / rows));
+    row.className += h < 160 ? ' fit2' : h < 186 ? ' fit1' : '';
+    for (i = 0; i < inner.length; i++) { inner[i].style.height = h + 'px'; }
+  }
+
+  window.addEventListener('resize', fitHome, false);
 
   // ------------------------------------------------------------- actions
 
