@@ -1057,14 +1057,20 @@ async function favouritesView(id) {
 // The integration wizard: 1. pick a type, 2. fill in its fields, 3. test, 4. save.
 async function integrationView(id) {
   const kinds = await api('GET', '/kinds');
-  const existing = id === 'new' ? null : (await api('GET', '/integrations')).find((i) => i.id === id);
+  const all = await api('GET', '/integrations');
+  const existing = id === 'new' ? null : all.find((i) => i.id === id);
   if (id !== 'new' && !existing) return render(back('#/integrations', 'Integrations'), errorBox(new Error('No such integration.')));
   if (!existing) {
     render(
       back('#/integrations', 'Integrations'),
       pageHead('Add integration', 'Step 1 of 2: what do you want to connect?'),
-      h('div', { class: 'grid' }, kinds.map((k) => h('button', { type: 'button', class: 'card kind', onclick: () => integrationForm(k, null) },
-        h('strong', {}, k.name), h('span', { class: 'small muted' }, k.description)))),
+      h('div', { class: 'grid' }, kinds.map((k) => {
+        const added = all.filter((i) => i.type === k.id);
+        return h('button', { type: 'button', class: `card kind${added.length ? ' added' : ''}`, onclick: () => integrationForm(k, null) },
+          h('span', { class: 'kind-head' }, h('strong', {}, k.name), added.length ? badge('ok', added.length > 1 ? `${added.length} added` : 'Added') : null),
+          h('span', { class: 'small muted' }, k.description),
+          added.length ? h('span', { class: 'small kind-names' }, `${added.map((i) => i.name).join(', ')} · Add another`) : null);
+      })),
     );
   } else {
     integrationForm(kinds.find((k) => k.id === existing.type), existing);
