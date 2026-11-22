@@ -14,6 +14,8 @@ const TABLET_CSS: &str = include_str!("../web/tablet.css");
 const ADMIN_HTML: &str = include_str!("../web/admin.html");
 const ADMIN_JS: &str = include_str!("../web/admin.js");
 const ADMIN_CSS: &str = include_str!("../web/admin.css");
+const LOGO: &str = include_str!("../web/logo.svg");
+const TOUCH_ICON: &[u8] = include_bytes!("../web/apple-touch-icon.png");
 
 const CSP: &str = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 
@@ -46,6 +48,8 @@ pub fn handle(app: &Arc<App>, req: &Request) -> Response {
         ("GET", ["admin"]) => asset("text/html; charset=utf-8", ADMIN_HTML),
         ("GET", ["admin.js"]) => asset("text/javascript; charset=utf-8", ADMIN_JS),
         ("GET", ["admin.css"]) => asset("text/css; charset=utf-8", ADMIN_CSS),
+        ("GET", ["logo.svg"]) => asset("image/svg+xml", LOGO),
+        ("GET", ["apple-touch-icon.png"]) => Response::new(200, "image/png", TOUCH_ICON).header("Cache-Control", "public, max-age=86400"),
         ("GET", ["healthz"]) => Response::new(200, "text/plain", "ok"),
         // Album art and map tiles. img tags can't send a token, so screens add `?t=`; admins have their cookie.
         ("GET", ["api", "image", iid, key]) => {
