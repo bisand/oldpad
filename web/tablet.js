@@ -26,14 +26,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    calMonth: 'Måned', calWeek: 'Uke', calWork: 'Arbeidsuke', calDay: 'Dag', calList: 'Liste', calComing: 'Kommende', monthsLong: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'], pairPin: 'Tall å taste inn', failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', nightClock: 'Nattklokke etter 5 minutter uten berøring', nightOff: 'Av', nightOn: 'På', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    calMonth: 'Måned', calWeek: 'Uke', calWork: 'Arbeidsuke', calDay: 'Dag', calList: 'Liste', calComing: 'Kommende', monthsLong: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'], pairPin: 'Tall å taste inn', failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', graphTemp: 'Temperatur', graphHum: 'Luftfuktighet', graphCo2: 'CO₂', graphWind: 'Vind', noHistory: 'Ingen historikk ennå', nightClock: 'Nattklokke etter 5 minutter uten berøring', nightOff: 'Av', nightOn: 'På', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    calMonth: 'Month', calWeek: 'Week', calWork: 'Work week', calDay: 'Day', calList: 'List', calComing: 'Coming up', monthsLong: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], pairPin: 'Number to type', failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', nightClock: 'Night clock after 5 idle minutes', nightOff: 'Off', nightOn: 'On', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    calMonth: 'Month', calWeek: 'Week', calWork: 'Work week', calDay: 'Day', calList: 'List', calComing: 'Coming up', monthsLong: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], pairPin: 'Number to type', failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', graphTemp: 'Temperature', graphHum: 'Humidity', graphCo2: 'CO₂', graphWind: 'Wind', noHistory: 'No history yet', nightClock: 'Night clock after 5 idle minutes', nightOff: 'Off', nightOn: 'On', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -1080,6 +1080,101 @@
       '<div class="bars">' + bars + '</div></div>';
   }
 
+  // ------------------------------------------------------------- graphs
+
+  var hist = {}, histAt = 0;
+  var GRAPHS = [['measure_temperature', 'graphTemp', 1], ['measure_humidity', 'graphHum', 0], ['measure_co2', 'graphCo2', 0], ['measure_wind_strength', 'graphWind', 0]];
+
+  // The screen's own readings that keep a history.
+  function histEntities() {
+    var names = ['indoor', 'outdoor', 'wind'], seen = {}, out = [], i, e;
+    for (i = 0; i < names.length; i++) {
+      e = panel(names[i]);
+      if (e && cap(e, 'history') && !seen[e.id]) { seen[e.id] = true; out.push(e); }
+    }
+    return out;
+  }
+
+  function histLoad() {
+    var at = new Date().getTime(), list = histEntities();
+    if (at - histAt < 300000) { return; }
+    histAt = at;
+    function one(id) {
+      request('GET', '/api/tablet/history?id=' + encodeURIComponent(id) + (PREVIEW ? '&preview=' + PREVIEW : ''), null, {}, function (status, data) {
+        // A failed refresh keeps the curve we have.
+        hist[id] = status === 200 && data ? data : hist[id] || {};
+        if (page === 'graphs') { render(); }
+      });
+    }
+    for (var i = 0; i < list.length; i++) { one(list[i].id); }
+  }
+
+  // Lines stop at a gap instead of drawing across hours with no readings.
+  function graphLines(points, x, y) {
+    var html = '', run = [], i;
+    function flush() {
+      if (run.length === 1) { run.push(run[0]); } // a lone reading still shows, as a dot
+      if (run.length) { html += run.join(' ') + '|'; }
+      run = [];
+    }
+    for (i = 0; i < points.length; i++) {
+      if (i && points[i][0] - points[i - 1][0] > 2700) { flush(); }
+      run.push(x(points[i][0]).toFixed(1) + ',' + y(points[i][1]).toFixed(1));
+    }
+    flush();
+    return html.split('|').slice(0, -1);
+  }
+
+  function graphCard(title, id, digits, list, width) {
+    var H = 150, L = 46, R = 8, T0 = 8, B = 20, end = new Date().getTime() / 1000, begin = end - 86400;
+    var lines = [], lo = null, hi = null, i, j, p, pts, c, last;
+    for (i = 0; i < list.length; i++) {
+      p = (hist[list[i].id] || {})[id] || [];
+      pts = [];
+      for (j = 0; j < p.length; j++) { if (p[j][0] >= begin) { pts.push(p[j]); } }
+      if (!pts.length) { continue; }
+      for (j = 0; j < pts.length; j++) {
+        if (lo === null || pts[j][1] < lo) { lo = pts[j][1]; }
+        if (hi === null || pts[j][1] > hi) { hi = pts[j][1]; }
+      }
+      lines.push({ e: list[i], pts: pts, n: i });
+    }
+    if (!lines.length) { return ''; }
+    if (hi - lo < 1) { lo -= 0.5; hi += 0.5; }
+    function x(t) { return L + (t - begin) / 86400 * (width - L - R); }
+    function y(v) { return T0 + (hi - v) / (hi - lo) * (H - T0 - B); }
+    var svg = '', keys = '', v, t, segs;
+    for (i = 0; i < 3; i++) {
+      v = lo + (hi - lo) * i / 2;
+      svg += '<line class="ggrid" x1="' + L + '" x2="' + (width - R) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '"/>' +
+        '<text class="gl" x="' + (L - 6) + '" y="' + (y(v) + 4).toFixed(1) + '" text-anchor="end">' + num(v, digits) + '</text>';
+    }
+    // Whole hours by the clock, so daylight saving moves the labels with it.
+    for (t = Math.ceil(begin / 3600) * 3600; t <= end; t += 3600) {
+      if (new Date(t * 1000).getHours() % 6 === 0) {
+        svg += '<text class="gl" x="' + x(t).toFixed(1) + '" y="' + (H - 5) + '" text-anchor="middle">' + pad(new Date(t * 1000).getHours()) + '</text>';
+      }
+    }
+    for (i = 0; i < lines.length; i++) {
+      segs = graphLines(lines[i].pts, x, y);
+      for (j = 0; j < segs.length; j++) { svg += '<polyline class="gline g' + lines[i].n + '" points="' + segs[j] + '"/>'; }
+      c = cap(lines[i].e, id);
+      last = lines[i].pts[lines[i].pts.length - 1][1];
+      keys += '<span class="gk g' + lines[i].n + '"><i></i>' + esc(lines[i].e.name) + ' <b>' + num(last, digits) + (c && c.units ? (c.units.charAt(0) === '°' ? '' : ' ') + esc(c.units) : '') + '</b></span>';
+    }
+    return '<div class="card graph"><div class="graph-top"><span class="sub">' + title + '</span><span class="graph-keys">' + keys + '</span></div>' +
+      '<svg width="' + width + '" height="' + H + '" viewBox="0 0 ' + width + ' ' + H + '">' + svg + '</svg></div>';
+  }
+
+  function graphsPage() {
+    histLoad();
+    var list = histEntities(), width = Math.max(240, $('page').clientWidth - 70), html = '', i, any = false;
+    for (i = 0; i < list.length; i++) { any = any || !!hist[list[i].id]; }
+    for (i = 0; i < GRAPHS.length; i++) { html += graphCard(T[GRAPHS[i][1]], GRAPHS[i][0], GRAPHS[i][2], list, width); }
+    if (list.length && any && !html) { html = '<div class="card"><p class="muted">' + T.noHistory + '</p></div>'; }
+    return html + byClass(['price']).map(priceCard).join('');
+  }
+
   // ------------------------------------------------------------- ships
 
   function shipKind(code) {
@@ -1202,6 +1297,7 @@
     { id: 'climate', icon: 'thermo', when: function () { return !!(panel('indoor') || panel('outdoor')) || byClass(['thermostat', 'heater', 'sensor']).length > 0; } },
     { id: 'flows', icon: 'bolt', when: function () { return byClass(['button']).length > 0; } },
     { id: 'weather', icon: 'cloud', when: function () { return !!series(); } },
+    { id: 'graphs', icon: 'chart', when: function () { return histEntities().length > 0 || byClass(['price']).length > 0; } },
     { id: 'ships', icon: 'boat', when: function () { return byClass(['ais']).length > 0; } },
     { id: 'departures', icon: 'clock', when: function () { return byClass(['departures']).length > 0; } },
     { id: 'calendar', icon: 'calendar', when: function () { return byClass(['calendar']).length > 0; } },
@@ -1341,6 +1437,7 @@
     if (page === 'climate') { return '<div class="row">' + climateCard('w100') + '</div>' + tilesHtml(byClass(['thermostat', 'heater', 'sensor']), true); }
     if (page === 'flows') { return tilesHtml(byClass(['button']), true); }
     if (page === 'weather') { return weatherPage(); }
+    if (page === 'graphs') { return graphsPage(); }
     if (page === 'ships') { return byClass(['ais']).map(shipsCard).join(''); }
     if (page === 'departures') { return byClass(['departures']).map(departuresCard).join(''); }
     if (page === 'calendar') { return calendarPage(); }
@@ -1396,7 +1493,7 @@
     for (i = 0; i < inner.length; i++) { inner[i].style.height = h + 'px'; }
   }
 
-  window.addEventListener('resize', function () { if (page === 'calendar') { render(); } else { fitHome(); } }, false);
+  window.addEventListener('resize', function () { if (page === 'calendar' || page === 'graphs') { render(); } else { fitHome(); } }, false);
 
   // ------------------------------------------------------------- actions
 
@@ -1671,6 +1768,7 @@
   // The forecast strip moves with the clock; redraw it hourly.
   setInterval(render, 3600 * 1000);
   setInterval(function () { camTick(true); }, 10000);
+  setInterval(function () { if (page === 'graphs') { render(); } }, 60000);
   // Finished events, a new day and warnings starting or ending change the page without the server saying anything.
   var calShown = '';
   setInterval(function () {

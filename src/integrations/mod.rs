@@ -119,6 +119,10 @@ pub trait Instance: Send + Sync {
     fn snapshot(&self, _entity: &str) -> Result<(String, Vec<u8>), String> {
         Err("no camera here".into())
     }
+    /// The last 24 hours of an entity with a `history` capability: `{capability: [[epoch, value], …]}`.
+    fn history(&self, _entity: &str) -> Result<Value, String> {
+        Err("no history here".into())
+    }
     /// Accounts the admin can connect, e.g. music services: `[{id, name, connected}]`.
     fn accounts(&self) -> Vec<Value> {
         vec![]
@@ -380,6 +384,15 @@ impl Registry {
             return Err("the camera's picture is empty or too large".into());
         }
         Ok((kind, bytes))
+    }
+
+    pub fn history(&self, full_id: &str) -> Result<Value, String> {
+        let (iid, eid) = full_id.split_once(':').ok_or("bad entity id")?;
+        let inst = self.instance(iid).ok_or("integration is not running")?;
+        if !inst.entities().iter().any(|e| e.id == eid && e.capabilities.contains_key("history")) {
+            return Err("no history for this".into());
+        }
+        inst.history(eid)
     }
 
     pub fn accounts(&self, id: &str) -> Vec<Value> {

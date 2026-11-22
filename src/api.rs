@@ -139,6 +139,13 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     let (kind, bytes) = app.registry.snapshot(id).map_err(|e| Response::error(502, &e))?;
                     Ok(Response::ok(json!({ "type": kind, "data": b64_encode(&bytes) })))
                 }
+                ("GET", ["tablet", "history"]) => {
+                    let id = req.query.get("id").map(String::as_str).unwrap_or("");
+                    if !device.allowed().contains(id) {
+                        return Err(Response::error(403, "Not configured for this screen"));
+                    }
+                    app.registry.history(id).map(Response::ok).map_err(|e| Response::error(502, &e))
+                }
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
                 ("POST", ["tablet", "search"]) => {
                     let body = req.json()?;

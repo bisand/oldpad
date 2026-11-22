@@ -165,6 +165,22 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
   font-size: 15px; text-align: center; pointer-events: none;
 }
 
+/* Graphs */
+.graph svg { display: block; }
+.graph-top { position: relative; height: 22px; margin-bottom: 4px; }
+.graph-keys { position: absolute; right: 0; top: 0; font-size: 14px; white-space: nowrap; }
+.gk { margin-left: 16px; }
+.gk i { display: inline-block; width: 12px; height: 3px; margin-right: 6px; vertical-align: middle; background: currentColor; }
+.gk b { font-weight: 600; }
+.gl { fill: #8b8f98; font-size: 11px; }
+.day .gl { fill: #6f747d; }
+.ggrid { stroke: #26282e; stroke-width: 1; }
+.day .ggrid { stroke: #e3e5e9; }
+.gline { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.gline.g0 { stroke: #e08a1e; } .gk.g0 { color: #e08a1e; }
+.gline.g1 { stroke: #3b8eea; } .gk.g1 { color: #3b8eea; }
+.gline.g2 { stroke: #2aa06a; } .gk.g2 { color: #2aa06a; }
+
 /* Night clock: above everything, so nothing bright shows in a dark room. */
 .sleep { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 70; background: #000; cursor: pointer; }
 #sleep-time {

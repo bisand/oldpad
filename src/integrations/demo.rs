@@ -94,6 +94,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             ("temperature_max", temp(22.1, false)),
             ("measure_humidity", Capability::new(json!(42), false)),
             ("measure_co2", Capability::new(json!(612), false)),
+            ("history", Capability::new(Value::Null, false)),
         ]),
         entity("outdoor", "Outdoor", "Garden", "sensor", vec![
             ("measure_temperature", temp(4.2, false)),
@@ -101,6 +102,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             ("temperature_max", temp(6.0, false)),
             ("measure_humidity", Capability::new(json!(87), false)),
             ("measure_wind_strength", Capability::new(json!(10.8), false)),
+            ("history", Capability::new(Value::Null, false)),
         ]),
         speaker("speaker", zone, "speaker", true, 0.28, "Radio One"),
         speaker("kitchen", "Kitchen", "speaker", true, 0.2, "Radio One"),
@@ -151,6 +153,19 @@ fn group_volumes(list: &mut [Entity]) -> Vec<(String, Value)> {
 }
 
 impl Instance for Demo {
+    /// A made-up day around the current readings.
+    fn history(&self, entity: &str) -> Result<Value, String> {
+        let list = self.entities.lock().unwrap();
+        let e = list.iter().find(|e| e.id == entity).ok_or("no such entity")?;
+        let end = crate::util::now() as i64 / 900 * 900;
+        let mut out = Map::new();
+        for (cap, swing) in [("measure_temperature", 1.5), ("measure_humidity", 5.0), ("measure_co2", 120.0), ("measure_wind_strength", 4.0)] {
+            let Some(v) = e.capabilities.get(cap).and_then(|c| c.value.as_f64()) else { continue };
+            let points: Vec<Value> = (0..96).rev().map(|i| json!([end - i * 900, ((v + swing * (i as f64 / 15.3).sin()) * 10.0).round() / 10.0])).collect();
+            out.insert(cap.into(), Value::Array(points));
+        }
+        Ok(Value::Object(out))
+    }
     fn snapshot(&self, _entity: &str) -> Result<(String, Vec<u8>), String> {
         // One transparent pixel.
         const PNG: [u8; 67] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1F, 0x15, 0xC4, 0x89, 0, 0, 0, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0, 1, 0, 0, 5, 0, 1, 0x0D, 0x0A, 0x2D, 0xB4, 0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];

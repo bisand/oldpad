@@ -10,7 +10,7 @@ use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const DEFAULT_FIELDS: &str = "Temperature=measure_temperature, Humidity=measure_humidity, CO2=measure_co2, WindStrength=measure_wind_strength, Pressure=measure_pressure";
 
@@ -123,6 +123,14 @@ impl Query {
         }
     }
 
+    /// 24 hours in 15-minute averages for every entity. One query, so the tag value of
+    /// an entity never becomes part of InfluxQL.
+    fn history(&self) -> Result<Value, String> {
+        let selects: Vec<String> = self.fields.iter().map(|(f, _)| format!("mean(\"{f}\") AS \"{f}\"")).collect();
+        let v = self.run(&format!("SELECT {} FROM {} {} GROUP BY time(15m), {} fill(none)", selects.join(", "), self.measurement, self.where_("24h"), self.tag))?;
+        Ok(parse_history(&v, self.tag.trim_matches('"'), &self.fields))
+    }
+
     fn load(&self) -> Result<Vec<Entity>, String> {
         let selects: Vec<String> = self.fields.iter().map(|(f, _)| format!("last(\"{f}\") AS \"{f}\"")).collect();
         let latest = self.run(&format!("SELECT {} FROM {} {} GROUP BY {}", selects.join(", "), self.measurement, self.where_("2h"), self.tag))?;
@@ -149,6 +157,7 @@ impl Query {
                 }
             }
             if !caps.is_empty() {
+                caps.insert("history".into(), Capability::new(Value::Null, false));
                 out.insert(name.to_string(), Entity { id: name.to_string(), name: name.to_string(), zone: String::new(), class: "sensor".into(), capabilities: caps });
             }
         }
@@ -167,6 +176,26 @@ impl Query {
         }
         Ok(out.into_values().collect())
     }
+}
+
+/// `{entity: {capability: [[epoch, value], …]}}`, leaving out gaps.
+fn parse_history(v: &Value, tag: &str, fields: &[(String, String)]) -> Value {
+    let mut out = Map::new();
+    for s in v["results"][0]["series"].as_array().into_iter().flatten() {
+        let Some(name) = s["tags"][tag].as_str().filter(|n| !n.is_empty()) else { continue };
+        let cols: Vec<&str> = s["columns"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        let rows = s["values"].as_array().map(Vec::as_slice).unwrap_or_default();
+        let mut caps = Map::new();
+        for (field, cap) in fields {
+            let Some(i) = cols.iter().position(|c| c == field) else { continue };
+            let points: Vec<Value> = rows.iter().filter_map(|r| Some(json!([r[0].as_i64()?, (r[i].as_f64()? * 10.0).round() / 10.0]))).collect();
+            if !points.is_empty() {
+                caps.insert(cap.clone(), Value::Array(points));
+            }
+        }
+        out.insert(name.to_string(), Value::Object(caps));
+    }
+    Value::Object(out)
 }
 
 fn units(cap: &str) -> Option<&'static str> {
@@ -192,10 +221,14 @@ fn test(config: &Map<String, Value>) -> Result<String, String> {
 struct Influx {
     entities: Arc<Mutex<Vec<Entity>>>,
     stopped: Arc<AtomicBool>,
+    query: Arc<Query>,
+    /// Screens share one answer for 5 minutes, so they cannot load the database.
+    history: Mutex<Option<(Instant, Value)>>,
 }
 
 fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String> {
-    let q = Query::new(config)?;
+    let query = Arc::new(Query::new(config)?);
+    let q = query.clone();
     let entities = Arc::new(Mutex::new(q.load()?));
     let stopped = Arc::new(AtomicBool::new(false));
     let (ents, stop) = (entities.clone(), stopped.clone());
@@ -228,7 +261,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             }
         }
     });
-    Ok(Box::new(Influx { entities, stopped }))
+    Ok(Box::new(Influx { entities, stopped, query, history: Mutex::new(None) }))
 }
 
 impl Instance for Influx {
@@ -237,6 +270,13 @@ impl Instance for Influx {
     }
     fn set(&self, _: &str, _: &str, _: &Value) -> Result<(), String> {
         Err("readings are read-only".into())
+    }
+    fn history(&self, entity: &str) -> Result<Value, String> {
+        let mut cache = self.history.lock().unwrap();
+        if !cache.as_ref().is_some_and(|(at, _)| at.elapsed() < Duration::from_secs(300)) {
+            *cache = Some((Instant::now(), self.query.history()?));
+        }
+        Ok(cache.as_ref().map_or(Value::Null, |(_, all)| all.get(entity).cloned().unwrap_or_else(|| json!({}))))
     }
     fn stop(&self) {
         self.stopped.store(true, Ordering::Relaxed);
@@ -256,6 +296,20 @@ mod tests {
         assert!(parse_filter("location=x").is_err());
         assert!(parse_filter("a\"b='x'").is_err());
         assert!(ident("weather\"; DROP").is_err());
+    }
+
+    #[test]
+    fn history_keeps_each_place_and_skips_gaps() {
+        let fields = parse_fields("Temperature=measure_temperature, CO2=measure_co2, Gone=measure_pressure").unwrap();
+        let v = json!({"results": [{"series": [
+            {"tags": {"place": "Stue"}, "columns": ["time", "Temperature", "CO2", "Gone"], "values": [[100, 21.26, null, null], [1000, null, 612.0, null], [1900, 21.0, 640.0, null]]},
+            {"tags": {"place": ""}, "columns": ["time", "Temperature"], "values": [[100, 1.0]]},
+        ]}]});
+        assert_eq!(parse_history(&v, "place", &fields), json!({"Stue": {
+            "measure_temperature": [[100, 21.3], [1900, 21.0]],
+            "measure_co2": [[1000, 612.0], [1900, 640.0]],
+        }}));
+        assert_eq!(parse_history(&json!({"results": [{}]}), "place", &fields), json!({}), "nothing stored yet");
     }
 
     #[test]

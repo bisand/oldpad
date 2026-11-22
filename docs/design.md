@@ -106,7 +106,6 @@ A dashboard has pages, a page has tiles. Tile types:
 
 ## Open questions
 
-- Graphs page (the kiosk's rendered Grafana PNGs) — needs an image proxy, as the CSP allows only same-origin images.
 - Sonos album art (same reason), and UPnP event subscriptions instead of 4-second polling.
 - More languages than English and Norwegian.
 - Packaging: container image and an example Kubernetes manifest.

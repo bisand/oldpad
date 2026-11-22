@@ -180,6 +180,13 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(tablet.call("GET", &format!("/api/tablet/camera?id={iid}:lamp"), None).0, 502, "on this screen, but a lamp has no picture");
     assert_eq!(phone.call("PUT", &dev, Some(json!({ "more": [plug, speaker, kitchen] }))).0, 200);
 
+    // --- history: only for what this screen shows, and only where it exists
+    let (s, hist) = tablet.call("GET", &format!("/api/tablet/history?id={outdoor}"), None);
+    assert_eq!((s, hist["measure_temperature"].as_array().map(Vec::len)), (200, Some(96)));
+    assert_eq!(tablet.call("GET", &format!("/api/tablet/history?id={reading}"), None).0, 403, "not on this screen");
+    assert_eq!(tablet.call("GET", &format!("/api/tablet/history?id={lamp}"), None).0, 502, "a lamp has no history");
+    assert_eq!(stranger.call("GET", &format!("/api/tablet/history?id={outdoor}"), None).0, 401);
+
     // --- live stream: flip the lamp, the event arrives on the stream
     let (_, ticket) = tablet.call("POST", "/api/tablet/ticket", Some(json!({})));
     let mut sse = TcpStream::connect(base.trim_start_matches("http://")).unwrap();
