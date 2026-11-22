@@ -1024,6 +1024,14 @@
       '<span>' + esc(T.levels[w.a.level]) + ' · ' + esc(alertWhen(w)) + ' · ' + esc(w.a.area) + '</span>' +
       (list.length > 1 ? '<em>+' + (list.length - 1) + ' ' + T.more + '</em>' : '') + '</div>';
   }
+  // On the night clock: the most serious orange or red warning in force.
+  function sleepAlert() {
+    var list = activeAlerts(), el = $('sleep-alert'), w = null, i;
+    for (i = 0; i < list.length && !w; i++) { if (list[i].on && list[i].a.level >= 3) { w = list[i]; } }
+    if (!w) { el.className = 'hidden'; return; }
+    el.textContent = w.a.name + ' · ' + T.levels[w.a.level] + (alertWhen(w) ? ' · ' + alertWhen(w) : '');
+    el.className = 'l' + w.a.level;
+  }
   function alertsCard() {
     var list = activeAlerts(), html = '', i, w;
     for (i = 0; i < list.length; i++) {
@@ -1780,7 +1788,7 @@
     var day = theme === 'day' || (theme !== 'night' && (sun === null ? inWindow : sun));
     // By the hours, not the sun: polar night would otherwise hide the dashboard all day.
     var sleep = !!token && !PREVIEW && !typing && load(NIGHT_KEY) === 'on' && !inWindow && d.getTime() - lastTouch >= NIGHT_IDLE;
-    if (sleep) { $('sleep-time').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+    if (sleep) { $('sleep-time').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()); sleepAlert(); }
     if (sleep !== asleep) { setAsleep(sleep); }
     var size = load(SIZE_KEY);
     document.body.className = (day ? 'day' : 'night') + (size === 'large' || size === 'xl' ? ' size-' + size : '');

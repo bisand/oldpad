@@ -45,7 +45,8 @@ In daily use on an iPad 2 with iOS 9.3.5; older versions are untested.
   MET forecast's location, midnight sun and polar night included.
 - **Night clock (optional, off by default).** Turn it on in a screen's settings
   (the cog). During night hours, after 5 minutes without a touch, the page gives
-  way to a dim clock on black until the screen is touched or day starts. A web
+  way to a dim clock on black until the screen is touched or day starts. Orange
+  and red weather warnings in force show under it. A web
   page cannot change the backlight, so set the iPad's brightness yourself.
 
 ## Run it

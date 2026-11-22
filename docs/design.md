@@ -115,7 +115,8 @@ music, doorbell and its camera), further entities for the menu pages, and up to
 - **Six** Homey tiles.
 - Theme switches by set hours or at sunrise/sunset; night is dark with dim text.
 - Optional night clock per screen. It follows the set hours rather than the sun,
-  so polar night cannot hide the dashboard all day.
+  so polar night cannot hide the dashboard all day. Orange and red weather
+  warnings in force show under the clock.
 - Doorbell pop-up above everything, including the night clock.
 
 ## Open questions
