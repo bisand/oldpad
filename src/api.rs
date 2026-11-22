@@ -168,6 +168,8 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     }
                     app.recorder.get(id).map(Response::ok).ok_or_else(|| Response::error(502, "No history yet"))
                 }
+                ("GET", ["tablet", "kindle.png"]) => Ok(crate::kindle::screen(app, &device, req)),
+                ("POST", ["tablet", "kindle", "tap"]) => crate::kindle::tap(app, &device, &req.json()?),
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
                 ("POST", ["tablet", "search"]) => {
                     let body = req.json()?;

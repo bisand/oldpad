@@ -130,6 +130,15 @@ music, doorbell and its camera), further entities for the menu pages, and up to
   warnings in force show under the clock.
 - Doorbell pop-up above everything, including the night clock.
 
+## E-ink screen (Kindle Paperwhite 3, portrait)
+
+A reader shows a picture drawn by the server and reports where it was tapped. It pairs like any screen and sends its token as `Authorization: Bearer`.
+
+- `GET /api/tablet/kindle.png?page=0&time=14:05` returns a 1072×1448 8-bit grayscale PNG with `X-Oldpad-Layout` and `X-Oldpad-Page`. `time` is the reader's own clock, because the server may be in another zone.
+- `POST /api/tablet/kindle/tap` with `X-Oldpad: 1` and `{"x", "y", "page", "layout"}` presses what is at that point and returns `{"ok": true, "page": n}`. Fetch the picture for that page afterwards.
+- A `409` means the picture is out of date and nothing was pressed: fetch it again.
+- Buttons are the screen's own lights, sockets, thermostats and scenes, eight to a page. Locks, alarms and unclassified devices are left off.
+
 ## Open questions
 
 - UPnP event subscriptions for Sonos instead of 4-second polling.

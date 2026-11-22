@@ -4,6 +4,7 @@ mod cbor;
 mod client;
 mod http;
 mod integrations;
+mod kindle;
 mod recorder;
 mod store;
 mod update;

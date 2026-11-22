@@ -156,6 +156,26 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!((state["pages"][0]["name"].as_str(), state["pages"][0]["items"][0]["card"].as_str()), (Some("Evening"), Some("clock")));
     assert_eq!(state["pages"][0]["items"][1]["name"], "Good night");
 
+    // --- e-ink: a picture to show, and taps that press what the picture showed
+    let token = format!("Bearer {}", tablet.bearer.clone().unwrap());
+    let picture = |page: u32| request(&base, "GET", &format!("/api/tablet/kindle.png?page={page}&time=14:05"), &[("Authorization", token.as_str())], None).unwrap();
+    let shot = picture(0);
+    assert_eq!((shot.status, shot.headers["content-type"].as_str()), (200, "image/png"));
+    if let Ok(path) = std::env::var("OLDPAD_KINDLE_PREVIEW") {
+        std::fs::write(path, &shot.body).unwrap();
+    }
+    let layout = shot.headers["x-oldpad-layout"].clone();
+    let tap = json!({ "x": 100, "y": 400, "page": 0, "layout": layout });
+    assert_eq!(tablet.call("POST", "/api/tablet/kindle/tap", Some(tap.clone())).0, 200);
+    assert_eq!(tablet.call("GET", "/api/tablet", None).1["tiles"][0]["capabilities"]["onoff"]["value"], false, "the tap turned it off");
+    assert_eq!(tablet.call("POST", "/api/tablet/kindle/tap", Some(tap)).0, 409, "that picture is out of date");
+    assert_eq!(tablet.call("GET", "/api/tablet", None).1["tiles"][0]["capabilities"]["onoff"]["value"], false, "and pressed nothing");
+    let layout = picture(0).headers["x-oldpad-layout"].clone();
+    assert_eq!(tablet.call("POST", "/api/tablet/kindle/tap", Some(json!({ "x": 100, "y": 400, "page": 0, "layout": layout }))).0, 200);
+    let mut nobody = Client { base: base.clone(), cookie: None, bearer: None };
+    assert_eq!(nobody.call("GET", "/api/tablet/kindle.png", None).0, 401);
+    assert_eq!(nobody.call("POST", "/api/tablet/kindle/tap", Some(json!({ "x": 1, "y": 1 }))).0, 401);
+
     // --- names: a screen can call things its own name, wherever they show
     let dev = format!("/api/admin/devices/{device_id}");
     assert_eq!(phone.call("PUT", &dev, Some(json!({ "names": { night.clone(): "x".repeat(33) } }))).0, 400);
