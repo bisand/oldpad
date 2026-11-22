@@ -600,9 +600,11 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
                         last_full = Instant::now();
                     }
                     lost = !all && !full;
+                    sk(Event::Healthy(true)); // one unplugged room is not Sonos being down
                 }
                 Err(e) => {
                     eprintln!("sonos: {e}");
+                    sk(Event::Healthy(false));
                     lost = false; // the 5-minute timer retries; don't hammer
                 }
             }

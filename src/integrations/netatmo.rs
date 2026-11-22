@@ -409,8 +409,14 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             }
             polled = Instant::now();
             match poller.entities() {
-                Ok(fresh) => publish(&shared, fresh, &events),
-                Err(e) => eprintln!("netatmo: {e}"),
+                Ok(fresh) => {
+                    publish(&shared, fresh, &events);
+                    events(Event::Healthy(true));
+                }
+                Err(e) => {
+                    eprintln!("netatmo: {e}");
+                    events(Event::Healthy(false));
+                }
             }
         }
     });

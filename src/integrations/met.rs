@@ -187,6 +187,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
     let (ent, stop) = (entity.clone(), stopped.clone());
     std::thread::spawn(move || {
         let mut round = 0u32;
+        let mut forecast_ok = true; // fetched less often than the warnings, so remembered between rounds
         while !stop.load(Ordering::Relaxed) {
             // Warnings every 5 minutes. The forecast updates hourly at most, so every 20 is plenty.
             std::thread::sleep(Duration::from_secs(5 * 60));
@@ -194,6 +195,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             if round.is_multiple_of(4) {
                 match fetch(lat, lon) {
                     Ok(mut fresh) => {
+                        forecast_ok = true;
                         let mut current = ent.lock().unwrap();
                         fresh.capabilities.insert("alerts".into(), current.capabilities["alerts"].clone());
                         *current = fresh.clone();
@@ -202,12 +204,16 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
                             sink(Event::Changed { entity: "forecast".into(), capability, value: c.value });
                         }
                     }
-                    Err(e) => eprintln!("met: {e}"),
+                    Err(e) => {
+                        forecast_ok = false;
+                        eprintln!("met: {e}");
+                    }
                 }
             }
             // A failed check keeps the warnings we have: an outage must not look like all clear.
             match fetch_alerts(lat, lon) {
                 Ok(alerts) => {
+                    sink(Event::Healthy(forecast_ok));
                     let mut current = ent.lock().unwrap();
                     let c = current.capabilities.get_mut("alerts").expect("set at start");
                     if c.value != alerts {
@@ -216,7 +222,10 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
                         sink(Event::Changed { entity: "forecast".into(), capability: "alerts".into(), value: alerts });
                     }
                 }
-                Err(e) => eprintln!("met: {e}"),
+                Err(e) => {
+                    eprintln!("met: {e}");
+                    sink(Event::Healthy(false));
+                }
             }
         }
     });

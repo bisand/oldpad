@@ -36,7 +36,8 @@ In daily use on an iPad 2 with iOS 9.3.5; older versions are untested.
   web page play sound by itself.
 - **Live.** Changes made anywhere else show up within seconds. After a dropped
   connection the screen fetches what it missed, and a banner says so if the
-  server stays out of reach for 15 seconds.
+  server stays out of reach for 15 seconds. If an integration stops answering
+  for two minutes, the screens showing it name it, as its values may be old.
 - **Per screen.** Each screen has its own layout, chosen on your phone. Text
   follows the tablet's language (English and Norwegian so far).
 - **Integrations by wizard.** Add any integration from your phone: pick a type,

@@ -118,9 +118,18 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     };
                     let p = &device.panels;
                     let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
+                    // Only what this screen shows: it need not know of the rest.
+                    let shown: std::collections::HashSet<String> = device.allowed().iter().filter_map(|i| Some(i.split_once(':')?.0.to_string())).collect();
+                    let down: Vec<Value> = {
+                        let store = app.store.lock().unwrap();
+                        app.registry.down().into_iter().filter(|(id, _)| shown.contains(id))
+                            .filter_map(|(id, secs)| Some(json!({ "name": store.data.integrations.iter().find(|i| i.id == id)?.name, "secs": secs })))
+                            .collect()
+                    };
                     Ok(Response::ok(json!({
                         "device": { "id": device.id, "name": device.name, "favRows": device.fav_rows.unwrap_or(1), "imageToken": App::image_token(&device) },
                         "settings": app.store.lock().unwrap().data.settings,
+                        "down": down,
                         "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
                         "more": device.more.iter().map(get).collect::<Vec<_>>(),
                         "pages": device.pages.iter().map(|p| json!({

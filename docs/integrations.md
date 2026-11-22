@@ -50,7 +50,9 @@ An instance may also implement `search(entity, query)`, returning `[{id, title, 
 `start` may block (it runs on its own thread) and should fail with a clear
 message the admin can act on. Push live changes through the `Sink`:
 `Event::Changed { entity, capability, value }` for one value,
-`Event::Reloaded` when entities were added, removed or renamed.
+`Event::Reloaded` when entities were added, removed or renamed,
+`Event::Healthy(bool)` after each poll or when a connection is made or lost. Screens
+showing the integration say so if it stays unhealthy for two minutes.
 
 ## Entities and capabilities
 

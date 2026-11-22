@@ -383,6 +383,7 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
             Ok(s) => s,
             Err(e) => {
                 eprintln!("ais: {e}");
+                sink(Event::Healthy(false));
                 std::thread::sleep(backoff);
                 backoff = (backoff * 2).min(Duration::from_secs(60));
                 continue;
@@ -395,6 +396,7 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
                 Ok(lines) => {
                     heard = Instant::now();
                     backoff = Duration::from_secs(2);
+                    sink(Event::Healthy(true));
                     for msg in lines.iter().filter_map(|l| asm.line(l)).flat_map(|p| decode(&p)) {
                         learned |= apply(&mut ships, msg, heard);
                     }
@@ -403,11 +405,13 @@ fn run(cfg: &Config, mut ships: HashMap<u32, Ship>, entity: &Mutex<Entity>, sink
                     // A quiet sea is normal for a while; a silent socket for 10 minutes is not.
                     if heard.elapsed() > Duration::from_secs(600) {
                         eprintln!("ais: nothing heard for 10 minutes, reconnecting");
+                        sink(Event::Healthy(false));
                         break;
                     }
                 }
                 Err(e) => {
                     eprintln!("ais: {e}");
+                    sink(Event::Healthy(false));
                     break;
                 }
             }

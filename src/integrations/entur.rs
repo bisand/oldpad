@@ -135,6 +135,7 @@ fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String
     std::thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_secs(30));
+            let mut ok = true;
             for id in &ids {
                 match fetch(id, n) {
                     Ok((name, list)) => {
@@ -148,9 +149,13 @@ fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String
                             sink(Event::Changed { entity: format!("stop-{}", id.trim_start_matches("NSR:StopPlace:")), capability: "departures".into(), value });
                         }
                     }
-                    Err(e) => eprintln!("entur: {id}: {e}"),
+                    Err(e) => {
+                        ok = false;
+                        eprintln!("entur: {id}: {e}");
+                    }
                 }
             }
+            sink(Event::Healthy(ok));
         }
     });
     Ok(Box::new(Entur { entities, stopped }))

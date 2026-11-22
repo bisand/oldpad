@@ -323,6 +323,7 @@ fn session(api: &Api, entities: &Mutex<Vec<Entity>>, sink: &Sink, stopped: &Atom
     let (rooms, list) = load(api, &mut ws)?;
     *entities.lock().unwrap() = list;
     sink(Event::Reloaded);
+    sink(Event::Healthy(true));
 
     let (mut heard, mut pinged, mut ping_id) = (Instant::now(), Instant::now(), 8u64);
     while !stopped.load(Ordering::Relaxed) {
@@ -367,7 +368,10 @@ fn realtime_loop(api: &Api, entities: &Mutex<Vec<Entity>>, sink: &Sink, stopped:
         let started = Instant::now();
         match session(api, entities, sink, stopped) {
             Ok(()) => return,
-            Err(e) => eprintln!("homeassistant: realtime: {e}"),
+            Err(e) => {
+                eprintln!("homeassistant: realtime: {e}");
+                sink(Event::Healthy(false));
+            }
         }
         if started.elapsed() > Duration::from_secs(60) {
             backoff = Duration::from_secs(2);

@@ -142,6 +142,7 @@ impl App {
                     app.send_where(|c| c.tiles.contains(&id), &msg);
                 }
                 Event::Reloaded => app.send_where(|_| true, &sse("reload", &json!({}))),
+                Event::Healthy(_) => {} // kept by the registry, which sends a reload when it changes
                 Event::Remember { key, value } => {
                     if !key.starts_with('_') {
                         return;

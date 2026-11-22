@@ -98,6 +98,9 @@ pub enum Event {
     /// start with `_`: state the integration earned (a service token), never
     /// shown to the browser and kept when the admin edits the fields.
     Remember { key: String, value: Value },
+    /// Whether the system behind this integration is answering. Screens that show
+    /// it are told when this changes, so repeating it after every poll is fine.
+    Healthy(bool),
 }
 
 pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
@@ -234,6 +237,8 @@ fn picture_type(kind: &str) -> Option<&'static str> {
 struct Running {
     instance: Option<Arc<dyn Instance>>,
     status: String,
+    /// Since when (epoch seconds) it has not been answering.
+    down: Option<u64>,
     /// Bumped on every (re)start, so a stale start thread knows to give up.
     generation: u64,
 }
@@ -271,7 +276,18 @@ impl Registry {
     pub fn start(self: &Arc<Self>, id: String, kind_id: String, config: Map<String, Value>, sink: Sink) {
         self.stop(&id);
         let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.running.lock().unwrap().insert(id.clone(), Running { instance: None, status: "starting".into(), generation });
+        self.running.lock().unwrap().insert(id.clone(), Running { instance: None, status: "starting".into(), down: None, generation });
+        let sink: Sink = {
+            let (reg, id, inner) = (Arc::downgrade(self), id.clone(), sink);
+            Arc::new(move |event| match event {
+                Event::Healthy(ok) => {
+                    if reg.upgrade().is_some_and(|r| r.set_health(&id, generation, ok)) {
+                        inner(Event::Reloaded); // screens fetch the new state, with who is down
+                    }
+                }
+                other => inner(other),
+            })
+        };
         let reg = Arc::clone(self);
         std::thread::spawn(move || {
             let Some(kind) = reg.kind(&kind_id) else { return };
@@ -294,6 +310,7 @@ impl Registry {
                     Ok(inst) => {
                         slot.instance = Some(Arc::from(inst));
                         slot.status = "running".into();
+                        slot.down = None;
                         drop(running);
                         sink(Event::Reloaded);
                         return;
@@ -304,10 +321,31 @@ impl Registry {
                     }
                 }
                 drop(running);
+                sink(Event::Healthy(false));
                 std::thread::sleep(backoff);
                 backoff = (backoff * 2).min(RETRY_MAX);
             }
         });
+    }
+
+    /// A replaced attempt's generation no longer counts. Returns whether anything changed.
+    fn set_health(&self, id: &str, generation: u64, ok: bool) -> bool {
+        let mut running = self.running.lock().unwrap();
+        let Some(slot) = running.get_mut(id).filter(|s| s.generation == generation) else { return false };
+        let was = slot.down.is_some();
+        slot.down = if ok { None } else { slot.down.or(Some(crate::util::now())) };
+        was != slot.down.is_some()
+    }
+
+    /// Integrations not answering, with the seconds since they stopped.
+    pub fn down(&self) -> Vec<(String, u64)> {
+        let t = crate::util::now();
+        self.running.lock().unwrap().iter().filter_map(|(id, r)| Some((id.clone(), t.saturating_sub(r.down?)))).collect()
+    }
+
+    #[cfg(test)]
+    pub fn force_down(&self, id: &str, secs: Option<u64>) {
+        self.running.lock().unwrap().get_mut(id).unwrap().down = secs.map(|s| crate::util::now() - s);
     }
 
     pub fn stop(&self, id: &str) {
@@ -488,6 +526,64 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(200));
         assert_eq!(OLD_TRIES.load(Ordering::SeqCst), tries, "the replaced attempt kept retrying");
         assert_eq!(reg.status("x"), "running");
+    }
+
+    #[test]
+    fn health_reaches_screens_once_and_ignores_replaced_attempts() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static SINKS: Mutex<Vec<Sink>> = Mutex::new(Vec::new());
+        static RELOADS: AtomicUsize = AtomicUsize::new(0);
+        let mut k = kind();
+        k.id = "health";
+        k.start = |c, s| {
+            SINKS.lock().unwrap().push(s.clone());
+            (super::demo::kind().start)(c, s)
+        };
+        let reg = Arc::new(Registry { kinds: vec![k], running: Mutex::new(HashMap::new()) });
+        let count: Sink = Arc::new(|e| {
+            if matches!(e, Event::Reloaded) {
+                RELOADS.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+        let wait = |n: usize| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while SINKS.lock().unwrap().len() < n || reg.status("h") != "running" {
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        };
+        reg.start("h".into(), "health".into(), Map::new(), count.clone());
+        wait(1);
+        std::thread::sleep(std::time::Duration::from_millis(20)); // let the start's own reload land
+        let first = SINKS.lock().unwrap()[0].clone();
+        let before = RELOADS.load(Ordering::SeqCst);
+        first(Event::Healthy(true));
+        assert_eq!((reg.down().len(), RELOADS.load(Ordering::SeqCst)), (0, before), "no change, no reload");
+        first(Event::Healthy(false));
+        first(Event::Healthy(false));
+        assert_eq!((reg.down().len(), RELOADS.load(Ordering::SeqCst)), (1, before + 1), "told once");
+        first(Event::Healthy(true));
+        assert_eq!((reg.down().len(), RELOADS.load(Ordering::SeqCst)), (0, before + 2), "and once when back");
+        reg.start("h".into(), "health".into(), Map::new(), count);
+        wait(2);
+        first(Event::Healthy(false));
+        assert!(reg.down().is_empty(), "the replaced instance no longer counts");
+        reg.stop("h");
+    }
+
+    #[test]
+    fn a_failed_start_counts_as_down() {
+        let mut k = kind();
+        k.id = "broken";
+        let reg = Arc::new(Registry { kinds: vec![k], running: Mutex::new(HashMap::new()) });
+        reg.start("b".into(), "broken".into(), Map::new(), Arc::new(|_| {}));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while reg.down().is_empty() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        reg.stop("b");
+        assert!(reg.down().is_empty(), "a removed integration is not down");
     }
 
     #[test]

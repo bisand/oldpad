@@ -237,6 +237,7 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
             std::thread::sleep(Duration::from_secs(60));
             match q.load() {
                 Ok(fresh) => {
+                    sink(Event::Healthy(true));
                     let mut changes = Vec::new();
                     let mut list = ents.lock().unwrap();
                     for e in &fresh {
@@ -257,7 +258,10 @@ fn start(config: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, S
                         sink(Event::Reloaded);
                     }
                 }
-                Err(e) => eprintln!("influxdb: {e}"),
+                Err(e) => {
+                    eprintln!("influxdb: {e}");
+                    sink(Event::Healthy(false));
+                }
             }
         }
     });

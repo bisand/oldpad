@@ -188,6 +188,19 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(phone.call("PUT", &dev, Some(json!({ "panels": { "outdoor": outdoor } }))).0, 200);
     assert_eq!(tablet.call("GET", &camera, None).0, 403, "gone with the setting");
 
+    // --- an integration that stopped answering: told only to the screens showing it
+    let (s, other) = phone.call("POST", "/api/admin/integrations", Some(json!({ "type": "demo", "name": "Elsewhere", "config": {} })));
+    assert_eq!(s, 200, "{other}");
+    let other = other["id"].as_str().unwrap().to_string();
+    assert_eq!(tablet.call("GET", "/api/tablet", None).1["down"], json!([]));
+    app.registry.force_down(&iid, Some(200));
+    app.registry.force_down(&other, Some(200));
+    let (_, state) = tablet.call("GET", "/api/tablet", None);
+    assert_eq!((state["down"].as_array().unwrap().len(), state["down"][0]["name"].as_str()), (1, Some("Demo")));
+    assert!(state["down"][0]["secs"].as_u64().unwrap() >= 200);
+    app.registry.force_down(&iid, None);
+    assert_eq!(phone.call("DELETE", &format!("/api/admin/integrations/{other}"), None).0, 200);
+
     // --- history: only for what this screen shows, and only where it exists
     let (s, hist) = tablet.call("GET", &format!("/api/tablet/history?id={outdoor}"), None);
     assert_eq!((s, hist["measure_temperature"].as_array().map(Vec::len)), (200, Some(96)));

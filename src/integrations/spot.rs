@@ -148,8 +148,14 @@ fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String
             // The files change once a day; every half hour finds tomorrow's soon after they're out.
             if t - fetched >= 1800 {
                 match fetch(&area, extra, t) {
-                    Ok(p) => (prices, fetched) = (p, t),
-                    Err(e) => eprintln!("spot: {e}"),
+                    Ok(p) => {
+                        (prices, fetched) = (p, t);
+                        sink(Event::Healthy(true));
+                    }
+                    Err(e) => {
+                        eprintln!("spot: {e}");
+                        sink(Event::Healthy(false));
+                    }
                 }
             }
             let fresh = entity(&prices, t);

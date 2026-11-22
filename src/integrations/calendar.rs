@@ -607,12 +607,14 @@ fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String
                 continue;
             }
             last = Instant::now();
+            let mut ok = true;
             for url in &urls {
                 // A failed refresh keeps showing what we have.
                 let fresh = match load(url, days) {
                     Ok(e) => e,
                     Err(e) => {
                         eprintln!("calendar: {e}");
+                        ok = false;
                         continue;
                     }
                 };
@@ -629,6 +631,7 @@ fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String
                     sink(Event::Changed { entity: id, capability: "events".into(), value });
                 }
             }
+            sink(Event::Healthy(ok));
         }
     });
     Ok(Box::new(Calendar { entities, stopped }))

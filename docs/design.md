@@ -65,6 +65,8 @@ forwards changes to the tablets that show them over **Server-Sent Events**
 (supported since Safari 5). The tablet does not poll for state: each time its
 stream connects it fetches the current state once, so nothing changed during a
 dropout is missed, and a banner appears if it stays disconnected for 15 seconds.
+An integration that stops answering for two minutes is named in a bar on the
+screens that show it, because its last values stay up.
 Only camera pictures and the graphs' history are fetched on a timer, while shown.
 
 ## Integrations

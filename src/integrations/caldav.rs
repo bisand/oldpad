@@ -261,9 +261,11 @@ fn start(c: &Map<String, Value>, sink: Sink) -> Result<Box<dyn Instance>, String
                 Ok(list) => list,
                 Err(e) => {
                     eprintln!("caldav: {e}");
+                    sink(Event::Healthy(false));
                     continue;
                 }
             };
+            sink(Event::Healthy(true));
             let mut all = ents.lock().unwrap();
             let same_shape = all.len() == fresh.len() && all.iter().zip(&fresh).all(|(a, b)| a.id == b.id && a.name == b.name);
             let changed: Vec<(String, Value)> = fresh.iter().zip(all.iter()).filter(|(a, b)| a.capabilities["events"].value != b.capabilities["events"].value).map(|(a, _)| (a.id.clone(), a.capabilities["events"].value.clone())).collect();

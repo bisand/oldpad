@@ -394,6 +394,7 @@ fn session(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink: &Sink
         ws.send(&emit(&nsp, 10 + i as u64, json!(["subscribe", uri])))?;
     }
     eprintln!("homey: realtime connected, {} subscriptions", uris.len());
+    sink(Event::Healthy(true));
 
     let mut last_ping = Instant::now();
     while !stopped.load(Ordering::Relaxed) {
@@ -480,7 +481,10 @@ fn realtime_loop(api: &Api, homey_id: &str, entities: &Mutex<Vec<Entity>>, sink:
         let started = Instant::now();
         match session(api, homey_id, entities, sink, stopped) {
             Ok(()) => return,
-            Err(e) => eprintln!("homey: realtime: {e}"),
+            Err(e) => {
+                eprintln!("homey: realtime: {e}");
+                sink(Event::Healthy(false));
+            }
         }
         if started.elapsed() > Duration::from_secs(60) {
             backoff = Duration::from_secs(2);
