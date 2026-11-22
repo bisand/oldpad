@@ -189,7 +189,8 @@ document.addEventListener('click', (e) => {
   for (const m of document.querySelectorAll('details.menu[open]')) if (!m.contains(e.target) || e.target.closest('.menu-list button')) m.open = false;
 });
 
-function statusOf(status) {
+function statusOf(status, down) {
+  if (status === 'running' && down) return { kind: 'bad', text: 'Not responding', detail: 'Screens keep showing its last values and say so.' };
   if (status === 'running') return { kind: 'ok', text: 'Connected' };
   if (status === 'starting') return { kind: 'wait', text: 'Starting' };
   if (status.startsWith('error')) return { kind: 'bad', text: 'Needs attention', detail: status.replace(/^error:\s*/, '') };
@@ -395,7 +396,7 @@ async function screensView() {
 }
 
 function integrationCard(i, entities) {
-  const st = statusOf(i.status);
+  const st = statusOf(i.status, i.down);
   const count = entities.filter((e) => e.id.startsWith(`${i.id}:`)).length;
   const hasFavs = entities.some((e) => e.id.startsWith(`${i.id}:`) && e.capabilities?.arrange_favourites);
   return h('article', { class: 'card' },
@@ -425,7 +426,7 @@ function integrationCard(i, entities) {
 
 async function integrationsView() {
   const [integrations, entities] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities')]);
-  const trouble = integrations.filter((i) => i.status.startsWith('error')).length;
+  const trouble = integrations.filter((i) => i.down || i.status.startsWith('error')).length;
   render(
     pageHead('Integrations', integrations.length ? (trouble ? `${trouble} need${trouble === 1 ? 's' : ''} attention` : `${integrations.length} connected services`) : null,
       linkButton('Add integration', '#/integration/new', 'primary')),
@@ -437,6 +438,14 @@ async function integrationsView() {
 
 async function peopleView() {
   render(peopleSection(await api('GET', '/people')));
+}
+
+function updateNote(a) {
+  const release = a.latest && h('a', { href: `https://github.com/bisand/oldpad/releases/tag/v${a.latest}`, target: '_blank', rel: 'noopener noreferrer' }, a.latest);
+  if (a.state === 'available') return h('span', { class: 'bad' }, 'Update available: ', release);
+  if (a.state === 'current') return h('span', { class: 'ok' }, 'Up to date');
+  if (a.state === 'dev') return h('span', {}, 'Development build', release ? [' · latest release ', release] : '');
+  return 'Could not check yet';
 }
 
 async function settingsView() {
@@ -509,7 +518,8 @@ async function settingsView() {
       h('section', { class: 'card' },
         h('h2', { class: 'card-title' }, 'About'),
         h('dl', { class: 'facts' },
-          h('dt', {}, 'Version'), h('dd', {}, `${info.version}${info.commit ? ` (${info.commit})` : ''}`),
+          h('dt', {}, 'Version'), h('dd', {}, `${info.about.version}${info.about.commit ? ` (${info.about.commit})` : ''}`),
+          h('dt', {}, 'Updates'), h('dd', {}, updateNote(info.about)),
           h('dt', {}, 'Address'), h('dd', {}, info.publicUrl),
           h('dt', {}, 'Screens'), h('dd', {}, String(info.counts.screens)),
           h('dt', {}, 'Integrations'), h('dd', {}, String(info.counts.integrations)),
@@ -976,7 +986,7 @@ async function integrationInfoView(id) {
   const [integrations, entities, devices] = await Promise.all([api('GET', '/integrations'), api('GET', '/entities'), api('GET', '/devices')]);
   const i = integrations.find((x) => x.id === id);
   if (!i) return render(back('#/integrations', 'Integrations'), errorBox(new Error('No such integration.')));
-  const st = statusOf(i.status);
+  const st = statusOf(i.status, i.down);
   const mine = entities.filter((e) => e.id.startsWith(`${id}:`));
   const usedOn = (eid) => devices.filter((d) => d.tiles.includes(eid) || d.more.includes(eid) || Object.values(d.panels).includes(eid) || (d.pages || []).some((p) => p.items.includes(eid))).map((d) => d.name);
   const filter = h('input', { type: 'search', placeholder: `Filter ${mine.length} devices`, 'aria-label': 'Filter devices' });

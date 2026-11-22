@@ -8,6 +8,9 @@ COPY web web
 # Shown on the admin's settings page.
 ARG OLDPAD_COMMIT=""
 ENV OLDPAD_COMMIT=$OLDPAD_COMMIT
+# The release version, when this is a release build.
+ARG OLDPAD_VERSION=""
+ENV OLDPAD_VERSION=$OLDPAD_VERSION
 RUN cargo build --release --locked && mkdir -m 700 /empty
 
 FROM scratch

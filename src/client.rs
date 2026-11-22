@@ -11,7 +11,9 @@ use std::time::Duration;
 const MAX_RESPONSE: usize = 16 * 1024 * 1024;
 const MAX_FRAME: usize = 4 * 1024 * 1024;
 /// MET Norway's terms ask clients to identify the application and a contact; the project page is that contact.
-const USER_AGENT: &str = concat!("oldpad/", env!("CARGO_PKG_VERSION"), " (+https://github.com/bisand/oldpad)");
+fn user_agent() -> String {
+    format!("oldpad/{} (+https://github.com/bisand/oldpad)", crate::util::VERSION)
+}
 
 pub struct Target {
     pub https: bool,
@@ -194,7 +196,8 @@ pub fn request_public(base: &str, method: &str, path: &str, headers: &[(&str, &s
 fn send(base: &str, method: &str, path: &str, headers: &[(&str, &str)], body: Option<&[u8]>, public_only: bool) -> Result<HttpResponse, String> {
     let t = parse_url(base)?;
     let mut s = open(&t, public_only)?;
-    let mut req = format!("{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nUser-Agent: {USER_AGENT}\r\n", t.prefix, t.host);
+    let agent = user_agent();
+    let mut req = format!("{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nUser-Agent: {agent}\r\n", t.prefix, t.host);
     for (k, v) in headers {
         req.push_str(&format!("{k}: {v}\r\n"));
     }
@@ -246,8 +249,9 @@ impl WebSocket {
         let t = parse_url(base)?;
         let mut stream = open(&t, false)?;
         let key = b64_encode(&random_bytes::<16>());
+        let agent = user_agent();
         let req = format!(
-            "GET {}{path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: {USER_AGENT}\r\n\r\n",
+            "GET {}{path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: {agent}\r\n\r\n",
             t.prefix, t.host
         );
         stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;

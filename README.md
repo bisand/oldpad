@@ -121,6 +121,37 @@ Admin and tablets share one HTTPS address, for example `https://dash.example.com
   internet), plus a QR encoder. The container image is about 1.5 MB with the web
   pages built in.
 
+## Releases
+
+Publishing a GitHub release builds and publishes the image for that version. The
+tag is the version, in [semver](https://semver.org) with a leading `v`:
+
+```bash
+gh release create v1.2.3 --generate-notes
+```
+
+A prerelease needs a suffix and the flag:
+
+```bash
+gh release create v1.3.0-rc.1 --prerelease --generate-notes
+```
+
+| Image tag | Points to |
+| --- | --- |
+| `1.2.3` | Exactly that release. It never changes, so pin this in production. |
+| `1.2`, `1` | The newest release in that line. |
+| `latest` | The newest stable release. |
+| `1.3.0-rc.1` | That prerelease only. It moves no other tag. |
+| `main`, `sha-<commit>` | The latest push to `main`, and one commit. For development. |
+
+The tablet's settings and the admin's Settings page show the running version and
+whether a newer stable release exists. The server asks GitHub's public releases
+API every six hours. It sends nothing about your home and never updates itself.
+
+The tag sets the version the app reports, so `Cargo.toml` does not need a bump. A
+tag that is not a version, or a version already published, fails the release's
+build without changing any image. Draft releases build nothing.
+
 ## Contributing
 
 Adding a home automation system is one Rust module: see

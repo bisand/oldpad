@@ -7,6 +7,15 @@ pub fn verbose() -> bool {
     *V.get_or_init(|| std::env::var_os("OLDPAD_LOG").is_some())
 }
 
+/// The release this was built as (set by the image build), else Cargo's version.
+pub const VERSION: &str = match option_env!("OLDPAD_VERSION") {
+    Some(v) if !v.is_empty() => v,
+    _ => env!("CARGO_PKG_VERSION"),
+};
+
+/// Built by the release pipeline, as opposed to from `main` or locally.
+pub const IS_RELEASE: bool = matches!(option_env!("OLDPAD_VERSION"), Some(v) if !v.is_empty());
+
 pub fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }

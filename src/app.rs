@@ -107,6 +107,7 @@ pub struct App {
     pub invites: Mutex<Vec<(String, u64)>>,
     /// A day of readings for sensors whose system keeps none.
     pub recorder: Recorder,
+    pub updates: crate::update::Updates,
 }
 
 impl App {
@@ -115,6 +116,7 @@ impl App {
         let recorder = Recorder::open(&cfg.data_dir);
         Arc::new(App {
             recorder,
+            updates: Default::default(),
             cfg,
             store: Mutex::new(store),
             registry: Arc::new(Registry::new()),

@@ -33,7 +33,7 @@ pub fn kind() -> Kind {
     Kind {
         id: "netatmo",
         name: "Netatmo",
-        description: "Indoor, outdoor, wind and rain readings from your Netatmo weather station.",
+        description: "Weather stations, thermostats, Legrand and BTicino lights and sockets, and camera pictures from your Netatmo account.",
         fields: vec![
             Field { key: "client_id", label: "Client ID", kind: FieldKind::Text, required: true, placeholder: "", help: "Create an app at dev.netatmo.com → My apps." },
             Field { key: "client_secret", label: "Client secret", kind: FieldKind::Secret, required: true, placeholder: "", help: "From the same app page." },

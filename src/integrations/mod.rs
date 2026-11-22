@@ -248,6 +248,8 @@ const RETRY_FIRST: std::time::Duration = std::time::Duration::from_secs(30);
 #[cfg(test)]
 const RETRY_FIRST: std::time::Duration = std::time::Duration::from_millis(20);
 const RETRY_MAX: std::time::Duration = std::time::Duration::from_secs(600);
+/// Seconds without an answer before anyone is told: a reconnect or one failed poll is normal.
+pub const DOWN_AFTER: u64 = 120;
 const MAX_SNAPSHOT: usize = 3 * 1024 * 1024; // an old iPad holds it in memory as base64
 
 /// Running instances, keyed by integration id. Entity ids seen by the rest of

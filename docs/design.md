@@ -25,8 +25,13 @@ household of screens. State is one JSON file, rewritten atomically.
 
 **Packaging.** A static musl binary on an empty base image, published to
 `ghcr.io/bisand/oldpad` for amd64 and arm64. Each architecture builds on a native
-runner and must start and answer `/healthz` before it is pushed; `main` moves only
-once both have passed.
+runner and must start and answer `/healthz` before it is pushed; public tags move
+only once both have passed. A push to `main` updates `main` and `sha-<commit>`. A
+published GitHub release adds its semver tags, and the floating ones (`1.2`, `1`,
+`latest`) move only when it is the newest release they cover. A released version
+is never overwritten. The server checks GitHub's latest release every six hours
+and only reports the result. A build from `main` says so rather than claiming to
+be out of date, since it may be ahead of every release.
 
 **Dependency policy.** Protocols we can write and test ourselves are written
 here: HTTP server and client, WebSocket client, CBOR, base64, the WebAuthn

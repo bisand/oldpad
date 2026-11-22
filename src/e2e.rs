@@ -198,6 +198,10 @@ fn phone_and_tablet_end_to_end() {
     let (_, state) = tablet.call("GET", "/api/tablet", None);
     assert_eq!((state["down"].as_array().unwrap().len(), state["down"][0]["name"].as_str()), (1, Some("Demo")));
     assert!(state["down"][0]["secs"].as_u64().unwrap() >= 200);
+    let admin_says = |p: &mut Client, id: &str| p.call("GET", "/api/admin/integrations", None).1.as_array().unwrap().iter().find(|i| i["id"] == id).unwrap()["down"].as_bool();
+    assert_eq!(admin_says(&mut phone, &iid), Some(true), "admin agrees with the screens");
+    app.registry.force_down(&iid, Some(30));
+    assert_eq!(admin_says(&mut phone, &iid), Some(false), "a short dropout is not reported");
     app.registry.force_down(&iid, None);
     assert_eq!(phone.call("DELETE", &format!("/api/admin/integrations/{other}"), None).0, 200);
 
@@ -305,6 +309,9 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(phone.call("PUT", "/api/admin/settings", Some(json!({ "day_start": 25, "day_end": 21, "theme": "auto", "language": "auto" }))).0, 400);
     assert_eq!(phone.call("PUT", "/api/admin/settings", Some(json!({ "day_start": 6, "day_end": 22, "theme": "night", "language": "nb" }))).0, 200);
     assert_eq!(tablet.call("GET", "/api/tablet", None).1["settings"]["theme"], "night");
+    let shown = tablet.call("GET", "/api/tablet", None).1["about"].clone();
+    assert_eq!((shown["version"].as_str(), shown["state"].as_str()), (Some(crate::util::VERSION), Some("dev")), "a local build is not called out of date");
+    assert_eq!(phone.call("GET", "/api/admin/settings", None).1["about"], shown, "admin says the same");
     let (s, backup) = phone.call("GET", "/api/admin/backup", None);
     assert_eq!((s, backup["devices"][0]["name"].as_str(), backup.get("sessions")), (200, Some("Kitchen"), None));
     assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{device_id}"), Some(json!({ "name": "Renamed" }))).0, 200);

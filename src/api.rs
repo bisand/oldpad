@@ -139,6 +139,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                         "device": { "id": device.id, "name": device.name, "favRows": device.fav_rows.unwrap_or(1), "imageToken": App::image_token(&device) },
                         "settings": app.store.lock().unwrap().data.settings,
                         "down": down,
+                        "about": app.updates.status(),
                         "tiles": device.tiles.iter().map(get).collect::<Vec<_>>(),
                         "more": device.more.iter().map(get).collect::<Vec<_>>(),
                         "pages": device.pages.iter().map(|p| json!({
@@ -544,8 +545,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             let store = app.store.lock().unwrap();
             Ok(Response::ok(json!({
                 "settings": store.data.settings,
-                "version": env!("CARGO_PKG_VERSION"),
-                "commit": option_env!("OLDPAD_COMMIT").unwrap_or(""),
+                "about": app.updates.status(),
                 "publicUrl": app.cfg.public_url,
                 "counts": { "screens": store.data.devices.len(), "integrations": store.data.integrations.len(), "people": store.data.admins.len() },
             })))
@@ -568,7 +568,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             let store = app.store.lock().unwrap();
             let d = &store.data;
             // Everything but sign-in sessions. It holds integration secrets: the admin is told so.
-            let backup = json!({ "oldpad": 1, "version": env!("CARGO_PKG_VERSION"), "exported": now(), "admins": d.admins, "devices": d.devices, "integrations": d.integrations, "settings": d.settings });
+            let backup = json!({ "oldpad": 1, "version": crate::util::VERSION, "exported": now(), "admins": d.admins, "devices": d.devices, "integrations": d.integrations, "settings": d.settings });
             Ok(Response::ok(backup).header("Content-Disposition", "attachment; filename=\"oldpad-backup.json\""))
         }
         ("POST", ["restore"]) => {
@@ -620,7 +620,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .iter()
                 .filter_map(|i| {
                     let kind = app.registry.kind(&i.kind)?;
-                    Some(json!({ "id": i.id, "type": i.kind, "typeName": kind.name, "name": i.name, "config": redact(kind, &i.config), "status": app.registry.status(&i.id), "accounts": app.registry.accounts(&i.id) }))
+                    Some(json!({ "id": i.id, "type": i.kind, "typeName": kind.name, "name": i.name, "config": redact(kind, &i.config), "down": app.registry.down().iter().any(|(id, secs)| *id == i.id && *secs >= crate::integrations::DOWN_AFTER), "status": app.registry.status(&i.id), "accounts": app.registry.accounts(&i.id) }))
                 })
                 .collect::<Vec<_>>())))
         }

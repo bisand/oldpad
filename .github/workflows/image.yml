@@ -1,4 +1,6 @@
-# Tests, then builds and pushes ghcr.io/bisand/oldpad on every push to main.
+# Tests, then builds and pushes ghcr.io/bisand/oldpad:
+# - every push to main: the moving `main` tag and `sha-<commit>`, for development.
+# - every published GitHub release: its version, like `1.2.3`, `1.2`, `1` and `latest`.
 # Only one third-party action (checkout, pinned by commit); the rest is plain
 # docker CLI, so there is little in the build that is not visible here.
 name: image
@@ -6,6 +8,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  release:
+    types: [published]
 # Tests and builds run project and dependency code, so they get no publishing rights.
 permissions:
   contents: read
@@ -18,10 +22,40 @@ jobs:
           persist-credentials: false
       - name: Test
         run: cargo test --locked
+      - name: Test the release tags
+        run: sh .github/release-tags-test.sh
+  # Refuses a release whose tag is not a version, before anything is built.
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.tags.outputs.version }}
+      tags: ${{ steps.tags.outputs.tags }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        if: github.event_name == 'release'
+        with:
+          persist-credentials: false
+      - name: Work out the image tags
+        id: tags
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -o pipefail
+          lines=$(gh api --paginate "repos/$REPOSITORY/releases" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
+            | sh .github/release-tags.sh "$TAG" "$PRERELEASE")
+          {
+            echo "version=$(echo "$lines" | head -n 1)"
+            echo "tags=$(echo "$lines" | tail -n +2 | tr '\n' ' ')"
+          } >> "$GITHUB_OUTPUT"
   # Each architecture builds natively: emulating arm64 would take far longer.
   build:
-    needs: test
-    if: github.event_name == 'push'
+    needs: [test, version]
+    if: github.event_name != 'pull_request'
     strategy:
       matrix:
         include:
@@ -38,39 +72,58 @@ jobs:
       - name: Build, check and push
         env:
           ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.version.outputs.version }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
         run: |
           image=ghcr.io/$(echo "$REPOSITORY" | tr '[:upper:]' '[:lower:]')
           sha=${GITHUB_SHA::7}
+          label=${VERSION:-sha-$sha}
           docker build \
             --label org.opencontainers.image.source="https://github.com/$REPOSITORY" \
             --label org.opencontainers.image.licenses=MIT \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.version="${VERSION:-$sha}" \
             --build-arg OLDPAD_COMMIT="$sha" \
-            -t "$image:sha-$sha-$ARCH" .
+            --build-arg OLDPAD_VERSION="$VERSION" \
+            -t "$image:$label-$ARCH" .
           # A binary that cannot start on this architecture must not be published.
-          docker run -d --name smoke -p 127.0.0.1:18080:8080 --tmpfs /data:uid=65534,gid=65534 "$image:sha-$sha-$ARCH"
+          docker run -d --name smoke -p 127.0.0.1:18080:8080 --tmpfs /data:uid=65534,gid=65534 "$image:$label-$ARCH"
           curl -fsS --retry 10 --retry-delay 1 --retry-all-errors http://127.0.0.1:18080/healthz
+          if [ -n "$VERSION" ]; then
+            docker logs smoke 2>&1 | grep -F "oldpad $VERSION listening"
+          fi
           docker rm -f smoke
           # Log in only after the build, so nothing in it can reach the credentials.
           echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-          docker push "$image:sha-$sha-$ARCH"
-  # `main` moves only once every architecture has built and started.
+          docker push "$image:$label-$ARCH"
+  # The public tags move only once every architecture has built and started.
   publish:
-    needs: build
+    needs: [version, build]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       packages: write
     steps:
       - name: Publish the multi-architecture image
         env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TAGS: ${{ needs.version.outputs.tags }}
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
         run: |
           image=ghcr.io/$(echo "$REPOSITORY" | tr '[:upper:]' '[:lower:]')
           sha=${GITHUB_SHA::7}
+          label=${VERSION:-sha-$sha}
           echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
-          docker buildx imagetools create -t "$image:sha-$sha" -t "$image:main" "$image:sha-$sha-amd64" "$image:sha-$sha-arm64"
-          echo "$image@$(docker buildx imagetools inspect "$image:sha-$sha" --format '{{.Manifest.Digest}}')" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$VERSION" ] && docker buildx imagetools inspect "$image:$VERSION" > /dev/null 2>&1; then
+            echo "::error::$image:$VERSION already exists. A released version never changes: publish a new one."
+            exit 1
+          fi
+          targets=()
+          for tag in ${TAGS:-sha-$sha main}; do targets+=(-t "$image:$tag"); done
+          docker buildx imagetools create "${targets[@]}" "$image:$label-amd64" "$image:$label-arm64"
+          echo "$image@$(docker buildx imagetools inspect "$image:$label" --format '{{.Manifest.Digest}}')" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tags: ${TAGS:-sha-$sha main}" >> "$GITHUB_STEP_SUMMARY"

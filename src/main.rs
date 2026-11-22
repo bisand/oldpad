@@ -6,6 +6,7 @@ mod http;
 mod integrations;
 mod recorder;
 mod store;
+mod update;
 mod util;
 mod webauthn;
 #[cfg(test)]
@@ -48,7 +49,7 @@ fn main() {
     });
     let app = app::App::new(cfg, store);
 
-    eprintln!("oldpad {} listening on {}", env!("CARGO_PKG_VERSION"), app.cfg.bind);
+    eprintln!("oldpad {} listening on {}", util::VERSION, app.cfg.bind);
     eprintln!("  tablets: open {}/ on the tablet", app.cfg.public_url);
     eprintln!("  admin:   {}/admin", app.cfg.public_url);
     if let Some(code) = app.setup_code.lock().unwrap().as_deref() {
@@ -61,6 +62,10 @@ fn main() {
     {
         let app = app.clone();
         std::thread::spawn(move || app.record_forever());
+    }
+    {
+        let app = app.clone();
+        std::thread::spawn(move || app.updates.run());
     }
 
     if let Some(admin) = admin_listener {
