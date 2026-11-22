@@ -30,8 +30,8 @@ In daily use on an iPad 2 with iOS 9.3.5; older versions are untested.
   something for it, and you can add pages of your own.
 - **Graphs.** The last 24 hours of temperature, humidity, CO₂ and wind from
   InfluxDB, with the electricity price for the hours ahead.
-- **Doorbell pop-up.** Pick a Homey sensor with an alarm (a doorbell or motion
-  sensor) and optionally a camera per screen. When it goes off, the screen shows
+- **Doorbell pop-up.** Pick a doorbell or motion sensor from Homey or Home
+  Assistant and optionally a camera per screen. When it goes off, the screen shows
   the picture for a minute, even at night. It is silent: old iPads do not let a
   web page play sound by itself.
 - **Live.** Changes made anywhere else show up within seconds. After a dropped

@@ -124,8 +124,8 @@ music, doorbell and its camera), further entities for the menu pages, and up to
 ## Open questions
 
 - UPnP event subscriptions for Sonos instead of 4-second polling.
-- Doorbell triggers from Home Assistant and Netatmo. Only Homey exposes the
-  `alarm_*` capabilities it needs today.
+- Doorbell triggers from Netatmo. Homey and Home Assistant expose the `alarm_*`
+  capabilities it needs today.
 - History for graphs from sources other than InfluxDB.
 - More languages than English and Norwegian.
 - An example Kubernetes manifest.

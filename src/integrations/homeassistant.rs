@@ -13,7 +13,7 @@ pub fn kind() -> Kind {
     Kind {
         id: "homeassistant",
         name: "Home Assistant",
-        description: "Lights, switches, climate, sensors, media players, cameras, scenes and scripts from Home Assistant.",
+        description: "Lights, switches, climate, sensors, doorbells, motion sensors, media players, cameras, scenes and scripts from Home Assistant.",
         fields: vec![
             Field {
                 key: "address",
@@ -182,6 +182,25 @@ fn map_state(s: &Value, zone: String) -> Option<Entity> {
             caps.insert(cap.to_string(), Capability { units: a["unit_of_measurement"].as_str().map(str::to_string), ..Capability::new(value, false) });
             "sensor"
         }
+        // Read-only triggers for the doorbell pop-up. Other binary sensors would only crowd the device list.
+        "binary_sensor" => {
+            let name = format!("{id} {}", a["friendly_name"].as_str().unwrap_or("")).to_lowercase();
+            let cap = match a["device_class"].as_str() {
+                Some("motion" | "occupancy" | "presence") => "alarm_motion",
+                _ if ["doorbell", "ringeklokke", "_ding", "visitor"].iter().any(|w| name.contains(w)) => "alarm_generic",
+                _ => return None,
+            };
+            caps.insert(cap.to_string(), Capability::new(json!(state == "on"), false));
+            "sensor"
+        }
+        // Its state is the time of the last press, so `apply` turns a new time into a short pulse.
+        "event" => {
+            if a["device_class"] != "doorbell" {
+                return None;
+            }
+            caps.insert("alarm_doorbell".to_string(), Capability::new(json!(false), false));
+            "sensor"
+        }
         "media_player" => {
             caps.insert("speaker_playing".to_string(), Capability::new(json!(state == "playing"), true));
             if let Some(v) = a["volume_level"].as_f64() {
@@ -307,9 +326,17 @@ fn apply(list: &mut Vec<Entity>, rooms: &Rooms, data: &Value) -> Option<Vec<(Str
         (Some(i), Some(new)) => {
             let old = &list[i];
             let reshaped = old.name != new.name || !old.capabilities.keys().eq(new.capabilities.keys());
-            let changes = new.capabilities.iter().filter(|(k, c)| old.capabilities.get(*k).is_none_or(|o| o.value != c.value)).map(|(k, c)| (k.clone(), c.value.clone())).collect();
+            let mut changes: Vec<(String, Value)> = new.capabilities.iter().filter(|(k, c)| old.capabilities.get(*k).is_none_or(|o| o.value != c.value)).map(|(k, c)| (k.clone(), c.value.clone())).collect();
+            // Coming back after a restart is not a ring: a reload shows the state without one.
+            let (before, after) = (&data["old_state"]["state"], &data["new_state"]["state"]);
+            let returned = before == "unavailable";
+            let rang = changes.iter().any(|(k, v)| k.starts_with("alarm_") && *v == true);
+            if id.starts_with("event.") && before.is_string() && !returned && before != after && after != "unavailable" && after != "unknown" {
+                changes.push(("alarm_doorbell".to_string(), json!(true)));
+                changes.push(("alarm_doorbell".to_string(), json!(false)));
+            }
             list[i] = new;
-            if reshaped { None } else { Some(changes) }
+            if reshaped || (returned && rang) { None } else { Some(changes) }
         }
     }
 }
@@ -463,6 +490,43 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert_eq!(apply(&mut list, &r, &json!({"entity_id": "light.n", "new_state": null})), None, "removed");
         assert_eq!(list.len(), 1);
+    }
+
+    #[test]
+    fn maps_doorbells_and_motion_but_not_every_binary_sensor() {
+        let map = |id: &str, class: Value, name: &str| map_state(&json!({"entity_id": id, "state": "on", "attributes": {"device_class": class, "friendly_name": name}}), String::new());
+        let m = map("binary_sensor.hall", json!("motion"), "Hall").unwrap();
+        assert_eq!((m.class.as_str(), &m.capabilities["alarm_motion"].value, m.capabilities["alarm_motion"].settable), ("sensor", &json!(true), false));
+        assert!(map("binary_sensor.front_ding", Value::Null, "Front").unwrap().capabilities.contains_key("alarm_generic"));
+        assert!(map("binary_sensor.x", Value::Null, "Ringeklokke").is_some());
+        assert!(map("binary_sensor.building", Value::Null, "Building").is_none(), "not a ding");
+        assert!(map("binary_sensor.window", json!("window"), "Window").is_none());
+        assert!(map("event.front", json!("doorbell"), "Front").unwrap().capabilities.contains_key("alarm_doorbell"));
+        assert!(map("event.remote", json!("button"), "Remote").is_none());
+        assert!(service_call("binary_sensor.hall", "alarm_motion", &json!(true)).is_err(), "read-only");
+    }
+
+    #[test]
+    fn a_new_press_is_a_pulse_and_a_restart_is_not_a_ring() {
+        let r = rooms();
+        let bell = |state: &str| json!({"entity_id": "event.front", "state": state, "attributes": {"device_class": "doorbell", "friendly_name": "Front"}});
+        let change = |old: &str, new: &str| json!({"entity_id": "event.front", "old_state": bell(old), "new_state": bell(new)});
+        let mut list = vec![r.map(&bell("2026-11-22T10:00:00+00:00")).unwrap()];
+        let pulse = Some(vec![("alarm_doorbell".to_string(), json!(true)), ("alarm_doorbell".to_string(), json!(false))]);
+        assert_eq!(apply(&mut list, &r, &change("2026-11-22T10:00:00+00:00", "2026-11-22T11:00:00+00:00")), pulse);
+        assert_eq!(list[0].capabilities["alarm_doorbell"].value, json!(false), "ready for the next press");
+        assert_eq!(apply(&mut list, &r, &change("unknown", "2026-11-22T12:00:00+00:00")), pulse, "the first press ever");
+        assert_eq!(apply(&mut list, &r, &change("2026-11-22T12:00:00+00:00", "unavailable")), Some(vec![]));
+        assert_eq!(apply(&mut list, &r, &change("unavailable", "2026-11-22T12:00:00+00:00")), Some(vec![]), "restored after a restart");
+        assert_eq!(apply(&mut list, &r, &change("2026-11-22T12:00:00+00:00", "2026-11-22T12:00:00+00:00")), Some(vec![]), "only an attribute changed");
+
+        let motion = |state: &str| json!({"entity_id": "binary_sensor.m", "state": state, "attributes": {"device_class": "motion", "friendly_name": "M"}});
+        let moved = |old: &str, new: &str| json!({"entity_id": "binary_sensor.m", "old_state": motion(old), "new_state": motion(new)});
+        let mut list = vec![r.map(&motion("off")).unwrap()];
+        assert_eq!(apply(&mut list, &r, &moved("off", "on")), Some(vec![("alarm_motion".to_string(), json!(true))]));
+        assert_eq!(apply(&mut list, &r, &moved("on", "unavailable")), Some(vec![("alarm_motion".to_string(), json!(false))]));
+        assert_eq!(apply(&mut list, &r, &moved("unavailable", "on")), None, "back and already on: reload, no ring");
+        assert_eq!(list[0].capabilities["alarm_motion"].value, json!(true));
     }
 
     /// Against a real instance: OLDPAD_HA_URL=… OLDPAD_HA_TOKEN=… cargo test live_home_assistant -- --ignored
