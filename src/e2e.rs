@@ -211,6 +211,9 @@ fn phone_and_tablet_end_to_end() {
     let screen = cookie_of(&paired);
     assert!(screen.starts_with("oldpad_kindle="), "{screen}");
     let page = web("GET", "/kindle", &screen, None);
+    let (_, list) = phone.call("GET", "/api/admin/devices", None);
+    let shown = list.as_array().unwrap().iter().find(|d| d["id"] == kindle_id.as_str()).unwrap();
+    assert_eq!((&shown["online"], &shown["live"]), (&json!(true), &json!(false)), "a Kindle with no stream is online while it asks for pages");
     assert!(page.headers["content-security-policy"].contains("form-action 'self'"));
     let html = text(&page);
     if let Ok(path) = std::env::var("OLDPAD_KINDLE_HTML") {

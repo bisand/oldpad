@@ -327,7 +327,9 @@ fn form_token(device: &Device) -> String {
 }
 
 fn screen_device(app: &App, req: &Request) -> Option<Device> {
-    app.device_by_token(&req.cookie(SCREEN_COOKIE)?)
+    let device = app.device_by_token(&req.cookie(SCREEN_COOKIE)?)?;
+    app.mark_polled(&device.id);
+    Some(device)
 }
 
 fn show(app: &App, req: &Request) -> Response {

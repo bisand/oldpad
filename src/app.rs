@@ -92,6 +92,9 @@ struct Client {
     tx: Sender<String>,
 }
 
+/// Seconds a Kindle counts as online after a request. Its page asks at least once a minute while awake.
+const POLL_WINDOW: u64 = 90;
+
 pub struct App {
     pub cfg: Config,
     pub store: Mutex<Store>,
@@ -100,6 +103,8 @@ pub struct App {
     pub challenges: Mutex<HashMap<String, (Challenge, u64)>>,
     tickets: Mutex<HashMap<String, (String, u64)>>,
     clients: Mutex<Vec<Client>>,
+    /// When each Kindle last asked for anything: its browser may hold no stream.
+    polled: Mutex<HashMap<String, u64>>,
     /// Printed at startup while no admin exists; needed to register the first passkey.
     pub setup_code: Mutex<Option<String>>,
     setup_failures: AtomicUsize,
@@ -124,6 +129,7 @@ impl App {
             challenges: Mutex::new(HashMap::new()),
             tickets: Mutex::new(HashMap::new()),
             clients: Mutex::new(Vec::new()),
+            polled: Mutex::new(HashMap::new()),
             setup_code: Mutex::new(setup_code),
             setup_failures: AtomicUsize::new(0),
             invites: Mutex::new(Vec::new()),
@@ -204,9 +210,18 @@ impl App {
         self.clients.lock().unwrap().retain(|c| !pred(c) || c.tx.send(msg.to_string()).is_ok());
     }
 
-    /// Whether the screen has its live connection open right now.
-    pub fn online(&self, device_id: &str) -> bool {
+    /// Whether the screen has its live connection open right now, so it can be told to reload.
+    pub fn live(&self, device_id: &str) -> bool {
         self.clients.lock().unwrap().iter().any(|c| c.device_id == device_id)
+    }
+
+    /// Live, or a Kindle that asked for its page within the last poll or two.
+    pub fn online(&self, device_id: &str) -> bool {
+        self.live(device_id) || self.polled.lock().unwrap().get(device_id).is_some_and(|t| now().saturating_sub(*t) <= POLL_WINDOW)
+    }
+
+    pub fn mark_polled(&self, device_id: &str) {
+        self.polled.lock().unwrap().insert(device_id.to_string(), now());
     }
 
     pub fn notify_all(&self, event: &str) {
@@ -228,6 +243,7 @@ impl App {
     pub fn drop_revoked_clients(&self) {
         let ids: HashSet<String> = self.store.lock().unwrap().data.devices.iter().map(|d| d.id.clone()).collect();
         self.clients.lock().unwrap().retain(|c| ids.contains(&c.device_id));
+        self.polled.lock().unwrap().retain(|id, _| ids.contains(id));
     }
 
     pub fn add_client(&self, device: &Device, tx: Sender<String>) {

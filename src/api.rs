@@ -403,7 +403,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .devices
                 .iter()
                 .map(|d| store.data.effective(d))
-                .map(|d| json!({ "id": d.id, "name": d.name, "follows": d.follows, "online": app.online(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "follows": d.follows, "online": app.online(&d.id), "live": app.live(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }
@@ -482,7 +482,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 return Err(Response::error(404, "No such device"));
             }
             app.notify_device(id, "refresh");
-            Ok(Response::ok(json!({ "ok": app.online(id) })))
+            Ok(Response::ok(json!({ "ok": app.live(id) })))
         }
         ("DELETE", ["devices", id]) => {
             let mut store = app.store.lock().unwrap();

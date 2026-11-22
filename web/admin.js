@@ -372,7 +372,7 @@ function screenCard(d, devices) {
           await api('POST', `/devices/${d.id}/reload`, {});
           toast(`${d.name} is reloading`);
           setTimeout(refresh, 4000);
-        }, { disabled: !d.online }),
+        }, { disabled: !d.live }),
         btn('Remove screen', async () => {
           const users = devices.filter((x) => x.follows === d.id);
           const yes = await ask({ title: `Remove ${d.name}?`, body: `It will have to be paired again.${users.length ? ` ${users[0].name} takes over the shared layout.` : ''}`, action: 'Remove', danger: true });
