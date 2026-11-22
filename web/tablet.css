@@ -165,6 +165,13 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
   font-size: 15px; text-align: center; pointer-events: none;
 }
 
+/* Night clock: above everything, so nothing bright shows in a dark room. */
+.sleep { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 70; background: #000; cursor: pointer; }
+#sleep-time {
+  position: absolute; left: 0; right: 0; top: 50%; margin-top: -70px;
+  font-size: 120px; line-height: 140px; text-align: center; color: #5a5a5a;
+}
+
 /* Portrait or smaller tablets */
 @media (max-width: 900px) {
   .w30, .w70 { width: 100%; }

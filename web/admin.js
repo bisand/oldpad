@@ -444,14 +444,13 @@ async function settingsView() {
   const st = { ...info.settings };
   const here = location.hash;
   let dirty = false;
-  const changed = () => { dirty = true; save.disabled = false; saved.textContent = 'Unsaved changes'; hoursRow.classList.toggle('hidden', !usesHours()); };
-  // With the sun, the hours still apply to screens that have no MET forecast.
-  const usesHours = () => st.theme === 'auto' || st.theme === 'sun';
+  const changed = () => { dirty = true; save.disabled = false; saved.textContent = 'Unsaved changes'; };
   const hours = (key) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = Number(e.target.value); changed(); } },
     Array.from({ length: 24 }, (_, i) => h('option', { value: i, selected: st[key] === i }, `${String(i).padStart(2, '0')}:00`)));
   const choice = (key, options) => h('select', { id: `s-${key}`, onchange: (e) => { st[key] = e.target.value; changed(); } },
     options.map(([v, label]) => h('option', { value: v, selected: st[key] === v }, label)));
-  const hoursRow = h('div', { class: `two${usesHours() ? '' : ' hidden'}` }, field('Day starts', 's-day_start', hours('day_start')), field('Night starts', 's-day_end', hours('day_end')));
+  // The hours also set when a screen's night clock may show, whatever the theme.
+  const hoursRow = h('div', { class: 'two' }, field('Day starts', 's-day_start', hours('day_start')), field('Night starts', 's-day_end', hours('day_end')));
   const saved = h('span', { class: 'small muted', role: 'status' });
   const save = h('button', { type: 'button', class: 'primary', disabled: true, onclick: async () => {
     save.disabled = true;
