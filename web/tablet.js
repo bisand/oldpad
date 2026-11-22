@@ -1581,6 +1581,16 @@
 
   // ------------------------------------------------------------- clock & theme
 
+  // Whether the sun is up here, or null with no forecast or none recent enough to say.
+  function sunUp(now) {
+    var d = val(panel('weather'), 'daylight'), i;
+    if (!d || now >= d.until) { return null; }
+    for (i = 0; i < d.spans.length; i++) {
+      if (now >= d.spans[i][0] && now < d.spans[i][1]) { return true; }
+    }
+    return false;
+  }
+
   function tick() {
     var d = new Date(), el = $('time');
     if (el) {
@@ -1592,7 +1602,8 @@
     var inWindow = a <= b ? h >= a && h < b : h >= a || h < b;
     // This screen's own choice wins over the household's.
     var theme = load(THEME_KEY) && load(THEME_KEY) !== 'auto' ? load(THEME_KEY) : SETTINGS.theme;
-    var day = theme === 'day' || (theme === 'auto' && inWindow);
+    var sun = theme === 'sun' ? sunUp(d.getTime() / 1000) : null;
+    var day = theme === 'day' || (theme !== 'night' && (sun === null ? inWindow : sun));
     var size = load(SIZE_KEY);
     document.body.className = (day ? 'day' : 'night') + (size === 'large' || size === 'xl' ? ' size-' + size : '');
   }

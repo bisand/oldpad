@@ -61,6 +61,41 @@ fn hour(t: &Value) -> Option<Value> {
     Some(json!([time, temp, symbol, details["wind_speed"], details["wind_from_direction"]]))
 }
 
+/// The sun's height above the horizon in degrees at an epoch second (USNO's low-precision formulas).
+fn sun_altitude(t: i64, lat: f64, lon: f64) -> f64 {
+    let d = t as f64 / 86_400.0 - 10_957.5; // days since J2000
+    let g = (357.529 + 0.985_600_28 * d).to_radians();
+    let l = (280.459 + 0.985_647_36 * d + 1.915 * g.sin() + 0.020 * (2.0 * g).sin()).to_radians();
+    let e = (23.439 - 0.000_000_36 * d).to_radians();
+    let ra = (e.cos() * l.sin()).atan2(l.cos());
+    let dec = (e.sin() * l.sin()).asin();
+    let hour_angle = ((18.697_374_558 + 24.065_709_824_419_08 * d) * 15.0 + lon).to_radians() - ra;
+    let lat = lat.to_radians();
+    (lat.sin() * dec.sin() + lat.cos() * dec.cos() * hour_angle.cos()).asin().to_degrees()
+}
+
+/// When the sun is up over the next three days: `{until, spans: [[rise, set], …]}`, to the minute.
+/// Stepping through the minutes needs no special case for midnight sun or polar night.
+fn daylight(from: i64, lat: f64, lon: f64) -> Value {
+    let until = from + 3 * 86_400;
+    let (mut spans, mut rose) = (Vec::new(), None);
+    for t in (from..until).step_by(60) {
+        // -0.833°: the top of the disc, seen through the atmosphere.
+        match (sun_altitude(t, lat, lon) >= -0.833, rose) {
+            (true, None) => rose = Some(t),
+            (false, Some(a)) => {
+                spans.push([a, t]);
+                rose = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(a) = rose {
+        spans.push([a, until]);
+    }
+    json!({ "until": until, "spans": spans })
+}
+
 fn fetch(lat: f64, lon: f64) -> Result<Entity, String> {
     // MET's terms: at most four decimals, so caches are shared between users.
     let path = format!("/weatherapi/locationforecast/2.0/compact?lat={lat:.4}&lon={lon:.4}");
@@ -79,6 +114,7 @@ fn fetch(lat: f64, lon: f64) -> Result<Entity, String> {
     caps.insert("measure_wind_speed".into(), Capability { units: Some("m/s".into()), ..cap(now["instant"]["details"]["wind_speed"].clone()) });
     caps.insert("weather_symbol".into(), cap(now["next_1_hours"]["summary"]["symbol_code"].clone()));
     caps.insert("forecast".into(), cap(Value::Array(hours)));
+    caps.insert("daylight".into(), cap(daylight(crate::util::now() as i64, lat, lon)));
     Ok(Entity { id: "forecast".into(), name: "Forecast".into(), zone: "Weather".into(), class: "weather".into(), capabilities: caps })
 }
 
@@ -218,6 +254,28 @@ mod tests {
         assert_eq!(parse_time("2026-11-20T10:00:00Z"), Some(1_795_168_800));
         assert_eq!(parse_time("2024-02-29T12:30:15Z"), Some(1_709_209_815));
         assert_eq!(parse_time("2026-11-20T10:00:00+01:00"), None);
+    }
+
+    #[test]
+    fn daylight_matches_met_and_handles_the_poles() {
+        let t = |s: &str| parse_time(s).unwrap();
+        // Times from MET's Sunrise API: Oslo, Sydney, Los Angeles, Tromsø.
+        for (lat, lon, from, met_rise, met_set) in [
+            (59.91, 10.75, "2026-06-21T00:00:00Z", "2026-06-21T01:53:00Z", "2026-06-21T20:43:00Z"),
+            (-33.87, 151.21, "2026-03-19T12:00:00Z", "2026-03-19T19:57:00Z", "2026-03-20T08:06:00Z"),
+            (34.05, -118.24, "2026-09-23T06:00:00Z", "2026-09-23T13:41:00Z", "2026-09-24T01:48:00Z"),
+            (69.65, 18.96, "2026-04-10T00:00:00Z", "2026-04-10T03:06:00Z", "2026-04-10T18:26:00Z"),
+        ] {
+            let d = daylight(t(from), lat, lon);
+            let (rise, set) = (d["spans"][0][0].as_i64().unwrap(), d["spans"][0][1].as_i64().unwrap());
+            assert!((rise - t(met_rise)).abs() <= 120, "{lat}: rise is {}s off", rise - t(met_rise));
+            assert!((set - t(met_set)).abs() <= 120, "{lat}: set is {}s off", set - t(met_set));
+            assert_eq!(d["spans"].as_array().unwrap().len(), 3);
+        }
+
+        let from = t("2026-06-21T00:00:00Z");
+        assert_eq!(daylight(from, 78.22, 15.65)["spans"], json!([[from, from + 3 * 86_400]]), "midnight sun in Longyearbyen");
+        assert_eq!(daylight(t("2026-12-21T00:00:00Z"), 78.22, 15.65)["spans"], json!([]), "polar night");
     }
 
     #[test]

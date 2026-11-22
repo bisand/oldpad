@@ -68,7 +68,7 @@ fields each declares. See [integrations.md](integrations.md).
 | Homey Pro (2023) | Own HTTP + socket.io v2 client over WebSocket, see [homey-protocol.md](homey-protocol.md) | API key scopes: `homey.device.readonly`, `homey.device.control`, `homey.zone.readonly`, `homey.flow.readonly`, `homey.flow.start`. Control, but no admin (rename, delete, settings, users, apps). |
 | Sonos | Direct on the LAN, not through Homey. Speakers are found by SSDP multicast like the Sonos app does; where multicast cannot reach (a Kubernetes pod) one known speaker address is enough, as every speaker reports the whole household's current addresses and oldpad re-reads them when a room stops answering. | Favourites with artwork, volume, play/pause, now playing. Homey's Sonos support is too thin for this. |
 | Indoor / outdoor | InfluxDB 1.x query | Configurable measurement, field and tag filter per reading. Today's min/max alongside the current value. |
-| Forecast | MET Norway Locationforecast + Sunrise | Next hours and tomorrow. Sunrise/sunset drives the day/night theme. |
+| Forecast | MET Norway Locationforecast | Next hours and tomorrow. Sunrise and sunset are calculated from the coordinates, with no extra request, and can drive the day/night theme. |
 
 ## Pairing and tokens
 
@@ -102,14 +102,13 @@ A dashboard has pages, a page has tiles. Tile types:
 - Sonos card for a **fixed room** per device: now playing, play/pause, volume,
   favourites.
 - **Six** Homey tiles.
-- Theme switches automatically at sunrise/sunset; night is dark with dim text.
+- Theme switches by set hours or at sunrise/sunset; night is dark with dim text.
 
 ## Open questions
 
 - Graphs page (the kiosk's rendered Grafana PNGs) — needs an image proxy, as the CSP allows only same-origin images.
 - Sonos album art (same reason), and UPnP event subscriptions instead of 4-second polling.
 - More languages than English and Norwegian.
-- Day/night by sunrise and sunset instead of fixed 07–21.
 - Packaging: container image and an example Kubernetes manifest.
 - Out-of-process integrations (a program speaking JSON over stdio), so
   integrations can be written in any language without a rebuild.

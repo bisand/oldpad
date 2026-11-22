@@ -73,6 +73,7 @@ vocabulary the tablet understands:
 | `camera` | null; the picture comes from `snapshot()` | camera tile, card and page, refreshed every 10 s while shown |
 | `alerts` | `[{id, level (2–4), name, area, from, until, text, advice}]` on a `weather` entity | warning banner on every page, details on tap |
 | `weather_symbol`, `forecast` | MET symbol code, `[[epoch, °C, symbol, wind m/s, wind from °], …]` | forecast strip and weather page |
+| `daylight` | `{until, spans: [[rise, set], …]}`, epoch seconds, on a `weather` entity | day/night theme when set to follow the sun |
 
 Entity `class` decides which menu page shows it: `light`/`socket` → lights,
 `thermostat`/`heater`/`sensor` → climate, `button` → Flows, `speaker` → music

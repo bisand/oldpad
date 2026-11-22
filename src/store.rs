@@ -179,7 +179,7 @@ pub struct Settings {
     /// Hours (0–23) when screens switch to the light theme and back.
     pub day_start: u8,
     pub day_end: u8,
-    /// "auto" (by the hours above), "day" or "night".
+    /// "auto" (by the hours above), "sun" (sunrise and sunset, else those hours), "day" or "night".
     pub theme: String,
     /// "auto" (the screen's own language), "nb" or "en".
     pub language: String,
@@ -193,7 +193,7 @@ impl Default for Settings {
 
 impl Settings {
     pub fn valid(&self) -> bool {
-        self.day_start < 24 && self.day_end < 24 && ["auto", "day", "night"].contains(&self.theme.as_str()) && ["auto", "nb", "en"].contains(&self.language.as_str())
+        self.day_start < 24 && self.day_end < 24 && ["auto", "sun", "day", "night"].contains(&self.theme.as_str()) && ["auto", "nb", "en"].contains(&self.language.as_str())
     }
 }
 
