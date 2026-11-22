@@ -176,6 +176,59 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(nobody.call("GET", "/api/tablet/kindle.png", None).0, 401);
     assert_eq!(nobody.call("POST", "/api/tablet/kindle/tap", Some(json!({ "x": 1, "y": 1 }))).0, 401);
 
+    // --- the Kindle's browser: plain pages, a cookie and forms
+    let web = |method: &str, path: &str, cookie: &str, body: Option<&str>| {
+        let mut headers = vec![("Cookie", cookie)];
+        if body.is_some() {
+            headers.push(("Content-Type", "application/x-www-form-urlencoded"));
+        }
+        request(&base, method, path, &headers, body.map(str::as_bytes)).unwrap()
+    };
+    let cookie_of = |r: &crate::client::HttpResponse| r.headers["set-cookie"].split(';').next().unwrap().to_string();
+    let text = |r: &crate::client::HttpResponse| String::from_utf8_lossy(&r.body).to_string();
+    let field = |html: &str, name: &str| html.split(&format!("name=\"{name}\" value=\"")).nth(1).unwrap().split('"').next().unwrap().to_string();
+    assert!(text(&web("GET", "/kindle", "", None)).contains("action=\"/kindle/pair\""));
+    let started = web("POST", "/kindle/pair", "", Some(""));
+    assert_eq!((started.status, started.headers["location"].as_str()), (303, "/kindle"));
+    let pending = cookie_of(&started);
+    assert!(started.headers["set-cookie"].contains("HttpOnly"));
+    let (kindle_code, kindle_pin) = { let v: Vec<&str> = pending.split('=').nth(1).unwrap().split('.').collect(); (v[2].to_string(), v[3].to_string()) };
+    assert!(text(&web("GET", "/kindle", &pending, None)).contains(&kindle_pin), "shows the PIN");
+    let (s, kindle_device) = phone.call("POST", &format!("/api/admin/pair/{kindle_code}"), Some(json!({ "name": "Kindle", "pin": kindle_pin })));
+    assert_eq!(s, 200);
+    let kindle_id = kindle_device["id"].as_str().unwrap().to_string();
+    assert_eq!(phone.call("PUT", &format!("/api/admin/devices/{kindle_id}"), Some(json!({ "tiles": [lamp, heater], "more": [plug], "panels": { "outdoor": outdoor }, "pages": [{ "id": "p1", "name": "Evening", "icon": "moon", "items": [night] }] }))).0, 200);
+    let paired = web("GET", "/kindle", &pending, None);
+    assert_eq!(paired.status, 303);
+    let screen = cookie_of(&paired);
+    assert!(screen.starts_with("oldpad_kindle="), "{screen}");
+    let page = web("GET", "/kindle", &screen, None);
+    assert!(page.headers["content-security-policy"].contains("form-action 'self'"));
+    let html = text(&page);
+    if let Ok(path) = std::env::var("OLDPAD_KINDLE_HTML") {
+        std::fs::write(path, &html).unwrap();
+    }
+    assert!(html.contains("Ceiling lamp") && html.contains("4.2°"));
+    let form = |token: &str, layout: &str| format!("token={token}&layout={layout}&page=0&item=0");
+    let (form_token, form_layout) = (field(&html, "token"), field(&html, "layout"));
+    assert_eq!(web("POST", "/kindle/press", &screen, Some(&form("wrong", &form_layout))).status, 403);
+    assert_eq!(web("POST", "/kindle/press", "", Some(&form(&form_token, &form_layout))).headers["location"], "/kindle", "no cookie, nothing pressed");
+    let mut cross = vec![("Cookie", screen.as_str()), ("Content-Type", "application/x-www-form-urlencoded"), ("Origin", "https://evil.example")];
+    let body = form(&form_token, &form_layout);
+    assert_eq!(request(&base, "POST", "/kindle/press", &cross, Some(body.as_bytes())).unwrap().status, 403);
+    cross.clear();
+    let lamp_on = |t: &mut Client| t.call("GET", "/api/tablet", None).1["tiles"][0]["capabilities"]["onoff"]["value"].clone();
+    assert_eq!(lamp_on(&mut tablet), true, "refused presses did nothing");
+    assert_eq!(web("POST", "/kindle/press", &screen, Some(&body)).headers["location"], "/kindle?page=0");
+    assert_eq!(lamp_on(&mut tablet), false);
+    assert_eq!(web("POST", "/kindle/press", &screen, Some(&body)).headers["location"], "/kindle?page=0&notice=stale", "an old page presses nothing");
+    assert_eq!(lamp_on(&mut tablet), false);
+    let fresh = text(&web("GET", "/kindle", &screen, None));
+    assert_eq!(web("POST", "/kindle/press", &screen, Some(&form(&form_token, &field(&fresh, "layout")))).status, 303);
+    assert_eq!(lamp_on(&mut tablet), true);
+    assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{kindle_id}"), None).0, 200);
+    assert!(text(&web("GET", "/kindle", &screen, None)).contains("action=\"/kindle/pair\""), "removing the screen signs it out");
+
     // --- names: a screen can call things its own name, wherever they show
     let dev = format!("/api/admin/devices/{device_id}");
     assert_eq!(phone.call("PUT", &dev, Some(json!({ "names": { night.clone(): "x".repeat(33) } }))).0, 400);

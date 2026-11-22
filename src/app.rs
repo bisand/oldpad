@@ -337,7 +337,11 @@ impl App {
     // ---------- device tokens ----------
 
     pub fn device_from(&self, req: &Request) -> Option<Device> {
-        let hash = sha256_hex(req.bearer()?);
+        self.device_by_token(req.bearer()?)
+    }
+
+    pub fn device_by_token(&self, token: &str) -> Option<Device> {
+        let hash = sha256_hex(token);
         let mut store = self.store.lock().unwrap();
         let t = now();
         let device = store.data.devices.iter_mut().find(|d| constant_eq(&d.token_hash, &hash) && d.expires > t)?;

@@ -130,6 +130,15 @@ music, doorbell and its camera), further entities for the menu pages, and up to
   warnings in force show under the clock.
 - Doorbell pop-up above everything, including the night clock.
 
+## Kindle in its own browser (no jailbreak)
+
+Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no JavaScript or live connection, and refreshes every five minutes while the Kindle is awake.
+
+- Pairing uses the normal code and PIN. The screen then keeps an `HttpOnly` cookie scoped to `/kindle`.
+- Each press is a form with a token derived from the screen, and a fingerprint of what the page showed. A stale page presses nothing and asks for another tap.
+- It shows the same controls as the e-ink picture below, and locks, alarms and unclassified devices stay off it.
+- The Kindle still goes to sleep by itself, so this is a remote you wake, not an always-on display.
+
 ## E-ink screen (Kindle Paperwhite 3, portrait)
 
 A reader shows a picture drawn by the server and reports where it was tapped. It pairs like any screen and sends its token as `Authorization: Bearer`.

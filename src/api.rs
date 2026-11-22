@@ -26,11 +26,15 @@ fn asset(content_type: &str, body: &str) -> Response {
 pub fn handle(app: &Arc<App>, req: &Request) -> Response {
     // Every state-changing call must carry a custom header. Browsers will not
     // send one cross-site without a CORS preflight, which we never answer.
+    let seg = req.segments();
+    let s: Vec<&str> = seg.iter().map(String::as_str).collect();
+    // A plain HTML form cannot add a header: the Kindle's page has its own form token.
+    if s.first() == Some(&"kindle") {
+        return crate::kindle::route(app, req, &s);
+    }
     if req.method != "GET" && req.header("x-oldpad") != Some("1") {
         return Response::error(403, "Missing X-Oldpad header");
     }
-    let seg = req.segments();
-    let s: Vec<&str> = seg.iter().map(String::as_str).collect();
     let m = req.method.as_str();
     if app.cfg.admin_bind.is_some() && !req.admin_port && matches!(s.as_slice(), ["admin" | "admin.js" | "admin.css"] | ["api", "admin", ..]) {
         return Response::error(404, "Not found");

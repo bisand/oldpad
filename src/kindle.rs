@@ -4,7 +4,8 @@
 use crate::app::App;
 use crate::http::{Request, Response};
 use crate::store::Device;
-use crate::util::sha256_hex;
+use crate::http::parse_query;
+use crate::util::{constant_eq, escape_xml, sha256_hex};
 use serde_json::{json, Value};
 
 const W: usize = 1072;
@@ -92,11 +93,7 @@ pub fn screen(app: &App, device: &Device, req: &Request) -> Response {
     let nb = app.store.lock().unwrap().data.settings.language == "nb";
     // The server's clock may be in another zone, so the reader says what time it is.
     let time = req.query.get("time").filter(|t| valid_time(t)).map_or("", String::as_str);
-    let temp = |id: &Option<String>| {
-        let v = id.as_ref().and_then(|i| app.registry.entity(i))?.capabilities.get("measure_temperature")?.value.as_f64()?;
-        Some(format!("{v:.1}°"))
-    };
-    let (indoor, outdoor) = (temp(&device.panels.indoor), temp(&device.panels.outdoor));
+    let (indoor, outdoor) = temperatures(app, device);
 
     let mut c = Canvas { px: vec![WHITE; W * H] };
     c.text(MARGIN, 40, 7, &fit(&device.name, W - 2 * MARGIN - 260, 7), BLACK);
@@ -151,14 +148,186 @@ pub fn tap(app: &App, device: &Device, body: &Value) -> Result<Response, Respons
         Some(Hit::Prev) => (page + pages - 1) % pages,
         Some(Hit::Next) => (page + 1) % pages,
         Some(Hit::Item(i)) => {
-            let item = &shown[i];
-            let (capability, value) = item.on.map_or(("button", json!(true)), |on| ("onoff", json!(!on)));
-            app.registry.set(&item.id, capability, &value).map_err(|e| Response::error(502, &e))?;
+            press_item(app, &shown[i]).map_err(|e| Response::error(502, &e))?;
             page
         }
         None => page,
     };
     Ok(Response::ok(json!({ "ok": true, "page": next })))
+}
+
+fn temperatures(app: &App, device: &Device) -> (Option<String>, Option<String>) {
+    let temp = |id: &Option<String>| {
+        let v = id.as_ref().and_then(|i| app.registry.entity(i))?.capabilities.get("measure_temperature")?.value.as_f64()?;
+        Some(format!("{v:.1}°"))
+    };
+    (temp(&device.panels.indoor), temp(&device.panels.outdoor))
+}
+
+fn press_item(app: &App, item: &Item) -> Result<(), String> {
+    let (capability, value) = item.on.map_or(("button", json!(true)), |on| ("onoff", json!(!on)));
+    app.registry.set(&item.id, capability, &value)
+}
+
+// ---------------------------------------------------------------- the browser page
+
+const SCREEN_COOKIE: &str = "oldpad_kindle";
+const PAIR_COOKIE: &str = "oldpad_kindle_pair";
+const PAGE_CSP: &str = "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+/// Long enough to see a change, rare enough to spare a reader's battery.
+const PAGE_REFRESH: u32 = 300;
+const PAIR_REFRESH: u32 = 5;
+const CSS: &str = "body{margin:0;padding:16px;background:#fff;color:#000;font-family:sans-serif;font-size:24px}\
+h1{font-size:32px;margin:0 0 8px}p{margin:8px 0}.temps{font-size:28px;font-weight:bold}\
+table{width:100%;border-collapse:separate;border-spacing:8px;table-layout:fixed}td{padding:0}form{margin:0}\
+button{display:block;width:100%;height:130px;padding:8px;border:3px solid #000;border-radius:0;background:#fff;color:#000;font-size:26px;font-weight:bold;text-align:left;overflow:hidden}\
+button.on{background:#000;color:#fff}button span{display:block;font-size:20px;font-weight:normal;margin-top:8px}\
+.nav{text-align:center;font-size:28px;margin-top:12px}.nav a{display:inline-block;color:#000;border:3px solid #000;padding:12px 36px;margin:0 12px;text-decoration:none}\
+.notice{border:3px solid #000;padding:8px}.code{font-size:40px;font-weight:bold;word-wrap:break-word}.start{height:90px;text-align:center}";
+
+pub fn route(app: &App, req: &Request, s: &[&str]) -> Response {
+    if req.admin_port {
+        return Response::error(404, "Not found");
+    }
+    // Forms from another site are refused here, and the press form also carries a token.
+    if req.method == "POST" && req.header("origin").is_some_and(|o| o != app.cfg.public_url) {
+        return Response::error(403, "Wrong origin");
+    }
+    match (req.method.as_str(), s) {
+        ("GET", ["kindle"]) => show(app, req),
+        ("GET", ["kindle", "style.css"]) => Response::new(200, "text/css; charset=utf-8", CSS).header("Cache-Control", "no-cache"),
+        ("POST", ["kindle", "pair"]) => start_pairing(app),
+        ("POST", ["kindle", "press"]) => press(app, req),
+        _ => Response::error(404, "Not found"),
+    }
+}
+
+fn cookie(app: &App, name: &str, value: &str, max_age: u64) -> String {
+    let secure = if app.cfg.secure_cookies() { "; Secure" } else { "" };
+    format!("{name}={value}; Path=/kindle; HttpOnly; SameSite=Lax; Max-Age={max_age}{secure}")
+}
+
+fn redirect(to: &str) -> Response {
+    Response::new(303, "text/plain; charset=utf-8", "").header("Location", to).header("Cache-Control", "no-store")
+}
+
+fn html(title: &str, refresh: u32, refresh_to: &str, body: &str) -> Response {
+    let page = format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"{refresh};url={refresh_to}\"><title>{}</title><link rel=\"stylesheet\" href=\"/kindle/style.css\"></head><body>{body}</body></html>",
+        escape_xml(title)
+    );
+    Response::new(200, "text/html; charset=utf-8", page).header("Cache-Control", "no-store").header("Content-Security-Policy", PAGE_CSP)
+}
+
+fn form_token(device: &Device) -> String {
+    sha256_hex(&format!("kindle-form:{}", device.token_hash))
+}
+
+fn screen_device(app: &App, req: &Request) -> Option<Device> {
+    app.device_by_token(&req.cookie(SCREEN_COOKIE)?)
+}
+
+fn show(app: &App, req: &Request) -> Response {
+    let nb = app.store.lock().unwrap().data.settings.language == "nb";
+    if let Some(device) = screen_device(app, req) {
+        return dashboard(app, req, &device, nb);
+    }
+    let pending = req.cookie(PAIR_COOKIE);
+    let parts: Vec<&str> = pending.as_deref().unwrap_or("").split('.').collect();
+    if let [id, secret, code, pin] = parts[..] {
+        let poll = app.poll_pairing(id, secret);
+        match poll["status"].as_str() {
+            Some("approved") => {
+                let token = poll["token"].as_str().unwrap_or("");
+                return redirect("/kindle").header("Set-Cookie", &cookie(app, PAIR_COOKIE, "", 0)).header("Set-Cookie", &cookie(app, SCREEN_COOKIE, token, app.cfg.device_ttl));
+            }
+            Some("pending") => {
+                let url = format!("{}/admin#/pair/{code}", app.cfg.public_url);
+                let (title, open, pin_label) = if nb { ("Koble til Kindle", "Åpne denne adressen på telefonen:", "PIN") } else { ("Pair this Kindle", "Open this address on your phone:", "PIN") };
+                let body = format!("<h1>{title}</h1><p>{open}</p><p class=\"code\">{}</p><p>{pin_label}:</p><p class=\"code\">{}</p>", escape_xml(&url), escape_xml(pin));
+                return html(title, PAIR_REFRESH, "/kindle", &body);
+            }
+            _ => {}
+        }
+    }
+    let (title, label) = if nb { ("Koble til Kindle", "Start") } else { ("Pair this Kindle", "Start") };
+    let body = format!("<h1>oldpad</h1><p>{title}</p><form method=\"post\" action=\"/kindle/pair\"><button class=\"start\" type=\"submit\">{label}</button></form>");
+    html(title, PAGE_REFRESH, "/kindle", &body).header("Set-Cookie", &cookie(app, PAIR_COOKIE, "", 0))
+}
+
+fn start_pairing(app: &App) -> Response {
+    match app.new_pairing() {
+        Ok(p) => redirect("/kindle").header("Set-Cookie", &cookie(app, PAIR_COOKIE, &format!("{}.{}.{}.{}", p.id, p.secret, p.code, p.pin), crate::app::PAIRING_TTL)),
+        Err(e) => Response::error(429, e),
+    }
+}
+
+fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
+    let wanted = req.query.get("page").and_then(|p| p.parse().ok()).unwrap_or(0);
+    let (shown, page, pages, layout) = page_of(items(app, device), wanted);
+    let (indoor, outdoor) = temperatures(app, device);
+    let token = form_token(device);
+    let mut body = format!("<h1>{}</h1>", escape_xml(&device.name));
+    let (in_label, out_label) = if nb { ("Inne", "Ute") } else { ("Indoor", "Outdoor") };
+    body += &format!("<p class=\"temps\">{in_label} {} &nbsp; {out_label} {}</p>", indoor.as_deref().unwrap_or("--"), outdoor.as_deref().unwrap_or("--"));
+    let notice = match req.query.get("notice").map(String::as_str) {
+        Some("stale") => Some(if nb { "Siden var utdatert. Trykk på nytt." } else { "The page was out of date. Tap again." }),
+        Some("failed") => Some(if nb { "Det virket ikke." } else { "That did not work." }),
+        _ => None,
+    };
+    if let Some(n) = notice {
+        body += &format!("<p class=\"notice\">{n}</p>");
+    }
+    if shown.is_empty() {
+        body += if nb { "<p>Ingen knapper er valgt for denne skjermen.</p>" } else { "<p>No controls are set up for this screen.</p>" };
+    }
+    body += "<table>";
+    for (n, row) in shown.chunks(2).enumerate() {
+        body += "<tr>";
+        for (c, item) in row.iter().enumerate() {
+            let state = match (item.on, nb) {
+                (Some(true), true) => "På",
+                (Some(true), false) => "On",
+                (Some(false), true) => "Av",
+                (Some(false), false) => "Off",
+                (None, true) => "Kjør",
+                (None, false) => "Run",
+            };
+            let class = if item.on == Some(true) { " class=\"on\"" } else { "" };
+            body += &format!(
+                "<td><form method=\"post\" action=\"/kindle/press\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"layout\" value=\"{layout}\"><input type=\"hidden\" name=\"page\" value=\"{page}\"><input type=\"hidden\" name=\"item\" value=\"{}\"><button{class} type=\"submit\">{}<span>{state}</span></button></form></td>",
+                n * 2 + c,
+                escape_xml(&item.name)
+            );
+        }
+        if row.len() == 1 {
+            body += "<td></td>";
+        }
+        body += "</tr>";
+    }
+    body += "</table>";
+    if pages > 1 {
+        body += &format!("<p class=\"nav\"><a href=\"/kindle?page={}\">&lt;</a> {} / {pages} <a href=\"/kindle?page={}\">&gt;</a></p>", (page + pages - 1) % pages, page + 1, (page + 1) % pages);
+    }
+    html(&device.name, PAGE_REFRESH, &format!("/kindle?page={page}"), &body)
+}
+
+fn press(app: &App, req: &Request) -> Response {
+    let Some(device) = screen_device(app, req) else { return redirect("/kindle") };
+    let form = parse_query(std::str::from_utf8(&req.body).unwrap_or(""));
+    let field = |k: &str| form.get(k).map_or("", String::as_str);
+    if !constant_eq(field("token"), &form_token(&device)) {
+        return Response::error(403, "Bad form token");
+    }
+    let (shown, page, _, layout) = page_of(items(app, &device), field("page").parse().unwrap_or(0));
+    let item = field("item").parse::<usize>().ok().and_then(|i| shown.get(i));
+    let Some(item) = item.filter(|_| field("layout") == layout) else {
+        return redirect(&format!("/kindle?page={page}&notice=stale"));
+    };
+    match press_item(app, item) {
+        Ok(()) => redirect(&format!("/kindle?page={page}")),
+        Err(_) => redirect(&format!("/kindle?page={page}&notice=failed")),
+    }
 }
 
 fn valid_time(t: &str) -> bool {
