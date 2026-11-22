@@ -256,7 +256,7 @@
       }
       show('app');
       render();
-      connectEvents();
+      if (!events) { connectEvents(); }
     });
   }
 
@@ -265,9 +265,12 @@
     if (events) { events.close(); events = null; }
     if (!window.EventSource) { setTimeout(loadState, 60000); return; } // no live updates: refresh instead
     request('POST', '/api/tablet/ticket', {}, {}, function (status, data) {
+      if (events) { return; } // another attempt got there first
       if (status !== 200 || !data) { setTimeout(connectEvents, 5000); return; }
       var es = new EventSource('/api/events?ticket=' + encodeURIComponent(data.ticket));
       events = es;
+      // Fetch only once subscribed, so a change made while the stream was down can't be missed.
+      es.onopen = function () { loadState(); };
       es.addEventListener('entity', function (e) {
         var msg = JSON.parse(e.data);
         var ent = entities[msg.id];
