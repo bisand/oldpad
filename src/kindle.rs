@@ -206,7 +206,6 @@ const PAGE_CSP: &str = "default-src 'none'; style-src 'self'; img-src 'self'; sc
 const PAGE_REFRESH: u32 = 300;
 const PAIR_REFRESH: u32 = 5;
 const COLUMNS: usize = 4;
-const PAGE_BUTTONS: usize = COLUMNS * 4;
 /// Two rows at most, so the buttons stay on the first screen.
 const MAX_BOXES: usize = COLUMNS * 2;
 // Tables, not flex or grid: the Kindle's browser is an old WebKit.
@@ -421,6 +420,25 @@ fn menu(app: &App, device: &Device, nb: bool) -> Vec<(String, String, String)> {
     fixed.chain(own).filter(|(id, ..)| id == "home" || (id == "music" && !speakers(app, device).is_empty()) || !view_items(app, device, id).is_empty() || !info_boxes(app, device, id, nb).is_empty()).collect()
 }
 
+fn menu_rows(entries: usize) -> usize {
+    entries.div_ceil(entries.div_ceil(3).max(MENU_COLUMNS))
+}
+
+/// As many buttons as fit a Paperwhite in portrait below what else the page shows.
+/// shortcut: heights are measured for that one screen, make them per-device if another reader is used.
+fn page_size(boxes: &[Info], menu_entries: usize) -> usize {
+    const ROOM: usize = 828;
+    const HERO_ROW: usize = 148;
+    const TILE_ROW: usize = 111;
+    const MENU_ROW: usize = 74;
+    const BUTTON_ROW: usize = 110;
+    let heroes = boxes.iter().filter(|b| b.hero).count();
+    let used = usize::from(heroes > 0) * HERO_ROW
+        + (boxes.len() - heroes).div_ceil(COLUMNS) * TILE_ROW
+        + menu_rows(menu_entries).saturating_sub(1) * MENU_ROW;
+    (ROOM.saturating_sub(used) / BUTTON_ROW).max(1) * COLUMNS
+}
+
 fn menu_html(entries: &[(String, String, String)], view: &str) -> String {
     // Never more than three rows, the most the stylesheet leaves room for.
     let columns = entries.len().div_ceil(3).max(MENU_COLUMNS);
@@ -438,7 +456,8 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let wanted = req.query.get("page").and_then(|p| p.parse().ok()).unwrap_or(0);
     let entries = menu(app, device, nb);
     let view = entries.iter().find(|(id, ..)| Some(id) == req.query.get("view")).map_or("home", |(id, ..)| id.as_str());
-    let (shown, page, pages, layout) = page_of(view_items(app, device, view), wanted, PAGE_BUTTONS);
+    let boxes = info_boxes(app, device, view, nb);
+    let (shown, page, pages, layout) = page_of(view_items(app, device, view), wanted, page_size(&boxes, entries.len()));
     let token = form_token(device);
     let title = entries.iter().find(|(id, ..)| id == view && view != "home").map_or(device.name.as_str(), |(_, label, _)| label.as_str());
     let pager = if pages > 1 {
@@ -447,7 +466,7 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
         String::new()
     };
     let mut body = format!("<table class=\"head\"><tr><td><h1>{}</h1></td>{pager}</tr></table>", escape_xml(title));
-    let (heroes, tiles): (Vec<Info>, Vec<Info>) = info_boxes(app, device, view, nb).into_iter().partition(|b| b.hero);
+    let (heroes, tiles): (Vec<Info>, Vec<Info>) = boxes.into_iter().partition(|b| b.hero);
     body += &grid(heroes.iter().map(Info::html).collect(), heroes.len(), "hero");
     body += &grid(tiles.iter().map(Info::html).collect(), COLUMNS, "tiles");
     let notice = match req.query.get("notice").map(String::as_str) {
@@ -480,7 +499,7 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
             escape_xml(&item.name)
         )
     }).collect(), COLUMNS, "buttons");
-    let rows = entries.len().div_ceil(entries.len().div_ceil(3).max(MENU_COLUMNS));
+    let rows = menu_rows(entries.len());
     let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
     let body = format!("{body}<script src=\"/kindle/app.js\"></script>");
     html(&device.name, PAGE_REFRESH, &escape_xml(&link(view, page)), &body)
@@ -725,7 +744,7 @@ fn press(app: &App, req: &Request) -> Response {
     }
     let entries = menu(app, &device, false);
     let view = entries.iter().find(|(id, ..)| id == field("view")).map_or("home", |(id, ..)| id.as_str());
-    let (shown, page, _, layout) = page_of(view_items(app, &device, view), field("page").parse().unwrap_or(0), PAGE_BUTTONS);
+    let (shown, page, _, layout) = page_of(view_items(app, &device, view), field("page").parse().unwrap_or(0), page_size(&info_boxes(app, &device, view, false), entries.len()));
     let item = field("item").parse::<usize>().ok().and_then(|i| shown.get(i));
     let Some(item) = item.filter(|_| field("layout") == layout) else {
         return redirect(&format!("{}&notice=stale", link(view, page)));
@@ -1037,6 +1056,17 @@ mod tests {
         assert_eq!(control(&entity(vec![("onoff", off.clone()), ("button", press.clone())])), Some((Some(false), false)), "a real switch is switched");
         assert_eq!(control(&entity(vec![("button", press)])), Some((None, true)));
         assert_eq!(control(&entity(vec![("onoff", on)])), None, "nothing to press");
+    }
+
+    #[test]
+    fn pages_hold_what_fits() {
+        let info = |hero| Info { hero, icon: "cloud", label: String::new(), value: String::new(), words: false, lines: Vec::new() };
+        let home = |tiles: usize| [true, true].into_iter().chain((0..tiles).map(|_| false)).map(info).collect::<Vec<_>>();
+        assert_eq!(page_size(&home(2), 6), 20, "the Kitchen screen: one row of tiles");
+        assert_eq!(page_size(&home(6), 6), 16, "two rows of tiles");
+        assert_eq!(page_size(&[], 6), 28, "buttons alone");
+        assert_eq!(page_size(&home(2), 7), 16, "a second menu row");
+        assert_eq!(page_size(&(0..40).map(|_| info(false)).collect::<Vec<_>>(), 18), COLUMNS, "never none");
     }
 
     #[test]

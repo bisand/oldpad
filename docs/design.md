@@ -136,7 +136,7 @@ Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no li
 
 - Pairing uses the normal code and PIN, with a QR code for the address. The screen then keeps an `HttpOnly` cookie scoped to `/kindle`.
 - Each press is a form with a token derived from the screen, and a fingerprint of what the page showed. A stale page presses nothing and asks for another tap.
-- It shows the same controls as the e-ink picture below, four across and sixteen to a page, each with its live value. Locks, alarms and unclassified devices stay off it.
+- It shows the same controls as the e-ink picture below, four across and as many rows as fit below the info boxes, each with its live value. Locks, alarms and unclassified devices stay off it.
 - Info boxes above the buttons show indoor, outdoor, wind, the forecast and the screen's sensors, at most eight.
 - Music shows each of the screen's speakers with what it plays, play or pause, and volume in 5 % steps.
 - A menu lists Home, Music, Lights, Climate, Scenes, Weather and the screen's own pages, leaving out empty ones. It sits at the bottom in portrait and on the left in landscape.
