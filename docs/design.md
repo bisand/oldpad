@@ -138,7 +138,7 @@ Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no li
 - Each press is a form with a token derived from the screen, and a fingerprint of what the page showed. A stale page presses nothing and asks for another tap.
 - It shows the same controls as the e-ink picture below, four across and as many rows as fit below the info boxes, each with its live value. Locks, alarms and unclassified devices stay off it.
 - Info boxes above the buttons show indoor, outdoor, wind, the forecast and the screen's sensors, at most eight.
-- Music shows each of the screen's speakers with what it plays, play or pause, and volume in 5 % steps.
+- Music follows the tablet's page: what the group plays, rooms to pick and group, favourites and search. Volume moves in 5 % steps, and it shows the first 24 favourites.
 - A menu lists Home, Music, Lights, Climate, Scenes, Weather and the screen's own pages, leaving out empty ones. It sits at the bottom in portrait and on the left in landscape.
 - Icons come from one grayscale sheet, `web/kindle-icons.png`, drawn from the tablet's icon paths. Its columns follow `ICONS` in `src/kindle.rs`.
 - The Kindle still goes to sleep by itself, so this is a remote you wake, not an always-on display.

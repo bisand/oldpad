@@ -37,7 +37,10 @@
   }
 
   document.addEventListener('submit', function (ev) {
-    var form = ev.target, xhr = new XMLHttpRequest(), fields = [], i, f;
+    var form = ev.target, xhr, fields = [], i, f;
+    // Search is a plain link to its results.
+    if ((form.getAttribute('method') || '').toLowerCase() !== 'post') { return; }
+    xhr = new XMLHttpRequest();
     ev.preventDefault();
     if (busy) { return; }
     busy = true;

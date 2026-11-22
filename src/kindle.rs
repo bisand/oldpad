@@ -235,9 +235,14 @@ button b{display:block;clear:both;max-height:44px;overflow:hidden;font-size:18px
 .menu a.on{background:#000;color:#fff}.menu .ic{display:block;margin:0 auto 1px}\
 @media (min-width:1000px){body{zoom:1.2}}\
 @media (orientation:landscape){.shell{padding-bottom:0}.menu{position:static;float:left;display:block;width:112px;border-top:0;border-right:2px solid #000;padding-right:6px}.menu div{display:block}.menu a{display:block;height:auto;padding:6px 2px;margin-bottom:4px}.main{margin-left:130px}}\
-.spk{height:146px;padding:10px 12px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;overflow:hidden}.spk.on{background:#000;color:#fff}\
-.spk small{display:block;font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden}.spk b{display:block;height:28px;font-size:22px;line-height:28px;white-space:nowrap;overflow:hidden}.spk>span{display:block;height:20px;font-size:15px;line-height:20px;white-space:nowrap;overflow:hidden}\
-.ctl{margin-top:8px;border-spacing:4px 0}.ctl td{vertical-align:middle}.ctl button{height:64px;padding:0;text-align:center;font-size:30px;font-weight:bold}.ctl button .ic{float:none;display:block;margin:0 auto}.spk.on button{background:#000;color:#fff;border-color:#fff}.vol{text-align:center;font-size:19px;font-weight:bold}\
+.m{margin:6px;padding:10px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;overflow:hidden}.m h2{margin:0 0 6px;font-size:17px;line-height:36px}.cols{border-spacing:0}\
+.m button{height:52px;padding:0;text-align:center;font-size:26px;font-weight:bold}.m button .ic{float:none;display:block;margin:0 auto}.m button span{float:none;display:block;white-space:normal}\
+.np{border-spacing:0}.np td{vertical-align:middle}.np .art{width:132px;text-align:center}.np img{display:block;width:120px;height:120px}.np small{display:block;font-size:16px;line-height:20px}.np b{display:block;font-size:26px;line-height:32px;white-space:nowrap;overflow:hidden}.np span{display:block;font-size:16px;line-height:20px;white-space:nowrap;overflow:hidden}.np .play{width:92px}.np .play button{height:84px}.np .nv{width:190px}\
+.vc{border-spacing:2px 0}.vc td{vertical-align:middle}.m .vc button{height:46px}.vc .v{text-align:center;font-size:16px;font-weight:bold;white-space:nowrap}\
+.rooms{border-spacing:0 4px}.rooms td{vertical-align:middle}.rooms .chk{width:54px}.rooms .rv{width:164px}.m .chk button{width:44px;height:44px;font-size:24px}.rooms a{display:block;padding:0 6px;color:#000;font-size:18px;font-weight:bold;text-decoration:none;white-space:nowrap;overflow:hidden}.rooms a span{display:block;font-size:14px;font-weight:normal;overflow:hidden}\
+.all{float:right}.m .all button{width:auto;height:36px;padding:0 12px;font-size:15px}.search{margin-bottom:6px}.search input{width:100%;height:48px;padding:0 10px;border:2px solid #000;-webkit-border-radius:8px;border-radius:8px;-webkit-box-sizing:border-box;box-sizing:border-box;font-size:20px;-webkit-appearance:none}\
+.favs{border-spacing:4px}.m .favs button{height:154px;padding:4px;font-size:14px;line-height:17px;overflow:hidden;word-wrap:break-word}.favs img,.favs .no{display:block;width:96px;height:96px;margin:0 auto 3px}.m .favs .no{border:1px solid #000;font-size:36px;line-height:96px}\
+.hits{border-spacing:0 3px}.hits td{vertical-align:middle}.hits .i{width:56px}.hits img{display:block;width:52px;height:52px}.hits .s{width:48px}.m button.hb{height:56px;padding:0 6px;border:0;font-size:16px;line-height:19px;text-align:left;overflow:hidden}.m button.hb span{font-size:13px;font-weight:normal;white-space:nowrap;overflow:hidden}\
 .notice{border:2px solid #000;border-left-width:10px;padding:8px 12px}.empty{padding:48px 12px;text-align:center}\
 .center{max-width:560px;margin:0 auto;padding-top:24px;text-align:center}.center h1{margin-bottom:8px}.qr{display:block;width:400px;max-width:100%;margin:16px auto}\
 .pin{margin:12px 0 4px}.code{display:inline-block;margin:0;padding:6px 20px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;font-size:52px;font-weight:bold;letter-spacing:6px}\
@@ -477,8 +482,11 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     if let Some(n) = notice {
         body += &format!("<p class=\"notice\">{n}</p>");
     }
+    let mut here = link(view, page);
     if view == "music" {
-        body += &grid(speakers(app, device).iter().map(|e| speaker_card(app, device, e, &token, nb)).collect(), 2, "speakers");
+        let (music, address) = music_page(app, device, req, &token, nb);
+        body += &music;
+        here = address;
     } else if shown.is_empty() && view != "weather" {
         body += if nb { "<p class=\"empty\">Ingen knapper er valgt for denne skjermen.</p>" } else { "<p class=\"empty\">No controls are set up for this screen.</p>" };
     }
@@ -502,7 +510,7 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let rows = menu_rows(entries.len());
     let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
     let body = format!("{body}<script src=\"/kindle/app.js\"></script>");
-    html(&device.name, PAGE_REFRESH, &escape_xml(&link(view, page)), &body)
+    html(&device.name, PAGE_REFRESH, &escape_xml(&here), &body)
 }
 
 /// Rows of equal columns; a short last row keeps its cells the same width.
@@ -681,34 +689,128 @@ fn speakers(app: &App, device: &Device) -> Vec<Entity> {
         .collect()
 }
 
-/// What a group plays comes from its leader, which need not be on this screen.
-fn speaker_lead(app: &App, e: &Entity) -> Entity {
+/// `speaker_group` holds the leading room's id within the same integration.
+fn lead_id(e: &Entity) -> String {
     let group = e.capabilities.get("speaker_group").and_then(|c| c.value.as_str());
-    let id = group.and_then(|g| e.id.split_once(':').map(|(integration, _)| format!("{integration}:{g}")));
-    id.and_then(|id| app.registry.entity(&id)).unwrap_or_else(|| e.clone())
+    group.and_then(|g| e.id.split_once(':').map(|(integration, _)| format!("{integration}:{g}"))).unwrap_or_else(|| e.id.clone())
 }
 
-fn speaker_card(app: &App, device: &Device, e: &Entity, token: &str, nb: bool) -> String {
-    let lead = speaker_lead(app, e);
-    let text = |c: &str| lead.capabilities.get(c).and_then(|c| c.value.as_str()).filter(|s| !s.is_empty()).map(escape_xml);
-    let playing = lead.capabilities.get("speaker_playing").is_some_and(|c| c.value == json!(true));
-    let control = |action: &str, label: &str, inner: &str| format!(
-        "<td><form method=\"post\" action=\"/kindle/speaker\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"id\" value=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{action}\"><button type=\"submit\" aria-label=\"{label}\">{inner}</button></form></td>",
-        escape_xml(&e.id)
-    );
-    let mut controls = if playing { control("pause", "Pause", &icon("pause")) } else { control("play", if nb { "Spill" } else { "Play" }, &icon("play")) };
-    if let Some(v) = number(e, "volume_set").filter(|_| e.capabilities["volume_set"].settable) {
-        controls += &control("down", if nb { "Lavere volum" } else { "Volume down" }, "&minus;");
-        controls += &format!("<td class=\"vol\">{:.0} %</td>", v * 100.0);
-        controls += &control("up", if nb { "Høyere volum" } else { "Volume up" }, "+");
+/// What a group plays comes from its leader, which need not be on this screen.
+fn speaker_lead(app: &App, e: &Entity) -> Entity {
+    app.registry.entity(&lead_id(e)).unwrap_or_else(|| e.clone())
+}
+
+fn encode(s: &str) -> String {
+    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+fn music_url(room: &str, query: &str) -> String {
+    let mut url = link("music", 0);
+    if !room.is_empty() {
+        url += &format!("&room={}", encode(room));
     }
-    format!(
-        "<div class=\"spk{}\"><small>{}</small><b>{}</b><span>{}</span><table class=\"ctl\"><tr>{controls}</tr></table></div>",
-        if playing { " on" } else { "" },
-        escape_xml(device.names.get(&e.id).unwrap_or(&e.name)),
-        text("speaker_track").unwrap_or_else(|| if nb { "Ingenting spilles" } else { "Nothing playing" }.to_string()),
-        text("speaker_artist").unwrap_or_default(),
-    )
+    if !query.is_empty() {
+        url += &format!("&q={}", encode(query));
+    }
+    url
+}
+
+fn text_of<'a>(e: &'a Entity, capability: &str) -> &'a str {
+    e.capabilities.get(capability).and_then(|c| c.value.as_str()).unwrap_or("")
+}
+
+/// The tablet's music page: what the group plays, its rooms, and favourites or search.
+/// Returns the page and its own address, for the refresh.
+fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) -> (String, String) {
+    // shortcut: the first 24 favourites, as each costs the reader a picture; page them if that is too few.
+    const MAX_FAVOURITES: usize = 24;
+    let all = speakers(app, device);
+    let Some(room) = all.iter().find(|e| Some(&e.id) == req.query.get("room")).or(all.first()) else { return (String::new(), link("music", 0)) };
+    let query = req.query.get("q").map_or("", |q| q.trim());
+    let query = if query.chars().count() <= 100 { query } else { "" };
+    let lead = speaker_lead(app, room);
+    let lead_of_room = lead_id(room);
+    let group: Vec<&Entity> = all.iter().filter(|e| lead_id(e) == lead_of_room).collect();
+    let name = |e: &Entity| device.names.get(&e.id).unwrap_or(&e.name).clone();
+    let integration = lead.id.split_once(':').map_or("", |(i, _)| i).to_string();
+    let image_token = App::image_token(device);
+    let picture = |key: &str| format!("<img src=\"/api/image/{}/{}?t={image_token}\" alt=\"\">", encode(&integration), escape_xml(key));
+    let button = |target: &str, action: &str, extra: (&str, &str), label: &str, class: &str, inner: &str| format!(
+        "<form method=\"post\" action=\"/kindle/speaker\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"id\" value=\"{}\"><input type=\"hidden\" name=\"room\" value=\"{}\"><input type=\"hidden\" name=\"q\" value=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{action}\"><input type=\"hidden\" name=\"{}\" value=\"{}\"><button{class} type=\"submit\" aria-label=\"{}\">{inner}</button></form>",
+        escape_xml(target), escape_xml(&room.id), escape_xml(query), extra.0, escape_xml(extra.1), escape_xml(label)
+    );
+    let volume = |e: &Entity, capability: &str, shown: f64| format!(
+        "<table class=\"vc\"><tr><td>{}</td><td class=\"v\">{:.0} %</td><td>{}</td></tr></table>",
+        button(&e.id, "down", ("cap", capability), if nb { "Lavere volum" } else { "Volume down" }, "", "&minus;"), shown * 100.0,
+        button(&e.id, "up", ("cap", capability), if nb { "Høyere volum" } else { "Volume up" }, "", "+")
+    );
+
+    let playing = lead.capabilities.get("speaker_playing").is_some_and(|c| c.value == json!(true));
+    let track = text_of(&lead, "speaker_track");
+    let group_name = match &group[..] {
+        [a, b] => format!("{} + {}", name(a), name(b)),
+        [a, _, ..] => format!("{} + {}", name(a), group.len() - 1),
+        _ => name(room),
+    };
+    let art = match text_of(&lead, "speaker_art") { "" => icon("radio"), key => picture(key) };
+    let toggle = if playing { button(&room.id, "pause", ("cap", ""), "Pause", "", &icon("pause")) } else { button(&room.id, "play", ("cap", ""), if nb { "Spill" } else { "Play" }, "", &icon("play")) };
+    let group_volume = number(&lead, "group_volume").filter(|_| group.len() > 1).map_or(String::new(), |v| format!("<td class=\"nv\">{}</td>", volume(room, "group_volume", v)));
+    let mut body = format!(
+        "<div class=\"m\"><table class=\"np\"><tr><td class=\"art\">{art}</td><td><small>{}</small><b>{}</b><span>{}</span></td><td class=\"play\">{toggle}</td>{group_volume}</tr></table></div>",
+        escape_xml(&group_name),
+        if track.is_empty() { (if nb { "Ingenting spilles" } else { "Nothing playing" }).to_string() } else { escape_xml(track) },
+        escape_xml(text_of(&lead, "speaker_artist")),
+    );
+
+    let all_button = if all.len() > 1 { format!("<div class=\"all\">{}</div>", button(&room.id, "all", ("cap", ""), if nb { "Alle rom" } else { "All rooms" }, "", if nb { "Alle rom" } else { "All rooms" })) } else { String::new() };
+    let rows: String = all.iter().map(|e| {
+        let inside = lead_id(e) == lead_of_room;
+        let (action, label, mark) = if inside { ("leave", if nb { "Ta ut av gruppen" } else { "Remove from group" }, "&#10003;") } else { ("join", if nb { "Legg til i gruppen" } else { "Add to group" }, "") };
+        let other = speaker_lead(app, e);
+        let sub = if inside { String::new() } else {
+            let t = if other.capabilities.get("speaker_playing").is_some_and(|c| c.value == json!(true)) { text_of(&other, "speaker_track") } else if nb { "Ingenting spilles" } else { "Nothing playing" };
+            format!("<span>{}</span>", escape_xml(t))
+        };
+        let vol = number(e, "volume_set").filter(|_| inside).map_or(String::new(), |v| volume(e, "volume_set", v));
+        format!(
+            "<tr class=\"rm{}\"><td class=\"chk\">{}</td><td><a href=\"{}\">{}{sub}</a></td><td class=\"rv\">{vol}</td></tr>",
+            if inside { " in" } else { "" }, button(&e.id, action, ("cap", ""), label, "", mark), escape_xml(&music_url(&e.id, query)), escape_xml(&name(e))
+        )
+    }).collect();
+    let rooms = format!("<div class=\"m\">{all_button}<h2>{}</h2><table class=\"rooms\">{rows}</table></div>", if nb { "Rom" } else { "Rooms" });
+
+    let search = format!(
+        "<form class=\"search\" method=\"get\" action=\"/kindle\"><input type=\"hidden\" name=\"view\" value=\"music\"><input type=\"hidden\" name=\"room\" value=\"{}\"><input type=\"search\" name=\"q\" value=\"{}\" placeholder=\"{}\" aria-label=\"{}\" autocomplete=\"off\"></form>",
+        escape_xml(&room.id), escape_xml(query), if nb { "Søk etter musikk og radio" } else { "Search music and radio" }, if nb { "Søk" } else { "Search" }
+    );
+    let found = if query.is_empty() { String::new() } else {
+        match app.registry.search(&lead.id, query) {
+            Ok(hits) if hits.is_empty() => format!("<p>{}</p>", if nb { "Fant ingenting." } else { "Nothing found." }),
+            Ok(hits) => {
+                let favourites = lead.capabilities.get("favourites").and_then(|c| c.value.as_array());
+                let rows: String = hits.iter().filter_map(|h| {
+                    let (id, title) = (h["id"].as_str()?, h["title"].as_str()?);
+                    let known = favourites.is_some_and(|f| f.iter().any(|x| x["title"] == title));
+                    let pic = h["art"].as_str().filter(|a| !a.is_empty()).map_or(String::new(), &picture);
+                    let inner = format!("{}<span>{}</span>", escape_xml(title), escape_xml(h["sub"].as_str().unwrap_or("")));
+                    let star = if known { "&#9733;".to_string() } else { button(&room.id, "save", ("fav", id), if nb { "Lagre som favoritt" } else { "Save as favourite" }, "", "&#9734;") };
+                    Some(format!("<tr><td class=\"i\">{pic}</td><td>{}</td><td class=\"s\">{star}</td></tr>", button(&room.id, "fav", ("fav", id), title, " class=\"hb\"", &inner)))
+                }).collect();
+                format!("<table class=\"hits\">{rows}</table>")
+            }
+            Err(_) => format!("<p>{}</p>", if nb { "Søket virket ikke." } else { "The search did not work." }),
+        }
+    };
+    let choices = if !query.is_empty() { found } else {
+        let cells: Vec<String> = lead.capabilities.get("favourites").and_then(|c| c.value.as_array()).into_iter().flatten().take(MAX_FAVOURITES).filter_map(|f| {
+            let (id, title) = (f["id"].as_str()?, f["title"].as_str()?);
+            let pic = f["art"].as_str().filter(|a| !a.is_empty()).map_or_else(|| format!("<span class=\"no\">{}</span>", escape_xml(&title.chars().take(1).collect::<String>())), &picture);
+            Some(button(&room.id, "fav", ("fav", id), title, if title == track { " class=\"on\"" } else { "" }, &format!("{pic}{}", escape_xml(title))))
+        }).collect();
+        format!("<h2>{}</h2>{}", if nb { "Favoritter" } else { "Favourites" }, grid(cells, 3, "favs"))
+    };
+    body += &grid(vec![rooms, format!("<div class=\"m\">{search}{choices}</div>")], 2, "cols");
+    (body, music_url(if req.query.contains_key("room") { &room.id } else { "" }, query))
 }
 
 /// Volume moves from its live value, and play and pause say which they mean, so an old page cannot do the opposite.
@@ -720,18 +822,52 @@ fn speaker_action(app: &App, req: &Request) -> Response {
     if !constant_eq(field("token"), &form_token(&device)) {
         return Response::error(403, "Bad form token");
     }
-    let back = link("music", 0);
-    let Some(e) = speakers(app, &device).into_iter().find(|e| e.id == field("id")) else {
-        return redirect(&format!("{back}&notice=stale"));
+    let query = field("q").trim();
+    let query = if query.chars().count() <= 100 { query } else { "" };
+    let mut back_room = field("room").to_string();
+    let all = speakers(app, &device);
+    let Some(e) = all.iter().find(|e| e.id == field("id")) else {
+        return redirect(&format!("{}&notice=stale", music_url(&back_room, query)));
     };
-    let volume = |step: f64| number(&e, "volume_set").map(|v| ((v + step).clamp(0.0, 1.0) * 100.0).round() / 100.0).ok_or("no volume".to_string());
+    let bare = |x: &Entity| x.id.split_once(':').map_or(String::new(), |(_, id)| id.to_string());
+    // Rooms only group with rooms of the same integration on this screen.
+    let anchor = all.iter().find(|x| x.id == field("room")).filter(|x| x.id.split_once(':').map(|p| p.0) == e.id.split_once(':').map(|p| p.0));
+    let step = |by: f64| {
+        let capability = if field("cap") == "group_volume" { "group_volume" } else { "volume_set" };
+        let source = if capability == "group_volume" { speaker_lead(app, e) } else { e.clone() };
+        let now = number(&source, capability).ok_or("no volume".to_string())?;
+        app.registry.set(&e.id, capability, &json!(((now + by).clamp(0.0, 1.0) * 100.0).round() / 100.0))
+    };
+    let favourite = field("fav");
     let done = match field("action") {
         "play" => app.registry.set(&e.id, "speaker_playing", &json!(true)),
         "pause" => app.registry.set(&e.id, "speaker_playing", &json!(false)),
-        "down" => volume(-VOLUME_STEP).and_then(|v| app.registry.set(&e.id, "volume_set", &json!(v))),
-        "up" => volume(VOLUME_STEP).and_then(|v| app.registry.set(&e.id, "volume_set", &json!(v))),
+        "down" => step(-VOLUME_STEP),
+        "up" => step(VOLUME_STEP),
+        "fav" if !favourite.is_empty() && favourite.len() <= 2048 => app.registry.set(&e.id, "play_favourite", &json!(favourite)),
+        "save" if !favourite.is_empty() && favourite.len() <= 2048 => app.registry.set(&e.id, "add_favourite", &json!(favourite)),
+        "join" => anchor.ok_or("no such room".to_string()).and_then(|a| app.registry.set(&e.id, "speaker_group", &json!(lead_id(a).split_once(':').map_or("", |p| p.1)))),
+        "leave" => {
+            let rest: Vec<&Entity> = all.iter().filter(|x| lead_id(x) == lead_id(e) && x.id != e.id).collect();
+            // A group needs at least one room, as on the tablet.
+            if rest.is_empty() {
+                Ok(())
+            } else {
+                if back_room == e.id {
+                    back_room = rest[0].id.clone();
+                }
+                app.registry.set(&e.id, "speaker_group", &json!(bare(e)))
+            }
+        }
+        "all" => anchor.ok_or("no such room".to_string()).and_then(|a| {
+            let target = lead_id(a);
+            let target = target.split_once(':').map_or("", |p| p.1);
+            all.iter().filter(|x| lead_id(x) != lead_id(a) && x.id.split_once(':').map(|p| p.0) == a.id.split_once(':').map(|p| p.0))
+                .try_for_each(|x| app.registry.set(&x.id, "speaker_group", &json!(target)))
+        }),
         _ => return Response::error(400, "Unknown action"),
     };
+    let back = music_url(&back_room, query);
     redirect(&if done.is_ok() { back } else { format!("{back}&notice=failed") })
 }
 
@@ -1056,6 +1192,12 @@ mod tests {
         assert_eq!(control(&entity(vec![("onoff", off.clone()), ("button", press.clone())])), Some((Some(false), false)), "a real switch is switched");
         assert_eq!(control(&entity(vec![("button", press)])), Some((None, true)));
         assert_eq!(control(&entity(vec![("onoff", on)])), None, "nothing to press");
+    }
+
+    #[test]
+    fn music_addresses_are_encoded() {
+        assert_eq!(music_url("", ""), "/kindle?view=music&page=0");
+        assert_eq!(music_url("a:b", "rock & roll\r\nX: y"), "/kindle?view=music&page=0&room=a%3Ab&q=rock%20%26%20roll%0D%0AX%3A%20y");
     }
 
     #[test]
