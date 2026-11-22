@@ -134,7 +134,7 @@ music, doorbell and its camera), further entities for the menu pages, and up to
 
 Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no JavaScript or live connection, and refreshes every five minutes while the Kindle is awake.
 
-- Pairing uses the normal code and PIN. The screen then keeps an `HttpOnly` cookie scoped to `/kindle`.
+- Pairing uses the normal code and PIN, with a QR code for the address. The screen then keeps an `HttpOnly` cookie scoped to `/kindle`.
 - Each press is a form with a token derived from the screen, and a fingerprint of what the page showed. A stale page presses nothing and asks for another tap.
 - It shows the same controls as the e-ink picture below, four across and sixteen to a page, each with its live value. Locks, alarms and unclassified devices stay off it.
 - Info boxes above the buttons show indoor, outdoor, wind, the forecast and the screen's sensors, at most eight.

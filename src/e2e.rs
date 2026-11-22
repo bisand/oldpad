@@ -193,7 +193,15 @@ fn phone_and_tablet_end_to_end() {
     let pending = cookie_of(&started);
     assert!(started.headers["set-cookie"].contains("HttpOnly"));
     let (kindle_code, kindle_pin) = { let v: Vec<&str> = pending.split('=').nth(1).unwrap().split('.').collect(); (v[2].to_string(), v[3].to_string()) };
-    assert!(text(&web("GET", "/kindle", &pending, None)).contains(&kindle_pin), "shows the PIN");
+    let pairing_page = text(&web("GET", "/kindle", &pending, None));
+    assert!(pairing_page.contains(&kindle_pin), "shows the PIN");
+    let qr_path = format!("/kindle/qr/{kindle_code}.png");
+    assert!(pairing_page.contains(&qr_path), "shows the QR code");
+    let qr = web("GET", &qr_path, &pending, None);
+    assert_eq!((qr.status, qr.headers["content-type"].as_str()), (200, "image/png"));
+    assert!(qr.body.len() < 100_000, "{}", qr.body.len());
+    assert_eq!(web("GET", &qr_path, "", None).status, 404, "only the browser that started it");
+    assert_eq!(web("GET", "/kindle/qr/AAAAAAAA.png", &pending, None).status, 404, "only its own code");
     let (s, kindle_device) = phone.call("POST", &format!("/api/admin/pair/{kindle_code}"), Some(json!({ "name": "Kindle", "pin": kindle_pin })));
     assert_eq!(s, 200);
     let kindle_id = kindle_device["id"].as_str().unwrap().to_string();
