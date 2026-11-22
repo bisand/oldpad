@@ -2,6 +2,8 @@
 
 Give an old iPad a second life as a home dashboard on the wall.
 
+**[Website, screenshots and guides](https://bisand.github.io/oldpad/)**
+
 oldpad is one small server binary plus a deliberately old-fashioned web page.
 The server does the heavy lifting — talking to [Homey](https://homey.app) or
 [Home Assistant](https://www.home-assistant.io) — and the tablet only draws what it is
@@ -158,7 +160,8 @@ build without changing any image. Draft releases build nothing.
 
 Adding a home automation system is one Rust module: see
 [docs/integrations.md](docs/integrations.md). The admin wizard is generated
-from the fields you declare.
+from the fields you declare. There are more ways to help, with or without code,
+in [How to contribute](https://bisand.github.io/oldpad/contribute/).
 
 ## License
 
