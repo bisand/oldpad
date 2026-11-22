@@ -89,6 +89,7 @@ tbody th { font-weight: 700; white-space: nowrap; }
 .feature.flip { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
 .feature.flip > :first-child { order: 2; }
 .feature p { max-width: 38ch; margin: .7rem 0 0; }
+.feature .credit { color: var(--muted); font-size: .875rem; }
 
 .connects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem clamp(2rem, 6vw, 5rem); }
 .connects h2, .connects > p { grid-column: 1 / -1; max-width: none; }
