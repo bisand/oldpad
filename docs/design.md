@@ -132,7 +132,7 @@ music, doorbell and its camera), further entities for the menu pages, and up to
 
 ## Kindle in its own browser (no jailbreak)
 
-Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no live connection, and works without JavaScript. A small script sends presses in the background and changes only what differs, to spare the panel a full redraw. The page refreshes every five minutes while the Kindle is awake.
+Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML and works without JavaScript, then reloading every five minutes. With JavaScript it listens to the tablet's event stream at `/kindle/events`, sends presses in the background and changes only what differs, to spare the panel a full redraw. Search results are not refreshed live, because each refresh would ask the music service.
 
 - Pairing uses the normal code and PIN, with a QR code for the address. The screen then keeps an `HttpOnly` cookie scoped to `/kindle`.
 - Each press is a form with a token derived from the screen, and a fingerprint of what the page showed. A stale page presses nothing and asks for another tap.

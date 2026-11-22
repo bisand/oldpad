@@ -259,6 +259,14 @@ pub fn route(app: &App, req: &Request, s: &[&str]) -> Response {
     match (req.method.as_str(), s) {
         ("GET", ["kindle"]) => show(app, req),
         ("GET", ["kindle", "style.css"]) => Response::new(200, "text/css; charset=utf-8", stylesheet()).header("Cache-Control", "no-cache"),
+        ("GET", ["kindle", "events"]) => match screen_device(app, req) {
+            Some(device) => {
+                let (tx, rx) = std::sync::mpsc::channel();
+                app.add_client(&device, tx);
+                Response::stream(rx)
+            }
+            None => Response::error(401, "Not paired"),
+        },
         ("GET", ["kindle", "app.js"]) => Response::new(200, "text/javascript; charset=utf-8", PAGE_JS).header("Cache-Control", "no-cache"),
         ("GET", ["kindle", "icons.png"]) => Response::new(200, "image/png", ICON_SHEET).header("Cache-Control", "public, max-age=86400"),
         ("GET", ["kindle", "qr", file]) => pairing_qr(app, req, file),
@@ -303,9 +311,12 @@ fn redirect(to: &str) -> Response {
     Response::new(303, "text/plain; charset=utf-8", "").header("Location", to).header("Cache-Control", "no-store")
 }
 
-fn html(title: &str, refresh: u32, refresh_to: &str, body: &str) -> Response {
+/// With `live` the script keeps the page current, so only a browser without scripts reloads it.
+fn html(title: &str, refresh: u32, refresh_to: &str, body: &str, live: bool) -> Response {
+    let reload = format!("<meta http-equiv=\"refresh\" content=\"{refresh};url={refresh_to}\">");
+    let reload = if live { format!("<noscript>{reload}</noscript>") } else { reload };
     let page = format!(
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"{refresh};url={refresh_to}\"><title>{}</title><link rel=\"stylesheet\" href=\"/kindle/style.css\"></head><body>{body}</body></html>",
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">{reload}<title>{}</title><link rel=\"stylesheet\" href=\"/kindle/style.css\"></head><body>{body}</body></html>",
         escape_xml(title)
     );
     Response::new(200, "text/html; charset=utf-8", page).header("Cache-Control", "no-store").header("Content-Security-Policy", PAGE_CSP)
@@ -344,14 +355,14 @@ fn show(app: &App, req: &Request) -> Response {
                     "<div class=\"center\"><h1>{title}</h1><p>{scan}</p><img class=\"qr\" src=\"/kindle/qr/{0}.png\" alt=\"{alt}\"><p class=\"pin\">{pin_label}</p><p class=\"code\">{1}</p><p class=\"address\">{or}: {2}</p></div>",
                     escape_xml(code), escape_xml(pin), escape_xml(&url)
                 );
-                return html(title, PAIR_REFRESH, "/kindle", &body);
+                return html(title, PAIR_REFRESH, "/kindle", &body, false);
             }
             _ => {}
         }
     }
     let (title, label) = if nb { ("Koble til Kindle", "Start") } else { ("Pair this Kindle", "Start") };
     let body = format!("<div class=\"center\"><h1>oldpad</h1><p>{title}</p><form method=\"post\" action=\"/kindle/pair\"><button class=\"start\" type=\"submit\">{label}</button></form></div>");
-    html(title, PAGE_REFRESH, "/kindle", &body).header("Set-Cookie", &cookie(app, PAIR_COOKIE, "", 0))
+    html(title, PAGE_REFRESH, "/kindle", &body, false).header("Set-Cookie", &cookie(app, PAIR_COOKIE, "", 0))
 }
 
 fn pair_url(app: &App, code: &str) -> String {
@@ -510,7 +521,7 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let rows = menu_rows(entries.len());
     let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
     let body = format!("{body}<script src=\"/kindle/app.js\"></script>");
-    html(&device.name, PAGE_REFRESH, &escape_xml(&here), &body)
+    html(&device.name, PAGE_REFRESH, &escape_xml(&here), &body, true)
 }
 
 /// Rows of equal columns; a short last row keeps its cells the same width.
