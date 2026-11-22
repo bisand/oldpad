@@ -180,6 +180,14 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(tablet.call("GET", &format!("/api/tablet/camera?id={iid}:lamp"), None).0, 502, "on this screen, but a lamp has no picture");
     assert_eq!(phone.call("PUT", &dev, Some(json!({ "more": [plug, speaker, kitchen] }))).0, 200);
 
+    // --- doorbell: its camera may be read, without becoming a page or tile
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "panels": { "outdoor": outdoor, "doorbell": heater, "door_camera": door } }))).0, 200);
+    let (_, state) = tablet.call("GET", "/api/tablet", None);
+    assert_eq!((state["panels"]["doorbell"]["name"].as_str().is_some(), state["panels"]["door_camera"]["class"].as_str()), (true, Some("camera")));
+    assert_eq!(tablet.call("GET", &camera, None).0, 200);
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "panels": { "outdoor": outdoor } }))).0, 200);
+    assert_eq!(tablet.call("GET", &camera, None).0, 403, "gone with the setting");
+
     // --- history: only for what this screen shows, and only where it exists
     let (s, hist) = tablet.call("GET", &format!("/api/tablet/history?id={outdoor}"), None);
     assert_eq!((s, hist["measure_temperature"].as_array().map(Vec::len)), (200, Some(96)));

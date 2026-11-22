@@ -127,7 +127,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                             "id": p.id, "name": p.name, "icon": p.icon,
                             "items": p.items.iter().map(|i| if i.starts_with("card:") { json!({ "card": &i[5..] }) } else { get(i) }).collect::<Vec<_>>(),
                         })).collect::<Vec<_>>(),
-                        "panels": { "indoor": panel(&p.indoor), "outdoor": panel(&p.outdoor), "wind": panel(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker) },
+                        "panels": { "indoor": panel(&p.indoor), "outdoor": panel(&p.outdoor), "wind": panel(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker), "doorbell": panel(&p.doorbell), "door_camera": panel(&p.door_camera) },
                     })))
                 }
                 // Base64 in JSON, not an img URL: a camera must need the screen's sign-in.

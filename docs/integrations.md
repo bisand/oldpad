@@ -43,6 +43,8 @@ An instance may also implement `search(entity, query)`, returning `[{id, title, 
 
 **History.** Give an entity a `history` capability with value null and implement `history(entity)`, returning `{capability: [[epoch, value], …]}` for the last 24 hours. The tablet's graphs page plots it for the screen's indoor, outdoor and wind readings. Keep the answer cheap: every screen on that page asks every 5 minutes.
 
+**Doorbell.** A screen can pick any entity with an `alarm_*` capability as its doorbell, and optionally a camera. When that capability changes to true, the tablet shows a pop-up for a minute. It must go back to false before the next ring counts.
+
 **Accounts.** An instance can offer accounts to sign in to (`accounts()` returns `[{id, name, connected}]`); the admin page shows a Connect button for each. `connect(account)` returns the URL where the admin signs in and finishes in the background. Keep what it earns (a token) with `Event::Remember { key, value }`: the key must start with `_`. Such keys are stored with the integration's config, handed to `start` on the next start, kept when the admin edits the fields, and never sent to the browser. Sonos connects Spotify this way, through Sonos's own music-service sign-in (`src/integrations/smapi.rs`).
 
 `start` may block (it runs on its own thread) and should fail with a clear

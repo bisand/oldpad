@@ -26,14 +26,14 @@
     indoor: 'Inne', outdoor: 'Ute', clock: 'Klokken', tomorrow: 'I morgen', on: 'På', off: 'Av', run: 'Kjør', unavailable: 'Utilgjengelig',
     now: 'Nå', today: 'I dag', pair: 'Koble til denne skjermen', pairLead: 'Skann koden med telefonen og logg inn med passnøkkel.',
     or: 'eller åpne', code: 'Kode', waiting: 'Venter på godkjenning…', getting: 'Henter kode…', offline: 'Får ikke kontakt med serveren. Prøver igjen…',
-    calMonth: 'Måned', calWeek: 'Uke', calWork: 'Arbeidsuke', calDay: 'Dag', calList: 'Liste', calComing: 'Kommende', monthsLong: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'], pairPin: 'Tall å taste inn', failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', graphTemp: 'Temperatur', graphHum: 'Luftfuktighet', graphCo2: 'CO₂', graphWind: 'Vind', noHistory: 'Ingen historikk ennå', nightClock: 'Nattklokke etter 5 minutter uten berøring', nightOff: 'Av', nightOn: 'På', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
+    calMonth: 'Måned', calWeek: 'Uke', calWork: 'Arbeidsuke', calDay: 'Dag', calList: 'Liste', calComing: 'Kommende', monthsLong: ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'desember'], pairPin: 'Tall å taste inn', failed: 'Det gikk ikke.', empty: 'Ingenting her ennå. Velg innhold for skjermen i admin på telefonen.', nothing: 'Ingenting spilles', theme: 'Utseende', bellHint: 'Trykk for å lukke', graphTemp: 'Temperatur', graphHum: 'Luftfuktighet', graphCo2: 'CO₂', graphWind: 'Vind', noHistory: 'Ingen historikk ennå', nightClock: 'Nattklokke etter 5 minutter uten berøring', nightOff: 'Av', nightOn: 'På', themeAuto: 'Automatisk', themeDay: 'Lyst', themeNight: 'Mørkt', thisScreen: 'Denne skjermen', size: 'Klokke og temperatur', sizeNormal: 'Normal', sizeLarge: 'Store', sizeXl: 'Ekstra store', reload: 'Last inn på nytt', preview: 'Forhåndsvisning: her kan du se, men ikke styre.', next: 'Neste timer', days3: 'Neste dager', rooms: 'Rom', allRooms: 'Alle rom', favourites: 'Favoritter', search: 'Søk etter musikk og radio', searching: 'Søker…', noHits: 'Fant ingenting.', ships: 'Båter i nærheten', noShips: 'Ingen båter innen', radar: 'Radar', chart: 'Sjøkart', map: 'Kart', ago: 'for % min siden', price: 'Strømpris', priceNow: 'Nå', cheapest: 'Billigst', dearest: 'Dyrest', krKwh: 'kr/kWh', noPrices: 'Ingen priser ennå', nowDep: 'Nå', min: 'min', cancelled: 'Innstilt', platform: 'Plf.', noDeps: 'Ingen avganger', noEvents: 'Ingenting i kalenderen', allDay: 'Hele dagen', busy: 'Opptatt', warnings: 'Farevarsler', noWarnings: 'Ingen farevarsler', levels: { 2: 'Gult nivå', 3: 'Oransje nivå', 4: 'Rødt nivå' }, fromT: 'fra', untilT: 'til', more: 'til', source: 'Kilde: Meteorologisk institutt', kn: 'kn', shipKinds: { fishing: 'Fiske', tug: 'Slepebåt', sailing: 'Seilbåt', pleasure: 'Fritidsbåt', fast: 'Hurtigbåt', pilot: 'Los', sar: 'Redning', passenger: 'Passasjer', cargo: 'Last', tanker: 'Tankskip', other: 'Annet' }, yes: 'Ja', no: 'Nei', close: 'Lukk', kinds: { track: 'Sanger', playlist: 'Spillelister', album: 'Album', radio: 'Radio' }
   }, en: {
     days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
     months: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
     indoor: 'Indoor', outdoor: 'Outdoor', clock: 'Time', tomorrow: 'Tomorrow', on: 'On', off: 'Off', run: 'Run', unavailable: 'Unavailable',
     now: 'Now', today: 'Today', pair: 'Pair this screen', pairLead: 'Scan the code with your phone and sign in with your passkey.',
     or: 'or open', code: 'Code', waiting: 'Waiting for approval…', getting: 'Getting a code…', offline: 'Cannot reach the server. Retrying…',
-    calMonth: 'Month', calWeek: 'Week', calWork: 'Work week', calDay: 'Day', calList: 'List', calComing: 'Coming up', monthsLong: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], pairPin: 'Number to type', failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', graphTemp: 'Temperature', graphHum: 'Humidity', graphCo2: 'CO₂', graphWind: 'Wind', noHistory: 'No history yet', nightClock: 'Night clock after 5 idle minutes', nightOff: 'Off', nightOn: 'On', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
+    calMonth: 'Month', calWeek: 'Week', calWork: 'Work week', calDay: 'Day', calList: 'List', calComing: 'Coming up', monthsLong: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], pairPin: 'Number to type', failed: 'That did not work.', empty: 'Nothing here yet. Choose what this screen shows in the admin page on your phone.', nothing: 'Nothing playing', theme: 'Appearance', bellHint: 'Tap to close', graphTemp: 'Temperature', graphHum: 'Humidity', graphCo2: 'CO₂', graphWind: 'Wind', noHistory: 'No history yet', nightClock: 'Night clock after 5 idle minutes', nightOff: 'Off', nightOn: 'On', themeAuto: 'Automatic', themeDay: 'Light', themeNight: 'Dark', thisScreen: 'This screen', size: 'Clock and temperature', sizeNormal: 'Normal', sizeLarge: 'Large', sizeXl: 'Extra large', reload: 'Reload', preview: 'Preview: look, but no controls.', next: 'Next hours', days3: 'Coming days', rooms: 'Rooms', allRooms: 'All rooms', favourites: 'Favourites', search: 'Search music and radio', searching: 'Searching…', noHits: 'Nothing found.', ships: 'Ships nearby', noShips: 'No ships within', radar: 'Radar', chart: 'Chart', map: 'Map', ago: '% min ago', price: 'Electricity price', priceNow: 'Now', cheapest: 'Cheapest', dearest: 'Dearest', krKwh: 'kr/kWh', noPrices: 'No prices yet', nowDep: 'Now', min: 'min', cancelled: 'Cancelled', platform: 'Pl.', noDeps: 'No departures', noEvents: 'Nothing on the calendar', allDay: 'All day', busy: 'Busy', warnings: 'Weather warnings', noWarnings: 'No weather warnings', levels: { 2: 'Yellow level', 3: 'Orange level', 4: 'Red level' }, fromT: 'from', untilT: 'until', more: 'more', source: 'Source: MET Norway', kn: 'kn', shipKinds: { fishing: 'Fishing', tug: 'Tug', sailing: 'Sailing', pleasure: 'Pleasure', fast: 'High speed', pilot: 'Pilot', sar: 'Rescue', passenger: 'Passenger', cargo: 'Cargo', tanker: 'Tanker', other: 'Other' }, yes: 'Yes', no: 'No', close: 'Close', kinds: { track: 'Songs', playlist: 'Playlists', album: 'Albums', radio: 'Radio' }
   } };
   var T = TEXTS[NB ? 'nb' : 'en'];
   // Household settings from the server; these defaults hold until the first load.
@@ -199,6 +199,7 @@
     save(TOKEN_KEY, null);
     if (events) { events.close(); events = null; }
     linkBack();
+    bellClose();
     startPairing();
   }
 
@@ -300,7 +301,9 @@
         var msg = JSON.parse(e.data);
         var ent = entities[msg.id];
         if (ent && ent.capabilities && ent.capabilities[msg.capability]) {
+          var was = ent.capabilities[msg.capability].value;
           ent.capabilities[msg.capability].value = msg.value;
+          if (msg.id === layout.panels.doorbell && msg.capability.indexOf('alarm_') === 0 && msg.value === true && was !== true) { bellRing(); }
           render();
         }
       }, false);
@@ -1080,6 +1083,55 @@
       '<div class="bars">' + bars + '</div></div>';
   }
 
+  // ------------------------------------------------------------- doorbell
+
+  var bellOn = false, bellRun = 0, bellTimer = null, bellAt = 0;
+
+  function bellRing() {
+    wake();
+    clearTimeout(bellTimer);
+    bellTimer = setTimeout(bellClose, 60000);
+    if (bellOn) { return; }
+    bellOn = true;
+    bellRun++;
+    $('bell-title').textContent = panel('doorbell').name;
+    $('bell-hint').textContent = T.bellHint;
+    $('bell').className = 'bell';
+    bellShot(bellRun);
+  }
+
+  function bellClose() {
+    clearTimeout(bellTimer);
+    if (!bellOn) { return; }
+    bellOn = false;
+    bellRun++;
+    $('bell').className = 'bell hidden';
+    $('bell-img').className = 'hidden';
+    $('bell-img').removeAttribute('src');
+    $('bell-t').className = 'cam-t hidden';
+    bellAt = 0;
+  }
+
+  // One picture at a time, so a slow camera cannot pile up requests.
+  function bellShot(run) {
+    var id = layout.panels.door_camera;
+    if (!id) { return; }
+    request('GET', '/api/tablet/camera?id=' + encodeURIComponent(id), null, {}, function (status, data) {
+      if (run !== bellRun) { return; }
+      if (status === 200 && data && data.data) {
+        bellAt = new Date().getTime();
+        $('bell-img').src = 'data:' + data.type + ';base64,' + data.data;
+        $('bell-img').className = '';
+      }
+      if (bellAt) {
+        // In red once it stops updating: a frozen picture must not pass for live.
+        $('bell-t').textContent = hm(bellAt / 1000);
+        $('bell-t').className = 'cam-t' + (new Date().getTime() - bellAt > 10000 ? ' old' : '');
+      }
+      setTimeout(function () { if (run === bellRun) { bellShot(run); } }, 3000);
+    });
+  }
+
   // ------------------------------------------------------------- graphs
 
   var hist = {}, histAt = 0;
@@ -1521,6 +1573,8 @@
     var act = el.getAttribute('data-act'), id = el.getAttribute('data-id'), e = id ? entities[id] : null, c, prev, next, i, all;
     if (act === 'wake') {
       wake();
+    } else if (act === 'bellclose') {
+      bellClose();
     } else if (act === 'page') {
       page = el.getAttribute('data-page');
       sheet = null;

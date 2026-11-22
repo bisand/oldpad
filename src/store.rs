@@ -81,11 +81,15 @@ pub struct Panels {
     pub wind: Option<String>,
     pub weather: Option<String>,
     pub speaker: Option<String>,
+    /// Its `alarm_*` turning on brings up the doorbell pop-up.
+    pub doorbell: Option<String>,
+    /// The camera that pop-up shows, if any.
+    pub door_camera: Option<String>,
 }
 
 impl Panels {
     pub fn ids(&self) -> impl Iterator<Item = &String> {
-        [&self.indoor, &self.outdoor, &self.wind, &self.weather, &self.speaker].into_iter().flatten()
+        [&self.indoor, &self.outdoor, &self.wind, &self.weather, &self.speaker, &self.doorbell, &self.door_camera].into_iter().flatten()
     }
 }
 
