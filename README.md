@@ -123,17 +123,19 @@ Admin and tablets share one HTTPS address, for example `https://dash.example.com
 
 ## Releases
 
-Publishing a GitHub release builds and publishes the image for that version. The
-tag is the version, in [semver](https://semver.org) with a leading `v`:
+Publishing a GitHub release builds and publishes the image for that version.
+Releases are always made from `main`. The tag is the version, in
+[semver](https://semver.org) with a leading `v`, and the notes list what changed
+since the last release:
 
 ```bash
-gh release create v1.2.3 --generate-notes
+git log --format='- %s' "$(git describe --tags --abbrev=0 main)..main" | gh release create v1.2.3 --target main --notes-file -
 ```
 
 A prerelease needs a suffix and the flag:
 
 ```bash
-gh release create v1.3.0-rc.1 --prerelease --generate-notes
+git log --format='- %s' "$(git describe --tags --abbrev=0 main)..main" | gh release create v1.3.0-rc.1 --target main --prerelease --notes-file -
 ```
 
 | Image tag | Points to |
