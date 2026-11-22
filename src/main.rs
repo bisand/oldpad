@@ -89,7 +89,7 @@ pub fn serve(app: Arc<app::App>, listener: TcpListener, admin_port: bool) {
         std::thread::spawn(move || {
             stream.set_read_timeout(Some(Duration::from_secs(15))).ok();
             stream.set_write_timeout(Some(Duration::from_secs(15))).ok();
-            let parsed = http::read_request(&stream, ip.to_string());
+            let parsed = http::read_request(&stream, ip.to_string(), admin_port, &|r| api::body_limit(&app, r));
             {
                 let mut reading = reading.lock().unwrap();
                 if let Some(n) = reading.get_mut(&ip) {
@@ -100,8 +100,7 @@ pub fn serve(app: Arc<app::App>, listener: TcpListener, admin_port: bool) {
                 }
             }
             let res = match parsed {
-                Ok(mut req) => {
-                    req.admin_port = admin_port;
+                Ok(req) => {
                     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| api::handle(&app, &req)))
                         .unwrap_or_else(|_| http::Response::error(500, "Internal error"));
                     if res.status >= 500 || util::verbose() {

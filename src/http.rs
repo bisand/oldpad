@@ -10,8 +10,12 @@ use std::time::{Duration, Instant};
 
 pub const MAX_HEAD: usize = 16 * 1024;
 pub const MAX_BODY: usize = 64 * 1024;
+/// A backup can outgrow every other request. Only a signed-in admin may send this much.
+pub const MAX_RESTORE: usize = 4 * 1024 * 1024;
 /// A whole request must arrive within this, however slowly it trickles in.
 const REQUEST_DEADLINE: Duration = Duration::from_secs(10);
+/// For a body past `MAX_BODY`, which a phone on weak Wi-Fi needs longer to send.
+const LARGE_BODY_DEADLINE: Duration = Duration::from_secs(60);
 
 /// Reads from the socket until a fixed moment, not per read.
 struct Deadline<'a> {
@@ -167,8 +171,9 @@ pub fn parse_query(q: &str) -> HashMap<String, String> {
         .collect()
 }
 
-/// Reads one request. Errors come back as the response to send.
-pub fn read_request(stream: &TcpStream, peer: String) -> Result<Request, Response> {
+/// Reads one request. Errors come back as the response to send. `limit` sees the
+/// request before its body is read and says how large that body may be.
+pub fn read_request(stream: &TcpStream, peer: String, admin_port: bool, limit: &dyn Fn(&Request) -> usize) -> Result<Request, Response> {
     let mut reader = BufReader::new(Deadline { stream, until: Instant::now() + REQUEST_DEADLINE }.take((MAX_HEAD + MAX_BODY) as u64));
     let mut head_len = 0;
     let mut lines = Vec::new();
@@ -211,22 +216,27 @@ pub fn read_request(stream: &TcpStream, peer: String) -> Result<Request, Respons
         Some(v) => v.parse().map_err(|_| Response::error(400, "Bad Content-Length"))?,
         None => 0,
     };
-    if len > MAX_BODY {
-        return Err(Response::error(413, "Body too large"));
-    }
-    let mut body = vec![0; len];
-    reader.read_exact(&mut body).map_err(|_| Response::error(400, "Body shorter than Content-Length"))?;
-
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    Ok(Request {
+    let mut req = Request {
         method: method.to_string(),
         path: path.to_string(),
         query: parse_query(query),
         headers,
-        body,
+        body: Vec::new(),
         peer,
-        admin_port: false,
-    })
+        admin_port,
+    };
+    if len > limit(&req) {
+        return Err(Response::error(413, "Body too large"));
+    }
+    if len > MAX_BODY {
+        reader.get_mut().get_mut().until = Instant::now() + LARGE_BODY_DEADLINE;
+    }
+    reader.get_mut().set_limit(len as u64);
+    let mut body = vec![0; len];
+    reader.read_exact(&mut body).map_err(|_| Response::error(400, "Body shorter than Content-Length"))?;
+    req.body = body;
+    Ok(req)
 }
 
 const SECURITY_HEADERS: &[(&str, &str)] = &[
@@ -289,7 +299,7 @@ mod tests {
         });
         let (server, _) = listener.accept().unwrap();
         let _keep = client.join().unwrap();
-        read_request(&server, "test".into())
+        read_request(&server, "test".into(), false, &|_| MAX_BODY)
     }
 
     #[test]

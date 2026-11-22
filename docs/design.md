@@ -20,7 +20,7 @@ written to run on iOS 5 and later. This sets the rules for the tablet page:
 
 Rust, standard library first. One thread per connection (capped at 128), one
 request per connection, `Content-Length` bodies only, 16 KB head and 64 KB body
-limits. SSE streams hold their thread for their lifetime, which is fine for a
+limits (4 MB for a signed-in admin restoring a backup). SSE streams hold their thread for their lifetime, which is fine for a
 household of screens. State is one JSON file, rewritten atomically.
 
 **Packaging.** A static musl binary on an empty base image, published to

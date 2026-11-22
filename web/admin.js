@@ -464,6 +464,7 @@ async function settingsView() {
   const file = h('input', { type: 'file', accept: 'application/json,.json', id: 'restore', class: 'hidden', onchange: async () => {
     const f = file.files[0];
     if (!f) return;
+    if (f.size > 4 * 1024 * 1024) { toast('That backup is larger than the 4 MB limit.', true); file.value = ''; return; }
     try {
       const backup = JSON.parse(await f.text());
       const when = backup.exported ? new Date(backup.exported * 1000).toLocaleString() : 'an unknown date';

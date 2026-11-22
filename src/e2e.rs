@@ -283,6 +283,30 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(phone.call("POST", "/api/admin/restore", Some(backup)).0, 200);
     assert_eq!(tablet.call("GET", "/api/tablet", None).1["device"]["name"], "Kitchen", "restored, and still paired");
 
+    // --- a backup past the normal limit: for a signed-in admin only, within its own limit
+    let (_, mut large) = phone.call("GET", "/api/admin/backup", None);
+    large["padding"] = json!("x".repeat(200_000));
+    let verified: Vec<u64> = app.store.lock().unwrap().data.sessions.iter().map(|s| s.verified).collect();
+    app.store.lock().unwrap().data.sessions.iter_mut().for_each(|s| s.verified = 0);
+    let (s, stale) = phone.call("POST", "/api/admin/restore", Some(large.clone()));
+    assert_eq!((s, stale["reauth"].as_bool()), (403, Some(true)), "a stale session gets the passkey prompt");
+    app.store.lock().unwrap().data.sessions.iter_mut().zip(verified).for_each(|(s, v)| s.verified = v);
+    assert_eq!(phone.call("POST", "/api/admin/restore", Some(large)).0, 200);
+    let status_for = |path: &str, cookie: Option<&str>, len: usize| {
+        let mut c = TcpStream::connect(base.trim_start_matches("http://")).unwrap();
+        let cookie = cookie.map_or(String::new(), |v| format!("Cookie: {v}\r\n"));
+        write!(c, "POST {path} HTTP/1.1\r\nHost: x\r\nX-Oldpad: 1\r\nContent-Type: application/json\r\n{cookie}Content-Length: {len}\r\n\r\n").unwrap();
+        let mut line = String::new();
+        BufReader::new(c).read_line(&mut line).unwrap();
+        line.split(' ').nth(1).unwrap().parse::<u16>().unwrap()
+    };
+    let (over, past) = (crate::http::MAX_BODY + 1, crate::http::MAX_RESTORE + 1);
+    let cookie = phone.cookie.clone().unwrap();
+    assert_eq!(status_for("/api/admin/restore", None, over), 413, "no sign-in, normal limit");
+    assert_eq!(status_for("/api/admin/restore", Some("oldpad_admin=wrong"), over), 413);
+    assert_eq!(status_for("/api/admin/restore", Some(&cookie), past), 413, "the larger limit holds too");
+    assert_eq!(status_for("/api/admin/settings", Some(&cookie), over), 413, "other routes keep the normal limit");
+
     // --- removing the screen revokes its token
     assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{device_id}"), None).0, 200);
     assert_eq!(tablet.call("GET", "/api/tablet", None).0, 401);

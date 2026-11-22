@@ -99,7 +99,7 @@ Admin and tablets share one HTTPS address, for example `https://dash.example.com
 
 - Put a TLS-terminating proxy in front, and permanently redirect all HTTP to HTTPS.
 - Old iPads do not trust Let's Encrypt's root. Install **ISRG Root X1** on each one before enabling the redirect, and compare its fingerprint with the one Let's Encrypt publishes.
-- The proxy must buffer requests (except `/api/events`), rate-limit by client address, and set HSTS.
+- The proxy must buffer requests (except `/api/events`), rate-limit by client address, and set HSTS. Allow bodies up to 4 MB on `/api/admin/restore`, as nginx stops at 1 MB by default.
 - Pairing needs the number shown on the screen. Backups, new admins, approving a screen, removing access and moving a stored key to a new address ask for a fresh passkey check.
 
 ## Why it is built this way

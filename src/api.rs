@@ -200,6 +200,13 @@ fn rp(app: &App) -> Rp<'_> {
     Rp { id: &app.cfg.rp_id, origin: &app.cfg.public_url }
 }
 
+/// How large this request's body may be. A stale session may send a backup too:
+/// the route then answers with the passkey prompt rather than a dropped connection.
+pub fn body_limit(app: &App, req: &Request) -> usize {
+    let restore = req.method == "POST" && req.segments() == ["api", "admin", "restore"];
+    if restore && app.admin_from(req).is_some() { crate::http::MAX_RESTORE } else { crate::http::MAX_BODY }
+}
+
 fn str_field<'a>(v: &'a Value, key: &str, max: usize) -> Result<&'a str, Response> {
     let s = v[key].as_str().map(str::trim).unwrap_or("");
     if s.is_empty() || s.len() > max {
@@ -545,7 +552,6 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
         }
         ("POST", ["restore"]) => {
             require_fresh(app, req)?;
-            // shortcut: request bodies are capped at 64 KB; raise http::MAX_BODY if a household outgrows it.
             let b = req.json()?;
             if b["oldpad"] != 1 {
                 return Err(Response::error(400, "This is not an oldpad backup"));
