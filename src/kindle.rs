@@ -2,10 +2,11 @@
 //! and sends back where it was tapped. Sized for a Paperwhite 3 held upright.
 
 use crate::app::App;
+use crate::integrations::Entity;
 use crate::http::{Request, Response};
-use crate::store::Device;
+use crate::store::{Device, Page};
 use crate::http::parse_query;
-use crate::util::{constant_eq, escape_xml, sha256_hex};
+use crate::util::{constant_eq, escape_xml, now, sha256_hex};
 use serde_json::{json, Value};
 
 const W: usize = 1072;
@@ -29,8 +30,25 @@ const CONTROLLABLE: [&str; 4] = ["light", "socket", "thermostat", "button"];
 struct Item {
     id: String,
     name: String,
+    class: String,
     /// `None` for a scene, which has no state to show.
     on: Option<bool>,
+    /// A live value beside the state. Left out of the fingerprint, or a drifting reading would void every tap.
+    detail: Option<String>,
+}
+
+fn number(e: &Entity, capability: &str) -> Option<f64> {
+    e.capabilities.get(capability)?.value.as_f64()
+}
+
+fn detail(e: &Entity, on: Option<bool>) -> Option<String> {
+    if let Some(target) = number(e, "target_temperature") {
+        return Some(number(e, "measure_temperature").map_or(format!("{target:.1}°"), |now| format!("{now:.1}° → {target:.1}°")));
+    }
+    if let Some(watts) = number(e, "measure_power").filter(|_| on == Some(true)) {
+        return Some(format!("{watts:.0} W"));
+    }
+    number(e, "dim").filter(|_| on == Some(true)).map(|d| format!("{:.0} %", d * 100.0))
 }
 
 fn items(app: &App, device: &Device) -> Vec<Item> {
@@ -46,16 +64,16 @@ fn items(app: &App, device: &Device) -> Vec<Item> {
             (_, Some(c)) if c.settable => None,
             _ => return None,
         };
-        Some(Item { id: id.clone(), name: device.names.get(id).unwrap_or(&e.name).clone(), on })
+        Some(Item { id: id.clone(), name: device.names.get(id).unwrap_or(&e.name).clone(), class: e.class.clone(), on, detail: detail(&e, on) })
     }).collect()
 }
 
 /// One page of buttons, and a fingerprint of what it shows. A tap carries the
 /// fingerprint, so a picture gone stale can never press the wrong thing.
-fn page_of(all: Vec<Item>, wanted: u64) -> (Vec<Item>, usize, usize, String) {
-    let pages = all.len().div_ceil(PER_PAGE).max(1);
+fn page_of(all: Vec<Item>, wanted: u64, per_page: usize) -> (Vec<Item>, usize, usize, String) {
+    let pages = all.len().div_ceil(per_page).max(1);
     let page = (wanted as usize).min(pages - 1);
-    let shown: Vec<Item> = all.into_iter().skip(page * PER_PAGE).take(PER_PAGE).collect();
+    let shown: Vec<Item> = all.into_iter().skip(page * per_page).take(per_page).collect();
     let print: String = shown.iter().map(|i| format!("{}={:?};", i.id, i.on)).collect();
     let layout = sha256_hex(&format!("{page}/{pages}:{print}"))[..16].to_string();
     (shown, page, pages, layout)
@@ -89,7 +107,7 @@ fn hit(x: usize, y: usize, count: usize, pages: usize) -> Option<Hit> {
 
 pub fn screen(app: &App, device: &Device, req: &Request) -> Response {
     let wanted = req.query.get("page").and_then(|p| p.parse().ok()).unwrap_or(0);
-    let (shown, page, pages, layout) = page_of(items(app, device), wanted);
+    let (shown, page, pages, layout) = page_of(items(app, device), wanted, PER_PAGE);
     let nb = app.store.lock().unwrap().data.settings.language == "nb";
     // The server's clock may be in another zone, so the reader says what time it is.
     let time = req.query.get("time").filter(|t| valid_time(t)).map_or("", String::as_str);
@@ -139,7 +157,7 @@ pub fn tap(app: &App, device: &Device, body: &Value) -> Result<Response, Respons
     let (Some(x), Some(y)) = (body["x"].as_u64(), body["y"].as_u64()) else {
         return Err(Response::error(400, "Send x and y"));
     };
-    let (shown, page, pages, layout) = page_of(items(app, device), body["page"].as_u64().unwrap_or(0));
+    let (shown, page, pages, layout) = page_of(items(app, device), body["page"].as_u64().unwrap_or(0), PER_PAGE);
     if body["layout"].as_str() != Some(layout.as_str()) {
         return Err(Response::error(409, "The screen has changed"));
     }
@@ -173,15 +191,34 @@ fn press_item(app: &App, item: &Item) -> Result<(), String> {
 
 const SCREEN_COOKIE: &str = "oldpad_kindle";
 const PAIR_COOKIE: &str = "oldpad_kindle_pair";
-const PAGE_CSP: &str = "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+const PAGE_CSP: &str = "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 /// Long enough to see a change, rare enough to spare a reader's battery.
 const PAGE_REFRESH: u32 = 300;
 const PAIR_REFRESH: u32 = 5;
-const CSS: &str = "body{margin:0;padding:16px;background:#fff;color:#000;font-family:sans-serif;font-size:24px}\
-h1{font-size:32px;margin:0 0 8px}p{margin:8px 0}.temps{font-size:28px;font-weight:bold}\
-table{width:100%;border-collapse:separate;border-spacing:8px;table-layout:fixed}td{padding:0}form{margin:0}\
-button{display:block;width:100%;height:130px;padding:8px;border:3px solid #000;border-radius:0;background:#fff;color:#000;font-size:26px;font-weight:bold;text-align:left;overflow:hidden}\
-button.on{background:#000;color:#fff}button span{display:block;font-size:20px;font-weight:normal;margin-top:8px}\
+const COLUMNS: usize = 4;
+const PAGE_BUTTONS: usize = COLUMNS * 4;
+/// Two rows at most, so the buttons stay on the first screen.
+const MAX_BOXES: usize = COLUMNS * 2;
+// Tables, not flex or grid: the Kindle's browser is an old WebKit.
+const MENU_COLUMNS: usize = 6;
+/// One picture, so a page costs the reader's Wi-Fi one request: a black row, then a white one for what is on.
+const ICON_SHEET: &[u8] = include_bytes!("../web/kindle-icons.png");
+/// In the order they stand in the sheet. Drawn at twice the size they are shown, for the sharper panel.
+const ICONS: [&str; 20] = ["home", "music", "bulb", "thermo", "bolt", "cloud", "sun", "moon", "chart", "radio", "flame", "plug", "partly", "moonpartly", "rain", "sleet", "snow", "fog", "thunder", "wind"];
+const ICON_SIZE: usize = 36;
+const CSS: &str = "html{height:100%}body{height:100%;margin:0;padding:10px;-webkit-box-sizing:border-box;box-sizing:border-box;background:#fff;color:#000;font-family:sans-serif;font-size:20px}\
+.shell{position:relative;min-height:100%;-webkit-box-sizing:border-box;box-sizing:border-box}.r1{padding-bottom:82px}.r2{padding-bottom:160px}.r3{padding-bottom:238px}\
+.menu{position:absolute;left:0;right:0;bottom:0;display:table;table-layout:fixed;width:100%;border-spacing:6px}.menu div{display:table-row}\
+.menu a{display:table-cell;height:66px;vertical-align:middle;padding:0 4px;border:2px solid #000;color:#000;background:#fff;font-size:15px;font-weight:bold;text-align:center;text-decoration:none;overflow:hidden;word-wrap:break-word}.menu a.on{background:#000;color:#fff}.menu .ic{display:block;margin:0 auto 1px}\
+@media (orientation:landscape){.shell{padding-bottom:0}.menu{position:static;float:left;display:block;width:128px}.menu div{display:block}.menu a{display:block;height:auto;padding:6px 4px;margin-bottom:6px}.main{margin-left:138px}}\
+h1{font-size:26px;margin:0 4px 2px}p{margin:8px 4px}\
+table{width:100%;border-collapse:separate;border-spacing:6px;table-layout:fixed}td{padding:0;vertical-align:top}form{margin:0}\
+.box{height:112px;padding:6px 8px;border:2px solid #000;overflow:hidden;word-wrap:break-word}\
+.box small{display:block;font-size:15px;white-space:nowrap;overflow:hidden}.box b{display:block;font-size:30px;line-height:38px;white-space:nowrap;overflow:hidden}\
+.box b.words{font-size:18px;line-height:20px;height:40px;white-space:normal}.box span{display:block;font-size:15px;line-height:18px}\
+.box .ic{float:right}button .ic{display:block;margin-bottom:1px}\
+button{display:block;width:100%;height:116px;padding:3px 6px;border:3px solid #000;border-radius:0;background:#fff;color:#000;font-size:18px;line-height:21px;font-weight:bold;text-align:left;overflow:hidden;word-wrap:break-word}\
+button.on{background:#000;color:#fff}button span{display:block;font-size:15px;line-height:18px;font-weight:normal}\
 .nav{text-align:center;font-size:28px;margin-top:12px}.nav a{display:inline-block;color:#000;border:3px solid #000;padding:12px 36px;margin:0 12px;text-decoration:none}\
 .notice{border:3px solid #000;padding:8px}.code{font-size:40px;font-weight:bold;word-wrap:break-word}.start{height:90px;text-align:center}";
 
@@ -195,10 +232,36 @@ pub fn route(app: &App, req: &Request, s: &[&str]) -> Response {
     }
     match (req.method.as_str(), s) {
         ("GET", ["kindle"]) => show(app, req),
-        ("GET", ["kindle", "style.css"]) => Response::new(200, "text/css; charset=utf-8", CSS).header("Cache-Control", "no-cache"),
+        ("GET", ["kindle", "style.css"]) => Response::new(200, "text/css; charset=utf-8", stylesheet()).header("Cache-Control", "no-cache"),
+        ("GET", ["kindle", "icons.png"]) => Response::new(200, "image/png", ICON_SHEET).header("Cache-Control", "public, max-age=86400"),
         ("POST", ["kindle", "pair"]) => start_pairing(app),
         ("POST", ["kindle", "press"]) => press(app, req),
         _ => Response::error(404, "Not found"),
+    }
+}
+
+fn stylesheet() -> String {
+    let (size, sheet) = (ICON_SIZE, ICONS.len() * ICON_SIZE);
+    let mut css = format!("{CSS}.ic{{display:inline-block;width:{size}px;height:{size}px;background:url(/kindle/icons.png) no-repeat;-webkit-background-size:{sheet}px {}px;background-size:{sheet}px {}px}}", size * 2, size * 2);
+    for (i, name) in ICONS.iter().enumerate() {
+        let x = i * size;
+        css += &format!(".i-{name}{{background-position:-{x}px 0}}.on .i-{name}{{background-position:-{x}px -{size}px}}");
+    }
+    css
+}
+
+/// Decoration beside a word, so it is hidden from screen readers. An unknown name gets the cloud.
+fn icon(name: &str) -> String {
+    let known = ICONS.iter().find(|i| **i == name).unwrap_or(&"cloud");
+    format!("<i class=\"ic i-{known}\" aria-hidden=\"true\"></i>")
+}
+
+fn class_icon(class: &str) -> &'static str {
+    match class {
+        "light" => "bulb",
+        "socket" => "plug",
+        "thermostat" => "thermo",
+        _ => "bolt",
     }
 }
 
@@ -262,14 +325,62 @@ fn start_pairing(app: &App) -> Response {
     }
 }
 
+/// The address of a view, which only ever holds an id from `menu`.
+fn link(view: &str, page: usize) -> String {
+    if view == "home" { format!("/kindle?page={page}") } else { format!("/kindle?view={view}&page={page}") }
+}
+
+fn own_page<'a>(device: &'a Device, view: &str) -> Option<&'a Page> {
+    device.pages.get(view.strip_prefix('p')?.parse::<usize>().ok()?)
+}
+
+fn view_items(app: &App, device: &Device, view: &str) -> Vec<Item> {
+    let mut all = items(app, device);
+    if let Some(p) = own_page(device, view) {
+        all.retain(|i| p.items.contains(&i.id));
+        all.sort_by_key(|i| p.items.iter().position(|x| *x == i.id));
+        return all;
+    }
+    let classes: &[&str] = match view {
+        "home" => return all,
+        "lights" => &["light", "socket"],
+        "climate" => &["thermostat"],
+        "flows" => &["button"],
+        _ => &[],
+    };
+    all.retain(|i| classes.contains(&i.class.as_str()));
+    all
+}
+
+/// The tablet's pages that work without a live connection, then the admin's own. Empty ones stay out.
+fn menu(app: &App, device: &Device, nb: bool) -> Vec<(String, String, String)> {
+    let built_in = [("home", "Hjem", "Home", "home"), ("lights", "Lys", "Lights", "bulb"), ("climate", "Klima", "Climate", "thermo"), ("flows", "Scener", "Scenes", "bolt"), ("weather", "Vær", "Weather", "cloud")];
+    let fixed = built_in.iter().map(|(id, no, en, ic)| (id.to_string(), if nb { no } else { en }.to_string(), ic.to_string()));
+    let own = device.pages.iter().enumerate().map(|(i, p)| (format!("p{i}"), p.name.clone(), p.icon.clone()));
+    fixed.chain(own).filter(|(id, ..)| id == "home" || !view_items(app, device, id).is_empty() || !info_boxes(app, device, id, nb).is_empty()).collect()
+}
+
+fn menu_html(entries: &[(String, String, String)], view: &str) -> String {
+    // Never more than three rows, the most the stylesheet leaves room for.
+    let columns = entries.len().div_ceil(3).max(MENU_COLUMNS);
+    let rows: String = entries.chunks(columns).map(|row| {
+        let links: String = row.iter().map(|(id, label, ic)| {
+            let current = if id == view { " class=\"on\" aria-current=\"page\"" } else { "" };
+            format!("<a{current} href=\"{}\">{}{}</a>", escape_xml(&link(id, 0)), icon(ic), escape_xml(label))
+        }).collect();
+        format!("<div>{links}</div>")
+    }).collect();
+    format!("<nav class=\"menu\">{rows}</nav>")
+}
+
 fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let wanted = req.query.get("page").and_then(|p| p.parse().ok()).unwrap_or(0);
-    let (shown, page, pages, layout) = page_of(items(app, device), wanted);
-    let (indoor, outdoor) = temperatures(app, device);
+    let entries = menu(app, device, nb);
+    let view = entries.iter().find(|(id, ..)| Some(id) == req.query.get("view")).map_or("home", |(id, ..)| id.as_str());
+    let (shown, page, pages, layout) = page_of(view_items(app, device, view), wanted, PAGE_BUTTONS);
     let token = form_token(device);
     let mut body = format!("<h1>{}</h1>", escape_xml(&device.name));
-    let (in_label, out_label) = if nb { ("Inne", "Ute") } else { ("Indoor", "Outdoor") };
-    body += &format!("<p class=\"temps\">{in_label} {} &nbsp; {out_label} {}</p>", indoor.as_deref().unwrap_or("--"), outdoor.as_deref().unwrap_or("--"));
+    body += &grid(info_boxes(app, device, view, nb).iter().map(Info::html).collect());
     let notice = match req.query.get("notice").map(String::as_str) {
         Some("stale") => Some(if nb { "Siden var utdatert. Trykk på nytt." } else { "The page was out of date. Tap again." }),
         Some("failed") => Some(if nb { "Det virket ikke." } else { "That did not work." }),
@@ -278,38 +389,195 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     if let Some(n) = notice {
         body += &format!("<p class=\"notice\">{n}</p>");
     }
-    if shown.is_empty() {
+    if shown.is_empty() && view != "weather" {
         body += if nb { "<p>Ingen knapper er valgt for denne skjermen.</p>" } else { "<p>No controls are set up for this screen.</p>" };
     }
-    body += "<table>";
-    for (n, row) in shown.chunks(2).enumerate() {
-        body += "<tr>";
-        for (c, item) in row.iter().enumerate() {
-            let state = match (item.on, nb) {
-                (Some(true), true) => "På",
-                (Some(true), false) => "On",
-                (Some(false), true) => "Av",
-                (Some(false), false) => "Off",
-                (None, true) => "Kjør",
-                (None, false) => "Run",
-            };
-            let class = if item.on == Some(true) { " class=\"on\"" } else { "" };
-            body += &format!(
-                "<td><form method=\"post\" action=\"/kindle/press\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"layout\" value=\"{layout}\"><input type=\"hidden\" name=\"page\" value=\"{page}\"><input type=\"hidden\" name=\"item\" value=\"{}\"><button{class} type=\"submit\">{}<span>{state}</span></button></form></td>",
-                n * 2 + c,
-                escape_xml(&item.name)
-            );
-        }
-        if row.len() == 1 {
-            body += "<td></td>";
-        }
-        body += "</tr>";
-    }
-    body += "</table>";
+    body += &grid(shown.iter().enumerate().map(|(i, item)| {
+        let state = match (item.on, nb) {
+            (Some(true), true) => "På",
+            (Some(true), false) => "On",
+            (Some(false), true) => "Av",
+            (Some(false), false) => "Off",
+            (None, true) => "Kjør",
+            (None, false) => "Run",
+        };
+        let state = item.detail.as_ref().map_or(state.to_string(), |d| format!("{state} · {}", escape_xml(d)));
+        let class = if item.on == Some(true) { " class=\"on\"" } else { "" };
+        format!(
+            "<form method=\"post\" action=\"/kindle/press\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"layout\" value=\"{layout}\"><input type=\"hidden\" name=\"view\" value=\"{view}\"><input type=\"hidden\" name=\"page\" value=\"{page}\"><input type=\"hidden\" name=\"item\" value=\"{i}\"><button{class} type=\"submit\">{}{}<span>{state}</span></button></form>",
+            icon(class_icon(&item.class)),
+            escape_xml(&item.name)
+        )
+    }).collect());
     if pages > 1 {
-        body += &format!("<p class=\"nav\"><a href=\"/kindle?page={}\">&lt;</a> {} / {pages} <a href=\"/kindle?page={}\">&gt;</a></p>", (page + pages - 1) % pages, page + 1, (page + 1) % pages);
+        body += &format!("<p class=\"nav\"><a href=\"{}\">&lt;</a> {} / {pages} <a href=\"{}\">&gt;</a></p>", escape_xml(&link(view, (page + pages - 1) % pages)), page + 1, escape_xml(&link(view, (page + 1) % pages)));
     }
-    html(&device.name, PAGE_REFRESH, &format!("/kindle?page={page}"), &body)
+    let rows = entries.len().div_ceil(entries.len().div_ceil(3).max(MENU_COLUMNS));
+    let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
+    html(&device.name, PAGE_REFRESH, &escape_xml(&link(view, page)), &body)
+}
+
+/// Rows of equal columns; a short last row keeps its cells the same width.
+fn grid(cells: Vec<String>) -> String {
+    if cells.is_empty() {
+        return String::new();
+    }
+    let rows: String = cells.chunks(COLUMNS).map(|row| {
+        let blanks = "<td></td>".repeat(COLUMNS - row.len());
+        format!("<tr>{}{blanks}</tr>", row.iter().map(|c| format!("<td>{c}</td>")).collect::<String>())
+    }).collect();
+    format!("<table>{rows}</table>")
+}
+
+struct Info {
+    icon: &'static str,
+    label: String,
+    value: String,
+    /// The value is a phrase, not a number, and needs a smaller size to fit.
+    words: bool,
+    lines: Vec<String>,
+}
+
+impl Info {
+    fn html(&self) -> String {
+        let lines: String = self.lines.iter().map(|l| format!("<span>{}</span>", escape_xml(l))).collect();
+        let class = if self.words { " class=\"words\"" } else { "" };
+        format!("<div class=\"box\">{}<small>{}</small><b{class}>{}</b>{lines}</div>", icon(self.icon), escape_xml(&self.label), escape_xml(&self.value))
+    }
+}
+
+fn readings(e: &Entity) -> Vec<String> {
+    let mut out = Vec::new();
+    if let (Some(lo), Some(hi)) = (number(e, "temperature_min"), number(e, "temperature_max")) {
+        out.push(format!("{lo:.0}° / {hi:.0}°"));
+    }
+    if let Some(h) = number(e, "measure_humidity") {
+        out.push(format!("{h:.0} %"));
+    }
+    if let Some(c) = number(e, "measure_co2") {
+        out.push(format!("CO₂ {c:.0}"));
+    }
+    out
+}
+
+fn climate(e: &Entity, label: &str, icon: &'static str) -> Info {
+    let value = number(e, "measure_temperature").map_or("--".to_string(), |t| format!("{t:.1}°"));
+    Info { icon, label: label.to_string(), value, words: false, lines: readings(e) }
+}
+
+/// Wind is stored in km/h and shown in m/s, as on the tablet.
+fn wind(e: &Entity, nb: bool) -> Option<Info> {
+    let strength = number(e, "measure_wind_strength")?;
+    let lines = number(e, "measure_gust_strength").map(|g| format!("{} {:.0} m/s", if nb { "Kast" } else { "Gusts" }, g / 3.6)).into_iter().collect();
+    Some(Info { icon: "wind", label: if nb { "Vind" } else { "Wind" }.to_string(), value: format!("{:.0} m/s", strength / 3.6), words: false, lines })
+}
+
+fn forecast(e: &Entity, nb: bool) -> Option<Info> {
+    let symbol = e.capabilities.get("weather_symbol")?.value.as_str()?;
+    let hours = e.capabilities.get("forecast").and_then(|c| c.value.as_array());
+    let t = now();
+    // Hours from now, because the server's clock may be in another zone.
+    let lines = [3u64, 6].iter().filter_map(|h| {
+        let row = hours?.iter().find(|r| r[0].as_u64().is_some_and(|at| at >= t + h * 3600))?;
+        Some(format!("+{h} {} {:.0}°", if nb { "t" } else { "h" }, row[1].as_f64()?))
+    }).collect();
+    Some(Info { icon: weather_icon(symbol), label: if nb { "Vær" } else { "Weather" }.to_string(), value: weather_text(symbol, nb).to_string(), words: true, lines })
+}
+
+fn weather_icon(symbol: &str) -> &'static str {
+    let base = symbol.split('_').next().unwrap_or("");
+    let night = symbol.contains("_night");
+    match base {
+        _ if base.contains("thunder") => "thunder",
+        "clearsky" => if night { "moon" } else { "sun" },
+        "fair" | "partlycloudy" => if night { "moonpartly" } else { "partly" },
+        "fog" => "fog",
+        _ if base.contains("sleet") => "sleet",
+        _ if base.contains("snow") => "snow",
+        _ if base.contains("rain") => "rain",
+        _ => "cloud",
+    }
+}
+
+fn weather_text(symbol: &str, nb: bool) -> &'static str {
+    let base = symbol.split('_').next().unwrap_or("");
+    let (no, en) = match base {
+        _ if base.contains("thunder") => ("Torden", "Thunder"),
+        "clearsky" => ("Klart", "Clear"),
+        "fair" => ("Lettskyet", "Fair"),
+        "partlycloudy" => ("Delvis skyet", "Partly cloudy"),
+        "fog" => ("Tåke", "Fog"),
+        "lightrain" => ("Lett regn", "Light rain"),
+        "rain" => ("Regn", "Rain"),
+        "heavyrain" => ("Kraftig regn", "Heavy rain"),
+        "lightrainshowers" => ("Lette regnbyger", "Light showers"),
+        "rainshowers" => ("Regnbyger", "Showers"),
+        "heavyrainshowers" => ("Kraftige regnbyger", "Heavy showers"),
+        "lightsleet" => ("Lett sludd", "Light sleet"),
+        "sleet" => ("Sludd", "Sleet"),
+        "heavysleet" => ("Kraftig sludd", "Heavy sleet"),
+        "lightsleetshowers" | "sleetshowers" => ("Sluddbyger", "Sleet showers"),
+        "heavysleetshowers" => ("Kraftige sluddbyger", "Heavy sleet showers"),
+        "lightsnow" => ("Lett snø", "Light snow"),
+        "snow" => ("Snø", "Snow"),
+        "heavysnow" => ("Kraftig snø", "Heavy snow"),
+        "lightsnowshowers" | "snowshowers" => ("Snøbyger", "Snow showers"),
+        "heavysnowshowers" => ("Kraftige snøbyger", "Heavy snow showers"),
+        _ => ("Skyet", "Cloudy"),
+    };
+    if nb { no } else { en }
+}
+
+/// Every three hours from now, in hours rather than clock times for the same reason as `forecast`.
+fn forecast_boxes(e: &Entity, nb: bool) -> Vec<Info> {
+    let Some(hours) = e.capabilities.get("forecast").and_then(|c| c.value.as_array()) else { return Vec::new() };
+    let t = now();
+    (0..12u64).filter_map(|n| {
+        let h = n * 3;
+        let row = hours.iter().find(|r| r[0].as_u64().is_some_and(|at| at + 3600 > t + h * 3600))?;
+        let label = if h == 0 { if nb { "Nå".to_string() } else { "Now".to_string() } } else { format!("+{h} {}", if nb { "t" } else { "h" }) };
+        let mut lines = vec![weather_text(row[2].as_str().unwrap_or(""), nb).to_string()];
+        lines.extend(row[3].as_f64().map(|w| format!("{w:.0} m/s")));
+        Some(Info { icon: weather_icon(row[2].as_str().unwrap_or("")), label, value: format!("{:.0}°", row[1].as_f64()?), words: false, lines })
+    }).collect()
+}
+
+fn info_boxes(app: &App, device: &Device, view: &str, nb: bool) -> Vec<Info> {
+    let entity = |id: &Option<String>| id.as_ref().and_then(|i| app.registry.entity(i));
+    if view == "weather" {
+        return entity(&device.panels.weather).map_or(Vec::new(), |e| forecast_boxes(&e, nb));
+    }
+    let own = own_page(device, view);
+    let card = |c: &str| own.map_or(view == "home" || (view == "climate" && c == "card:climate"), |p| p.items.iter().any(|i| i == c));
+    let mut boxes = Vec::new();
+    if card("card:climate") {
+        let (indoor, outdoor) = (entity(&device.panels.indoor), entity(&device.panels.outdoor));
+        boxes.extend(indoor.as_ref().map(|e| climate(e, if nb { "Inne" } else { "Indoor" }, "home")));
+        boxes.extend(outdoor.as_ref().map(|e| climate(e, if nb { "Ute" } else { "Outdoor" }, "cloud")));
+        boxes.extend(outdoor.as_ref().and_then(|e| wind(e, nb)).or_else(|| entity(&device.panels.wind).and_then(|e| wind(&e, nb))));
+    }
+    if card("card:forecast") {
+        boxes.extend(entity(&device.panels.weather).and_then(|e| forecast(&e, nb)));
+    }
+    let panels: Vec<&String> = if card("card:climate") { device.panels.ids().collect() } else { Vec::new() };
+    let ids: Vec<&String> = match own {
+        Some(p) => p.items.iter().collect(),
+        None if view == "home" || view == "climate" => device.tiles.iter().chain(device.more.iter()).chain(device.pages.iter().flat_map(|p| p.items.iter())).collect(),
+        None => Vec::new(),
+    };
+    let mut seen = std::collections::HashSet::new();
+    for id in ids.into_iter().filter(|id| seen.insert(id.as_str()) && !panels.contains(id)) {
+        let Some(e) = app.registry.entity(id).filter(|e| e.class == "sensor") else { continue };
+        let label = device.names.get(id).unwrap_or(&e.name);
+        if number(&e, "measure_temperature").is_some() {
+            boxes.push(climate(&e, label, "thermo"));
+        } else if let Some((value, lines)) = readings(&e).split_first() {
+            boxes.push(Info { icon: "chart", label: label.clone(), value: value.clone(), words: false, lines: lines.to_vec() });
+        }
+    }
+    // Home keeps its buttons on the first screen; a page of its own can spend more.
+    boxes.truncate(if view == "home" { MAX_BOXES } else { MAX_BOXES * 2 });
+    boxes
 }
 
 fn press(app: &App, req: &Request) -> Response {
@@ -319,14 +587,16 @@ fn press(app: &App, req: &Request) -> Response {
     if !constant_eq(field("token"), &form_token(&device)) {
         return Response::error(403, "Bad form token");
     }
-    let (shown, page, _, layout) = page_of(items(app, &device), field("page").parse().unwrap_or(0));
+    let entries = menu(app, &device, false);
+    let view = entries.iter().find(|(id, ..)| id == field("view")).map_or("home", |(id, ..)| id.as_str());
+    let (shown, page, _, layout) = page_of(view_items(app, &device, view), field("page").parse().unwrap_or(0), PAGE_BUTTONS);
     let item = field("item").parse::<usize>().ok().and_then(|i| shown.get(i));
     let Some(item) = item.filter(|_| field("layout") == layout) else {
-        return redirect(&format!("/kindle?page={page}&notice=stale"));
+        return redirect(&format!("{}&notice=stale", link(view, page)));
     };
     match press_item(app, item) {
-        Ok(()) => redirect(&format!("/kindle?page={page}")),
-        Err(_) => redirect(&format!("/kindle?page={page}&notice=failed")),
+        Ok(()) => redirect(&link(view, page)),
+        Err(_) => redirect(&format!("{}&notice=failed", link(view, page))),
     }
 }
 
@@ -561,7 +831,7 @@ mod tests {
     use super::*;
 
     fn item(id: &str, on: Option<bool>) -> Item {
-        Item { id: id.into(), name: id.into(), on }
+        Item { id: id.into(), name: id.into(), class: "light".into(), on, detail: None }
     }
 
     #[test]
@@ -578,7 +848,7 @@ mod tests {
 
     #[test]
     fn a_changed_state_or_layout_changes_the_fingerprint() {
-        let print = |a: Option<bool>, b: &str| page_of(vec![item("x", a), item(b, None)], 0).3;
+        let print = |a: Option<bool>, b: &str| page_of(vec![item("x", a), item(b, None)], 0, PER_PAGE).3;
         assert_eq!(print(Some(true), "y"), print(Some(true), "y"));
         assert_ne!(print(Some(true), "y"), print(Some(false), "y"));
         assert_ne!(print(Some(true), "y"), print(Some(true), "z"));
@@ -587,9 +857,46 @@ mod tests {
     #[test]
     fn pages_are_clamped() {
         let all = (0..9).map(|i| item(&i.to_string(), None)).collect();
-        let (shown, page, pages, _) = page_of(all, 99);
+        let (shown, page, pages, _) = page_of(all, 99, PER_PAGE);
         assert_eq!((shown.len(), page, pages), (1, 1, 2));
-        assert_eq!(page_of(vec![], 5).1, 0);
+        assert_eq!(page_of(vec![], 5, PER_PAGE).1, 0);
+    }
+
+    #[test]
+    fn grid_rows_are_full_width() {
+        let html = grid(vec!["a".into(); COLUMNS + 1]);
+        assert_eq!(html.matches("<tr>").count(), 2);
+        assert_eq!(html.matches("<td").count(), COLUMNS * 2, "the short row is padded");
+        assert_eq!(grid(vec![]), "");
+    }
+
+    #[test]
+    fn views_have_safe_links() {
+        assert_eq!(link("home", 2), "/kindle?page=2");
+        assert_eq!(link("p1", 0), "/kindle?view=p1&page=0");
+        let html = menu_html(&(0..7).map(|i| (format!("p{i}"), "<x>".to_string(), "moon".to_string())).collect::<Vec<_>>(), "p6");
+        assert_eq!(html.matches("<div>").count(), 2);
+        assert!(html.contains("&lt;x&gt;") && html.contains("class=\"on\" aria-current=\"page\" href=\"/kindle?view=p6&amp;page=0\"><i class=\"ic i-moon\""));
+    }
+
+    #[test]
+    fn icons_match_their_sheet() {
+        let size = |at: usize| u32::from_be_bytes(ICON_SHEET[at..at + 4].try_into().unwrap()) as usize;
+        assert_eq!((size(16), size(20)), (ICONS.len() * ICON_SIZE * 2, ICON_SIZE * 4), "two rows, one column per icon");
+        for name in crate::store::PAGE_ICONS {
+            assert!(ICONS.contains(&name), "{name}");
+        }
+        assert!(icon("<script>").contains("i-cloud"), "only known names reach the page");
+        assert_eq!(weather_icon("clearsky_night"), "moon");
+        assert_eq!(weather_icon("lightsleetshowers_day"), "sleet");
+        assert_eq!(weather_icon("heavyrainandthunder"), "thunder");
+    }
+
+    #[test]
+    fn weather_symbols_have_words() {
+        assert_eq!(weather_text("partlycloudy_night", false), "Partly cloudy");
+        assert_eq!(weather_text("heavyrainandthunder", true), "Torden");
+        assert_eq!(weather_text("unknown", true), "Skyet");
     }
 
     #[test]

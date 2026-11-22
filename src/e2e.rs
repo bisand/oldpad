@@ -226,6 +226,18 @@ fn phone_and_tablet_end_to_end() {
     let fresh = text(&web("GET", "/kindle", &screen, None));
     assert_eq!(web("POST", "/kindle/press", &screen, Some(&form(&form_token, &field(&fresh, "layout")))).status, 303);
     assert_eq!(lamp_on(&mut tablet), true);
+    let menu = text(&web("GET", "/kindle", &screen, None));
+    assert!(menu.contains("class=\"menu\"") && menu.contains("view=lights") && menu.contains("view=p0"));
+    assert!(menu.contains("i-bulb") && web("GET", "/kindle", &screen, None).headers["content-security-policy"].contains("img-src 'self'"));
+    let sheet = web("GET", "/kindle/icons.png", "", None);
+    assert_eq!((sheet.status, sheet.headers["content-type"].as_str()), (200, "image/png"));
+    assert!(text(&web("GET", "/kindle/style.css", "", None)).contains(".on .i-bulb"));
+    let scenes = text(&web("GET", "/kindle?view=flows", &screen, None));
+    assert!(scenes.contains("Good night") && !scenes.contains("Coffee maker<"), "a view shows only its own");
+    assert!(text(&web("GET", "/kindle?view=%0d%0aevil", &screen, None)).contains("Coffee maker<"), "an unknown view is home");
+    let stale = format!("token={form_token}&layout=old&view=flows&page=0&item=0");
+    assert_eq!(web("POST", "/kindle/press", &screen, Some(&stale)).headers["location"], "/kindle?view=flows&page=0&notice=stale", "a press stays on its view");
+    assert_eq!(lamp_on(&mut tablet), true);
     assert_eq!(phone.call("DELETE", &format!("/api/admin/devices/{kindle_id}"), None).0, 200);
     assert!(text(&web("GET", "/kindle", &screen, None)).contains("action=\"/kindle/pair\""), "removing the screen signs it out");
 
