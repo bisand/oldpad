@@ -1,0 +1,106 @@
+---
+layout: base.njk
+bodyClass: home
+---
+<section class="hero">
+  <div class="hero-copy">
+    <h1>The iPad in your drawer still has a job.</h1>
+    <p>oldpad turns a tablet nobody updates any more into a wall dashboard for your lights, heating, music and weather. It runs on iOS 5 and later, and on a Kindle.</p>
+    <p class="actions">
+      <a class="btn main" href="/guide/">Try it in two minutes</a>
+      <a class="btn" href="https://github.com/bisand/oldpad">View on GitHub</a>
+    </p>
+  </div>
+  <div class="ipad hero-pad">
+    <img class="only-light" src="/img/home-day.webp" width="1024" height="768" alt="oldpad's home screen in its day theme, with the clock, indoor and outdoor temperature, forecast, music and six tiles for lights and heating.">
+    <img class="only-dark" src="/img/home-night.webp" width="1024" height="768" alt="The same home screen in its night theme.">
+  </div>
+</section>
+
+<section class="band drawer">
+  <div class="wrap">
+    <h2>What's in your drawer?</h2>
+    <p class="lead">If it has a browser from the last fifteen years, there is a good chance it can help. These are the devices we know about.</p>
+    <div class="table">
+    <table>
+      <thead><tr><th scope="col">Device</th><th scope="col">What it becomes</th><th scope="col">How far we've tested it</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">iPad 2</th><td>Full dashboard</td><td>In daily use on iOS 9.3.5</td></tr>
+        <tr><th scope="row">iPad 1, iPad mini 1</th><td>Full dashboard</td><td>Written for iOS 5 and later, not yet tested. Tell us how it goes.</td></tr>
+        <tr><th scope="row">Kindle Paperwhite</th><td>E-ink remote you wake with a tap</td><td>In use on a Paperwhite 3, no jailbreak</td></tr>
+        <tr><th scope="row">Raspberry Pi</th><td>The server that runs it all</td><td>Image built for 64-bit ARM</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<section class="wrap tour" id="features">
+  <h2>Everything at home, on one old screen</h2>
+
+  <div class="feature">
+    <div class="ipad"><img src="/img/tablet-music.webp" loading="lazy" width="1024" height="768" alt="The music page with rooms, volume sliders, search and favourites."></div>
+    <div><h3>Music in every room</h3><p>Play, pause and set the volume on your Sonos speakers. Group rooms with a tap, start a favourite, or search for a radio station.</p></div>
+  </div>
+
+  <div class="feature flip">
+    <div class="ipad"><img src="/img/tablet-climate.webp" loading="lazy" width="1024" height="768" alt="The climate page with thermostats and sensor readings."></div>
+    <div><h3>Lights, heating and scenes</h3><p>Control what Homey Pro or Home Assistant already knows about. Each screen shows its own tiles, so the kitchen gets the kitchen.</p></div>
+  </div>
+
+  <div class="feature">
+    <div class="ipad"><img src="/img/tablet-weather.webp" loading="lazy" width="1024" height="768" alt="The weather page with a forecast for the coming days."></div>
+    <div><h3>Weather, graphs and the day ahead</h3><p>See the forecast, weather warnings, 24-hour graphs, electricity prices, your calendar, the next departures and even ships passing by.</p></div>
+  </div>
+
+  <div class="feature flip tall">
+    <div class="kindle"><img src="/img/kindle.webp" loading="lazy" width="1072" height="1226" alt="The Kindle page in black and white, with temperatures and buttons for lights and heating."></div>
+    <div><h3>A Kindle works too</h3><p>Open one address in the Kindle's own browser. No jailbreak, no install. You get big e-ink buttons for lights, heating, scenes and music.</p><p><a href="/guide/kindle/">Set up a Kindle</a></p></div>
+  </div>
+
+  <div class="feature tall">
+    <div class="phone"><img src="/img/admin.webp" loading="lazy" width="390" height="844" alt="The phone admin page listing paired screens."></div>
+    <div><h3>Set it up from your phone</h3><p>The tablet shows a QR code. Scan it, sign in with Face ID or Touch ID, and name the screen. There are no passwords to remember, and you can arrange every screen from the sofa.</p></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap connects">
+    <h2>Works with what you have</h2>
+    <div>
+      <h3>In your home</h3>
+      <ul><li>Homey Pro</li><li>Home Assistant</li><li>Sonos</li><li>InfluxDB</li><li>Your own AIS ship receiver</li></ul>
+    </div>
+    <div>
+      <h3>Over the internet</h3>
+      <ul><li>Netatmo and Legrand</li><li>MET Norway weather and warnings</li><li>iCal and CalDAV calendars</li><li>Entur departures</li><li>Norwegian electricity prices</li></ul>
+    </div>
+    <p>No smart home yet? The built-in demo house lets you try everything first. <a href="/guide/integrations/">See all integrations</a></p>
+  </div>
+</section>
+
+<section class="wrap small">
+  <h2>Small enough to forget about</h2>
+  <p class="lead">The server is one Rust binary with no runtime and almost no dependencies. On our home server it uses about 2.5 MB of memory, and the container image is about 1.5 MB. It sits happily on a Raspberry Pi next to everything else.</p>
+  <p>Your data stays on your server. Tablets hold only a revocable token for their own tiles, and your smart home keys never leave the server.</p>
+</section>
+
+<section class="band start">
+  <div class="wrap">
+    <h2>Up and running in three steps</h2>
+    <ol class="steps">
+      <li><h3>Start the server</h3><pre><code>docker run -d --name oldpad -p 8080:8080 \
+  -v oldpad-data:/data \
+  ghcr.io/bisand/oldpad:latest</code></pre></li>
+      <li><h3>Create your passkey</h3><p>Run <code>docker logs oldpad</code> for the setup code, then open <code>/admin</code> and add the demo house or your own system.</p></li>
+      <li><h3>Pair the tablet</h3><p>Open the address in Safari, scan the code it shows, and add it to the home screen.</p></li>
+    </ol>
+    <p><a class="btn main" href="/guide/install/">Read the install guide</a></p>
+  </div>
+</section>
+
+<section class="wrap join">
+  <h2>Help more old devices come back</h2>
+  <p class="lead">oldpad is young and open to help. Test it on a device we haven't tried, translate it into your language, or connect the system you use at home. A new integration is one Rust file, and the setup wizard builds itself.</p>
+  <p class="actions"><a class="btn main" href="/contribute/">See how to contribute</a> <a class="btn" href="https://github.com/bisand/oldpad/issues">Open issues</a></p>
+</section>

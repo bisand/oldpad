@@ -1,0 +1,20 @@
+[
+  { "title": "Use it", "pages": [
+    { "title": "Try it in two minutes", "url": "/guide/" },
+    { "title": "Install on a server", "url": "/guide/install/" },
+    { "title": "Set up an iPad", "url": "/guide/ipad/" },
+    { "title": "Set up a Kindle", "url": "/guide/kindle/" },
+    { "title": "Connect your home", "url": "/guide/integrations/" },
+    { "title": "Reach it over HTTPS", "url": "/guide/https/" },
+    { "title": "Settings reference", "url": "/guide/configuration/" },
+    { "title": "Examples", "url": "/guide/examples/" }
+  ]},
+  { "title": "Build it", "pages": [
+    { "title": "Developer guide", "url": "/dev/" },
+    { "title": "How to contribute", "url": "/contribute/" },
+    { "title": "Writing an integration", "url": "/dev/integrations/" },
+    { "title": "Design decisions", "url": "/dev/design/" },
+    { "title": "Homey protocol", "url": "/dev/homey-protocol/" },
+    { "title": "Homey zone lights", "url": "/dev/homey-zone-lights/" }
+  ]}
+]

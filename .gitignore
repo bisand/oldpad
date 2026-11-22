@@ -1,3 +1,5 @@
 /target
 /data
 .DS_Store
+/site/node_modules
+/site/_site

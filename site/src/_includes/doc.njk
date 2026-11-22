@@ -1,0 +1,23 @@
+---
+layout: base.njk
+bodyClass: docs
+---
+<div class="doc-wrap">
+  <details class="side" open>
+    <summary>All pages</summary>
+    <nav aria-label="Documentation">
+      {% for group in nav %}
+      <h2>{{ group.title }}</h2>
+      <ul>
+        {% for p in group.pages %}
+        <li><a href="{{ p.url }}"{% if p.url == page.url %} aria-current="page"{% endif %}>{{ p.title }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+    </nav>
+  </details>
+  <article class="prose">
+    <h1>{{ title }}</h1>
+    {{ content | safe }}
+  </article>
+</div>

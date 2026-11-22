@@ -1,0 +1,13 @@
+{
+  "name": "oldpad-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "eleventy --serve --port=8090",
+    "build": "eleventy --pathprefix=/oldpad/"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.8",
+    "@fontsource-variable/schibsted-grotesk": "5.3.0"
+  }
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if title %}{{ title }} | oldpad{% else %}oldpad: bring an old iPad or Kindle back as a home dashboard{% endif %}</title>
+<meta name="description" content="{{ description or 'oldpad turns an old iPad or Kindle into a wall dashboard for your lights, heating, music and weather. Free, open source and self-hosted.' }}">
+<meta name="color-scheme" content="light dark">
+<script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preload" href="/font.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/site.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='2' width='22' height='28' rx='4' fill='%231b2430'/%3E%3Crect x='8' y='6' width='16' height='20' fill='%23ffd46b'/%3E%3C/svg%3E">
+</head>
+<body class="{{ bodyClass }}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <a class="brand" href="/">oldpad</a>
+  <nav aria-label="Main">
+    <a href="/#features">Features</a>
+    <a href="/guide/">Guide</a>
+    <a href="/dev/">Developers</a>
+    <a href="/contribute/">Contribute</a>
+    <a href="https://github.com/bisand/oldpad">GitHub</a>
+  </nav>
+  <div class="theme" role="group" aria-label="Colour theme" hidden>
+    <button type="button" data-set="system">System</button>
+    <button type="button" data-set="light">Light</button>
+    <button type="button" data-set="dark">Dark</button>
+  </div>
+</header>
+<main id="main">{{ content | safe }}</main>
+<footer class="foot">
+  <p>oldpad is free software under the <a href="https://github.com/bisand/oldpad/blob/main/LICENSE">MIT license</a>.</p>
+  <p><a href="https://github.com/bisand/oldpad">Source</a> <a href="https://github.com/bisand/oldpad/issues">Issues</a> <a href="https://github.com/bisand/oldpad/releases">Releases</a></p>
+</footer>
+<script>
+(function(){var r=document.documentElement,g=document.querySelector('.theme'),b=g.querySelectorAll('button');
+function mark(v){b.forEach(function(x){x.setAttribute('aria-pressed',x.dataset.set===v)})}
+g.hidden=false;mark(r.dataset.theme||'system');
+g.addEventListener('click',function(e){var v=e.target.dataset.set;if(!v)return;
+if(v==='system')delete r.dataset.theme;else r.dataset.theme=v;
+try{v==='system'?localStorage.removeItem('theme'):localStorage.setItem('theme',v)}catch(x){}mark(v)})})();
+</script>
+</body>
+</html>
