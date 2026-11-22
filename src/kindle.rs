@@ -34,6 +34,8 @@ struct Item {
     class: String,
     /// `None` for a scene, which has no state to show.
     on: Option<bool>,
+    /// Pressing runs it, even when it reports a state it cannot be switched to.
+    runs: bool,
     /// A live value beside the state. Left out of the fingerprint, or a drifting reading would void every tap.
     detail: Option<String>,
 }
@@ -52,6 +54,17 @@ fn detail(e: &Entity, on: Option<bool>) -> Option<String> {
     number(e, "dim").filter(|_| on == Some(true)).map(|d| format!("{:.0} %", d * 100.0))
 }
 
+/// What a control shows and whether pressing runs it. A Homey group can report
+/// "on" when any of its lights is, while only its button can be pressed.
+fn control(e: &Entity) -> Option<(Option<bool>, bool)> {
+    let onoff = e.capabilities.get("onoff");
+    if onoff.is_some_and(|c| c.settable) {
+        return Some((onoff.map(|c| c.value == json!(true)), false));
+    }
+    e.capabilities.get("button").filter(|c| c.settable)?;
+    Some((onoff.map(|c| c.value == json!(true)), true))
+}
+
 fn items(app: &App, device: &Device) -> Vec<Item> {
     let pages = device.pages.iter().flat_map(|p| p.items.iter()).filter(|i| !i.starts_with("card:"));
     let mut seen = std::collections::HashSet::new();
@@ -60,12 +73,8 @@ fn items(app: &App, device: &Device) -> Vec<Item> {
         if !CONTROLLABLE.contains(&e.class.as_str()) {
             return None;
         }
-        let on = match (e.capabilities.get("onoff"), e.capabilities.get("button")) {
-            (Some(c), _) if c.settable => Some(c.value == json!(true)),
-            (_, Some(c)) if c.settable => None,
-            _ => return None,
-        };
-        Some(Item { id: id.clone(), name: device.names.get(id).unwrap_or(&e.name).clone(), class: e.class.clone(), on, detail: detail(&e, on) })
+        let (on, runs) = control(&e)?;
+        Some(Item { id: id.clone(), name: device.names.get(id).unwrap_or(&e.name).clone(), class: e.class.clone(), on, runs, detail: detail(&e, on) })
     }).collect()
 }
 
@@ -184,7 +193,7 @@ fn temperatures(app: &App, device: &Device) -> (Option<String>, Option<String>) 
 }
 
 fn press_item(app: &App, item: &Item) -> Result<(), String> {
-    let (capability, value) = item.on.map_or(("button", json!(true)), |on| ("onoff", json!(!on)));
+    let (capability, value) = if item.runs { ("button", json!(true)) } else { ("onoff", json!(item.on != Some(true))) };
     app.registry.set(&item.id, capability, &value)
 }
 
@@ -192,7 +201,7 @@ fn press_item(app: &App, item: &Item) -> Result<(), String> {
 
 const SCREEN_COOKIE: &str = "oldpad_kindle";
 const PAIR_COOKIE: &str = "oldpad_kindle_pair";
-const PAGE_CSP: &str = "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+const PAGE_CSP: &str = "default-src 'none'; style-src 'self'; img-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 /// Long enough to see a change, rare enough to spare a reader's battery.
 const PAGE_REFRESH: u32 = 300;
 const PAIR_REFRESH: u32 = 5;
@@ -202,13 +211,15 @@ const PAGE_BUTTONS: usize = COLUMNS * 4;
 const MAX_BOXES: usize = COLUMNS * 2;
 // Tables, not flex or grid: the Kindle's browser is an old WebKit.
 const MENU_COLUMNS: usize = 6;
+// A Paperwhite lays out at its full 1072 px, and its browser counts some height it hides, hence the zoom and the menu lifted 28 px.
 /// One picture, so a page costs the reader's Wi-Fi one request: a black row, then a white one for what is on.
 const ICON_SHEET: &[u8] = include_bytes!("../web/kindle-icons.png");
 /// In the order they stand in the sheet. Drawn at twice the size they are shown, for the sharper panel.
-const ICONS: [&str; 20] = ["home", "music", "bulb", "thermo", "bolt", "cloud", "sun", "moon", "chart", "radio", "flame", "plug", "partly", "moonpartly", "rain", "sleet", "snow", "fog", "thunder", "wind"];
+const ICONS: [&str; 22] = ["home", "music", "bulb", "thermo", "bolt", "cloud", "sun", "moon", "chart", "radio", "flame", "plug", "partly", "moonpartly", "rain", "sleet", "snow", "fog", "thunder", "wind", "play", "pause"];
 const ICON_SIZE: usize = 36;
+const PAGE_JS: &str = include_str!("../web/kindle.js");
 const CSS: &str = "html{height:100%}body{height:100%;margin:0;padding:12px 14px;-webkit-box-sizing:border-box;box-sizing:border-box;background:#fff;color:#000;font-family:sans-serif;font-size:20px;line-height:1.2}\
-.shell{position:relative;min-height:100%;-webkit-box-sizing:border-box;box-sizing:border-box}.r1{padding-bottom:84px}.r2{padding-bottom:158px}.r3{padding-bottom:232px}\
+.shell{position:relative;min-height:100%;-webkit-box-sizing:border-box;box-sizing:border-box}.r1{padding-bottom:112px}.r2{padding-bottom:186px}.r3{padding-bottom:260px}\
 h1{font-size:34px;line-height:40px;margin:0}p{margin:8px 6px}form{margin:0}\
 table{width:100%;border-collapse:separate;border-spacing:6px;table-layout:fixed}td{padding:0;vertical-align:top}\
 .head{border-spacing:0;border-bottom:3px solid #000;margin-bottom:6px;padding:0 6px 6px}.head td{vertical-align:middle}.pager{width:190px;text-align:right;font-size:18px;white-space:nowrap}\
@@ -220,10 +231,14 @@ table{width:100%;border-collapse:separate;border-spacing:6px;table-layout:fixed}
 button{display:block;width:100%;height:104px;padding:6px 10px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;-webkit-appearance:none;background:#fff;color:#000;font-family:sans-serif;text-align:left;overflow:hidden}\
 button.on{background:#000;color:#fff}button .ic{float:left}button span{float:right;font-size:15px;line-height:36px;white-space:nowrap}\
 button b{display:block;clear:both;max-height:44px;overflow:hidden;font-size:18px;line-height:22px;word-wrap:break-word}\
-.menu{position:absolute;left:0;right:0;bottom:0;display:table;table-layout:fixed;width:100%;border-top:2px solid #000;border-spacing:4px;background:#fff}.menu div{display:table-row}\
+.menu{position:absolute;left:0;right:0;bottom:28px;display:table;table-layout:fixed;width:100%;border-top:2px solid #000;border-spacing:4px;background:#fff}.menu div{display:table-row}\
 .menu a{display:table-cell;height:62px;vertical-align:middle;padding:0 2px;-webkit-border-radius:10px;border-radius:10px;color:#000;font-size:15px;font-weight:bold;text-align:center;text-decoration:none;overflow:hidden;word-wrap:break-word}\
 .menu a.on{background:#000;color:#fff}.menu .ic{display:block;margin:0 auto 1px}\
+@media (min-width:1000px){body{zoom:1.2}}\
 @media (orientation:landscape){.shell{padding-bottom:0}.menu{position:static;float:left;display:block;width:112px;border-top:0;border-right:2px solid #000;padding-right:6px}.menu div{display:block}.menu a{display:block;height:auto;padding:6px 2px;margin-bottom:4px}.main{margin-left:130px}}\
+.spk{height:146px;padding:10px 12px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;overflow:hidden}.spk.on{background:#000;color:#fff}\
+.spk small{display:block;font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden}.spk b{display:block;height:28px;font-size:22px;line-height:28px;white-space:nowrap;overflow:hidden}.spk>span{display:block;height:20px;font-size:15px;line-height:20px;white-space:nowrap;overflow:hidden}\
+.ctl{margin-top:8px;border-spacing:4px 0}.ctl td{vertical-align:middle}.ctl button{height:64px;padding:0;text-align:center;font-size:30px;font-weight:bold}.ctl button .ic{float:none;display:block;margin:0 auto}.spk.on button{background:#000;color:#fff;border-color:#fff}.vol{text-align:center;font-size:19px;font-weight:bold}\
 .notice{border:2px solid #000;border-left-width:10px;padding:8px 12px}.empty{padding:48px 12px;text-align:center}\
 .center{max-width:560px;margin:0 auto;padding-top:24px;text-align:center}.center h1{margin-bottom:8px}.qr{display:block;width:400px;max-width:100%;margin:16px auto}\
 .pin{margin:12px 0 4px}.code{display:inline-block;margin:0;padding:6px 20px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;font-size:52px;font-weight:bold;letter-spacing:6px}\
@@ -240,10 +255,12 @@ pub fn route(app: &App, req: &Request, s: &[&str]) -> Response {
     match (req.method.as_str(), s) {
         ("GET", ["kindle"]) => show(app, req),
         ("GET", ["kindle", "style.css"]) => Response::new(200, "text/css; charset=utf-8", stylesheet()).header("Cache-Control", "no-cache"),
+        ("GET", ["kindle", "app.js"]) => Response::new(200, "text/javascript; charset=utf-8", PAGE_JS).header("Cache-Control", "no-cache"),
         ("GET", ["kindle", "icons.png"]) => Response::new(200, "image/png", ICON_SHEET).header("Cache-Control", "public, max-age=86400"),
         ("GET", ["kindle", "qr", file]) => pairing_qr(app, req, file),
         ("POST", ["kindle", "pair"]) => start_pairing(app),
         ("POST", ["kindle", "press"]) => press(app, req),
+        ("POST", ["kindle", "speaker"]) => speaker_action(app, req),
         _ => Response::error(404, "Not found"),
     }
 }
@@ -398,10 +415,10 @@ fn view_items(app: &App, device: &Device, view: &str) -> Vec<Item> {
 
 /// The tablet's pages that work without a live connection, then the admin's own. Empty ones stay out.
 fn menu(app: &App, device: &Device, nb: bool) -> Vec<(String, String, String)> {
-    let built_in = [("home", "Hjem", "Home", "home"), ("lights", "Lys", "Lights", "bulb"), ("climate", "Klima", "Climate", "thermo"), ("flows", "Scener", "Scenes", "bolt"), ("weather", "Vær", "Weather", "cloud")];
+    let built_in = [("home", "Hjem", "Home", "home"), ("music", "Musikk", "Music", "music"), ("lights", "Lys", "Lights", "bulb"), ("climate", "Klima", "Climate", "thermo"), ("flows", "Scener", "Scenes", "bolt"), ("weather", "Vær", "Weather", "cloud")];
     let fixed = built_in.iter().map(|(id, no, en, ic)| (id.to_string(), if nb { no } else { en }.to_string(), ic.to_string()));
     let own = device.pages.iter().enumerate().map(|(i, p)| (format!("p{i}"), p.name.clone(), p.icon.clone()));
-    fixed.chain(own).filter(|(id, ..)| id == "home" || !view_items(app, device, id).is_empty() || !info_boxes(app, device, id, nb).is_empty()).collect()
+    fixed.chain(own).filter(|(id, ..)| id == "home" || (id == "music" && !speakers(app, device).is_empty()) || !view_items(app, device, id).is_empty() || !info_boxes(app, device, id, nb).is_empty()).collect()
 }
 
 fn menu_html(entries: &[(String, String, String)], view: &str) -> String {
@@ -441,7 +458,9 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     if let Some(n) = notice {
         body += &format!("<p class=\"notice\">{n}</p>");
     }
-    if shown.is_empty() && view != "weather" {
+    if view == "music" {
+        body += &grid(speakers(app, device).iter().map(|e| speaker_card(app, device, e, &token, nb)).collect(), 2, "speakers");
+    } else if shown.is_empty() && view != "weather" {
         body += if nb { "<p class=\"empty\">Ingen knapper er valgt for denne skjermen.</p>" } else { "<p class=\"empty\">No controls are set up for this screen.</p>" };
     }
     body += &grid(shown.iter().enumerate().map(|(i, item)| {
@@ -463,6 +482,7 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     }).collect(), COLUMNS, "buttons");
     let rows = entries.len().div_ceil(entries.len().div_ceil(3).max(MENU_COLUMNS));
     let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
+    let body = format!("{body}<script src=\"/kindle/app.js\"></script>");
     html(&device.name, PAGE_REFRESH, &escape_xml(&link(view, page)), &body)
 }
 
@@ -629,6 +649,71 @@ fn info_boxes(app: &App, device: &Device, view: &str, nb: bool) -> Vec<Info> {
     // Home keeps its buttons on the first screen; a page of its own can spend more.
     boxes.truncate(if view == "home" { MAX_BOXES } else { MAX_BOXES * 2 });
     boxes
+}
+
+/// The screen's speakers, its music panel first, as on the tablet.
+fn speakers(app: &App, device: &Device) -> Vec<Entity> {
+    let pages = device.pages.iter().flat_map(|p| p.items.iter());
+    let mut seen = std::collections::HashSet::new();
+    device.panels.speaker.iter().chain(device.tiles.iter()).chain(device.more.iter()).chain(pages)
+        .filter(|id| seen.insert(id.as_str()))
+        .filter_map(|id| app.registry.entity(id))
+        .filter(|e| e.class == "speaker" && e.capabilities.get("speaker_playing").is_some_and(|c| c.settable))
+        .collect()
+}
+
+/// What a group plays comes from its leader, which need not be on this screen.
+fn speaker_lead(app: &App, e: &Entity) -> Entity {
+    let group = e.capabilities.get("speaker_group").and_then(|c| c.value.as_str());
+    let id = group.and_then(|g| e.id.split_once(':').map(|(integration, _)| format!("{integration}:{g}")));
+    id.and_then(|id| app.registry.entity(&id)).unwrap_or_else(|| e.clone())
+}
+
+fn speaker_card(app: &App, device: &Device, e: &Entity, token: &str, nb: bool) -> String {
+    let lead = speaker_lead(app, e);
+    let text = |c: &str| lead.capabilities.get(c).and_then(|c| c.value.as_str()).filter(|s| !s.is_empty()).map(escape_xml);
+    let playing = lead.capabilities.get("speaker_playing").is_some_and(|c| c.value == json!(true));
+    let control = |action: &str, label: &str, inner: &str| format!(
+        "<td><form method=\"post\" action=\"/kindle/speaker\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"id\" value=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{action}\"><button type=\"submit\" aria-label=\"{label}\">{inner}</button></form></td>",
+        escape_xml(&e.id)
+    );
+    let mut controls = if playing { control("pause", "Pause", &icon("pause")) } else { control("play", if nb { "Spill" } else { "Play" }, &icon("play")) };
+    if let Some(v) = number(e, "volume_set").filter(|_| e.capabilities["volume_set"].settable) {
+        controls += &control("down", if nb { "Lavere volum" } else { "Volume down" }, "&minus;");
+        controls += &format!("<td class=\"vol\">{:.0} %</td>", v * 100.0);
+        controls += &control("up", if nb { "Høyere volum" } else { "Volume up" }, "+");
+    }
+    format!(
+        "<div class=\"spk{}\"><small>{}</small><b>{}</b><span>{}</span><table class=\"ctl\"><tr>{controls}</tr></table></div>",
+        if playing { " on" } else { "" },
+        escape_xml(device.names.get(&e.id).unwrap_or(&e.name)),
+        text("speaker_track").unwrap_or_else(|| if nb { "Ingenting spilles" } else { "Nothing playing" }.to_string()),
+        text("speaker_artist").unwrap_or_default(),
+    )
+}
+
+/// Volume moves from its live value, and play and pause say which they mean, so an old page cannot do the opposite.
+fn speaker_action(app: &App, req: &Request) -> Response {
+    const VOLUME_STEP: f64 = 0.05;
+    let Some(device) = screen_device(app, req) else { return redirect("/kindle") };
+    let form = parse_query(std::str::from_utf8(&req.body).unwrap_or(""));
+    let field = |k: &str| form.get(k).map_or("", String::as_str);
+    if !constant_eq(field("token"), &form_token(&device)) {
+        return Response::error(403, "Bad form token");
+    }
+    let back = link("music", 0);
+    let Some(e) = speakers(app, &device).into_iter().find(|e| e.id == field("id")) else {
+        return redirect(&format!("{back}&notice=stale"));
+    };
+    let volume = |step: f64| number(&e, "volume_set").map(|v| ((v + step).clamp(0.0, 1.0) * 100.0).round() / 100.0).ok_or("no volume".to_string());
+    let done = match field("action") {
+        "play" => app.registry.set(&e.id, "speaker_playing", &json!(true)),
+        "pause" => app.registry.set(&e.id, "speaker_playing", &json!(false)),
+        "down" => volume(-VOLUME_STEP).and_then(|v| app.registry.set(&e.id, "volume_set", &json!(v))),
+        "up" => volume(VOLUME_STEP).and_then(|v| app.registry.set(&e.id, "volume_set", &json!(v))),
+        _ => return Response::error(400, "Unknown action"),
+    };
+    redirect(&if done.is_ok() { back } else { format!("{back}&notice=failed") })
 }
 
 fn press(app: &App, req: &Request) -> Response {
@@ -882,7 +967,7 @@ mod tests {
     use super::*;
 
     fn item(id: &str, on: Option<bool>) -> Item {
-        Item { id: id.into(), name: id.into(), class: "light".into(), on, detail: None }
+        Item { id: id.into(), name: id.into(), class: "light".into(), on, runs: on.is_none(), detail: None }
     }
 
     #[test]
@@ -941,6 +1026,17 @@ mod tests {
         assert_eq!(weather_icon("clearsky_night"), "moon");
         assert_eq!(weather_icon("lightsleetshowers_day"), "sleet");
         assert_eq!(weather_icon("heavyrainandthunder"), "thunder");
+    }
+
+    #[test]
+    fn a_group_shows_its_state_and_is_run() {
+        use crate::integrations::Capability;
+        let entity = |caps: Vec<(&str, Capability)>| Entity { id: "x".into(), name: "x".into(), zone: "z".into(), class: "button".into(), capabilities: caps.into_iter().map(|(k, c)| (k.to_string(), c)).collect() };
+        let (on, off, press) = (Capability::new(json!(true), false), Capability::new(json!(false), true), Capability::new(Value::Null, true));
+        assert_eq!(control(&entity(vec![("onoff", on.clone()), ("button", press.clone())])), Some((Some(true), true)), "read-only state, run by its button");
+        assert_eq!(control(&entity(vec![("onoff", off.clone()), ("button", press.clone())])), Some((Some(false), false)), "a real switch is switched");
+        assert_eq!(control(&entity(vec![("button", press)])), Some((None, true)));
+        assert_eq!(control(&entity(vec![("onoff", on)])), None, "nothing to press");
     }
 
     #[test]

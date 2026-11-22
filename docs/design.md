@@ -132,13 +132,14 @@ music, doorbell and its camera), further entities for the menu pages, and up to
 
 ## Kindle in its own browser (no jailbreak)
 
-Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no JavaScript or live connection, and refreshes every five minutes while the Kindle is awake.
+Open `/kindle` in the Kindle's Experimental Browser. It is plain HTML with no live connection, and works without JavaScript. A small script sends presses in the background and changes only what differs, to spare the panel a full redraw. The page refreshes every five minutes while the Kindle is awake.
 
 - Pairing uses the normal code and PIN, with a QR code for the address. The screen then keeps an `HttpOnly` cookie scoped to `/kindle`.
 - Each press is a form with a token derived from the screen, and a fingerprint of what the page showed. A stale page presses nothing and asks for another tap.
 - It shows the same controls as the e-ink picture below, four across and sixteen to a page, each with its live value. Locks, alarms and unclassified devices stay off it.
 - Info boxes above the buttons show indoor, outdoor, wind, the forecast and the screen's sensors, at most eight.
-- A menu lists Home, Lights, Climate, Scenes, Weather and the screen's own pages, leaving out empty ones. It sits at the bottom in portrait and on the left in landscape.
+- Music shows each of the screen's speakers with what it plays, play or pause, and volume in 5 % steps.
+- A menu lists Home, Music, Lights, Climate, Scenes, Weather and the screen's own pages, leaving out empty ones. It sits at the bottom in portrait and on the left in landscape.
 - Icons come from one grayscale sheet, `web/kindle-icons.png`, drawn from the tablet's icon paths. Its columns follow `ICONS` in `src/kindle.rs`.
 - The Kindle still goes to sleep by itself, so this is a remote you wake, not an always-on display.
 

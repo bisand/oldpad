@@ -80,6 +80,13 @@ fn tablet_js_is_es5() {
 }
 
 #[test]
+fn kindle_js_is_es5() {
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/web/kindle.js")).unwrap();
+    let found = problems(&src);
+    assert!(found.is_empty(), "kindle.js uses syntax old browsers do not support:\n{}", found.join("\n"));
+}
+
+#[test]
 fn the_check_catches_modern_code() {
     assert!(!problems("var f = (a) => a;").is_empty());
     assert!(!problems("const x = 1;").is_empty());
