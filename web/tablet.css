@@ -158,6 +158,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 30px;
   padding: 14px 18px; border-radius: 10px; background: #b3261e; color: #fff;
   font-size: 17px; text-align: center;
 }
+/* Stays up while disconnected, so it must never block a tap. */
+.link {
+  position: fixed; left: 50%; top: 8px; width: 420px; margin-left: -210px; z-index: 60;
+  padding: 8px 12px; border-radius: 8px; background: #b3261e; color: #fff;
+  font-size: 15px; text-align: center; pointer-events: none;
+}
 
 /* Portrait or smaller tablets */
 @media (max-width: 900px) {

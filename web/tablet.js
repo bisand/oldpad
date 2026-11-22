@@ -115,6 +115,7 @@
   var events = null;
   var pairTimer = null;
   var toastTimer = null;
+  var linkTimer = null;       // set from the moment the connection is lost until it is back
   var mapZoom = 0;              // + and − on the ships map, on top of the zoom that fits the radius
   var sheet = null;            // the entity whose controls are open
   var holdUntil = 0;          // don't redraw under a finger on the volume slider
@@ -148,6 +149,22 @@
     toastTimer = setTimeout(function () { el.className = 'toast hidden'; }, 4000);
   }
 
+  function linkShow() {
+    $('link').textContent = T.offline;
+    $('link').className = 'link';
+  }
+
+  // Short dropouts are normal on old Wi-Fi: say nothing unless it lasts.
+  function linkLost() {
+    if (linkTimer === null) { linkTimer = setTimeout(linkShow, 15000); }
+  }
+
+  function linkBack() {
+    clearTimeout(linkTimer);
+    linkTimer = null;
+    $('link').className = 'link hidden';
+  }
+
   function request(method, url, body, headers, done) {
     var x = new XMLHttpRequest();
     x.open(method, url, true);
@@ -177,6 +194,7 @@
     token = null;
     save(TOKEN_KEY, null);
     if (events) { events.close(); events = null; }
+    linkBack();
     startPairing();
   }
 
@@ -230,7 +248,8 @@
   function loadState() {
     request('GET', '/api/tablet' + (PREVIEW ? '?preview=' + PREVIEW : ''), null, {}, function (status, data) {
       if (status !== 200 || !data) {
-        toast(T.offline);
+        linkLost();
+        linkShow();
         setTimeout(loadState, 10000);
         return;
       }
@@ -256,6 +275,8 @@
       }
       show('app');
       render();
+      // Fresh values, and a stream to keep them fresh (the two modes without one poll instead).
+      if (PREVIEW || !window.EventSource || (events && events.readyState === 1)) { linkBack(); }
       if (!events) { connectEvents(); }
     });
   }
@@ -266,7 +287,7 @@
     if (!window.EventSource) { setTimeout(loadState, 60000); return; } // no live updates: refresh instead
     request('POST', '/api/tablet/ticket', {}, {}, function (status, data) {
       if (events) { return; } // another attempt got there first
-      if (status !== 200 || !data) { setTimeout(connectEvents, 5000); return; }
+      if (status !== 200 || !data) { linkLost(); setTimeout(connectEvents, 5000); return; }
       var es = new EventSource('/api/events?ticket=' + encodeURIComponent(data.ticket));
       events = es;
       // Fetch only once subscribed, so a change made while the stream was down can't be missed.
@@ -285,6 +306,7 @@
       // The ticket is single use, so let the browser's own retry fail and get a new one.
       es.onerror = function () {
         es.close();
+        linkLost();
         if (events === es) { events = null; setTimeout(connectEvents, 5000); }
       };
     });
