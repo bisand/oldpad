@@ -41,7 +41,7 @@ An instance may also implement `search(entity, query)`, returning `[{id, title, 
 
 **Cameras.** Implement `snapshot(entity)`, never `image()`: `/api/image` needs no sign-in. Snapshots are served only to a signed-in screen that was assigned the camera.
 
-**History.** Give an entity a `history` capability with value null and implement `history(entity)`, returning `{capability: [[epoch, value], …]}` for the last 24 hours. The tablet's graphs page plots it for the screen's indoor, outdoor and wind readings. Keep the answer cheap: every screen on that page asks every 5 minutes.
+**History.** Give an entity a `history` capability with value null and implement `history(entity)`, returning `{capability: [[epoch, value], …]}` for the last 24 hours. The tablet's graphs page plots it for the screen's indoor, outdoor and wind readings. Keep the answer cheap: every screen on that page asks every 5 minutes. Without this, oldpad records the entity itself every 15 minutes when it is a screen's indoor, outdoor or wind panel.
 
 **Doorbell.** A screen can pick any entity with an `alarm_*` capability as its doorbell, and optionally a camera. When that capability changes to true, the tablet shows a pop-up for a minute. It must go back to false before the next ring counts.
 

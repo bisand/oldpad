@@ -28,8 +28,11 @@ In daily use on an iPad 2 with iOS 9.3.5; older versions are untested.
 - **Menu pages** for music, lights, climate, Flows, a longer forecast, graphs,
   ships, departures, the calendar and cameras. A page shows when the screen has
   something for it, and you can add pages of your own.
-- **Graphs.** The last 24 hours of temperature, humidity, CO₂ and wind from
-  InfluxDB, with the electricity price for the hours ahead.
+- **Graphs.** The last 24 hours of temperature, humidity, CO₂ and wind for the
+  screen's indoor, outdoor and wind readings, with the electricity price for the
+  hours ahead. InfluxDB's history is used where it is the source. For anything
+  else oldpad records a reading every 15 minutes, so those graphs fill up from
+  the day you add them.
 - **Doorbell pop-up.** Pick a doorbell or motion sensor from Homey or Home
   Assistant and optionally a camera per screen. When it goes off, the screen shows
   the picture for a minute, even at night. It is silent: old iPads do not let a
@@ -85,7 +88,7 @@ on your phone, enter the code and create your passkey. Then open
 | `OLDPAD_PUBLIC_URL` | `http://localhost:8080` | The address your phone uses. Must be `https://` (passkeys require it) unless it is `localhost`. Put a TLS-terminating proxy in front. |
 | `OLDPAD_BIND` | `0.0.0.0:8080` | Where to listen, in plain HTTP: put an HTTPS proxy in front. |
 | `OLDPAD_ADMIN_BIND` | unset | Optional separate port for the admin page, for setups that keep tablets on a private network. |
-| `OLDPAD_DATA_DIR` | `data` | One JSON file with admins, screens and integrations. Keep it private. |
+| `OLDPAD_DATA_DIR` | `data` | One JSON file with admins, screens and integrations, and one with the last day of readings. Keep it private. |
 | `OLDPAD_DEVICE_TTL_DAYS` | `90` | A screen unused this long must pair again. |
 | `OLDPAD_ADMIN_TTL_DAYS` | `30` | Phone sign-in lifetime. |
 | `OLDPAD_LAN_IP` | unset | Any address on the home network, so integrations can scan it for devices (Sonos) where multicast discovery does not reach. In Kubernetes, set it to the node's address (`status.hostIP`). |

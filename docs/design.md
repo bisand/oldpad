@@ -67,6 +67,10 @@ stream connects it fetches the current state once, so nothing changed during a
 dropout is missed, and a banner appears if it stays disconnected for 15 seconds.
 An integration that stops answering for two minutes is named in a bar on the
 screens that show it, because its last values stay up.
+Readings for the graphs come from InfluxDB where that is the source. For other
+climate panels the server samples every 15 minutes and keeps a day in
+`history.json`, separate from the state and from backups. An integration that is
+down is skipped, so an outage shows as a gap rather than a flat line.
 Only camera pictures and the graphs' history are fetched on a timer, while shown.
 
 ## Integrations
@@ -126,7 +130,6 @@ music, doorbell and its camera), further entities for the menu pages, and up to
 - UPnP event subscriptions for Sonos instead of 4-second polling.
 - Doorbell triggers from Netatmo. Homey and Home Assistant expose the `alarm_*`
   capabilities it needs today.
-- History for graphs from sources other than InfluxDB.
 - More languages than English and Norwegian.
 - An example Kubernetes manifest.
 - Out-of-process integrations (a program speaking JSON over stdio), so

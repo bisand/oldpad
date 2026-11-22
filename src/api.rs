@@ -118,6 +118,15 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     };
                     let p = &device.panels;
                     let panel = |id: &Option<String>| id.as_ref().map(get).unwrap_or(Value::Null);
+                    // Climate panels can be graphed: by their own system, or else from what oldpad records.
+                    let climate = |id: &Option<String>| {
+                        let mut v = panel(id);
+                        let graphable = v["capabilities"].as_object().is_some_and(|c| !c.contains_key("history") && crate::recorder::GRAPHED.iter().any(|g| c.contains_key(*g)));
+                        if graphable {
+                            v["capabilities"]["history"] = json!({ "value": null, "settable": false });
+                        }
+                        v
+                    };
                     // Only what this screen shows: it need not know of the rest.
                     let shown: std::collections::HashSet<String> = device.allowed().iter().filter_map(|i| Some(i.split_once(':')?.0.to_string())).collect();
                     let down: Vec<Value> = {
@@ -136,7 +145,7 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                             "id": p.id, "name": p.name, "icon": p.icon,
                             "items": p.items.iter().map(|i| if i.starts_with("card:") { json!({ "card": &i[5..] }) } else { get(i) }).collect::<Vec<_>>(),
                         })).collect::<Vec<_>>(),
-                        "panels": { "indoor": panel(&p.indoor), "outdoor": panel(&p.outdoor), "wind": panel(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker), "doorbell": panel(&p.doorbell), "door_camera": panel(&p.door_camera) },
+                        "panels": { "indoor": climate(&p.indoor), "outdoor": climate(&p.outdoor), "wind": climate(&p.wind), "weather": panel(&p.weather), "speaker": panel(&p.speaker), "doorbell": panel(&p.doorbell), "door_camera": panel(&p.door_camera) },
                     })))
                 }
                 // Base64 in JSON, not an img URL: a camera must need the screen's sign-in.
@@ -153,7 +162,10 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                     if !device.allowed().contains(id) {
                         return Err(Response::error(403, "Not configured for this screen"));
                     }
-                    app.registry.history(id).map(Response::ok).map_err(|e| Response::error(502, &e))
+                    if app.registry.entity(id).is_some_and(|e| e.capabilities.contains_key("history")) {
+                        return app.registry.history(id).map(Response::ok).map_err(|e| Response::error(502, &e));
+                    }
+                    app.recorder.get(id).map(Response::ok).ok_or_else(|| Response::error(502, "No history yet"))
                 }
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
                 ("POST", ["tablet", "search"]) => {

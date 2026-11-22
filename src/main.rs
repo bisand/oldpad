@@ -4,6 +4,7 @@ mod cbor;
 mod client;
 mod http;
 mod integrations;
+mod recorder;
 mod store;
 mod util;
 mod webauthn;
@@ -57,6 +58,10 @@ fn main() {
         eprintln!("  admin port: {bind}");
     }
     app.start_integrations();
+    {
+        let app = app.clone();
+        std::thread::spawn(move || app.record_forever());
+    }
 
     if let Some(admin) = admin_listener {
         let app = app.clone();

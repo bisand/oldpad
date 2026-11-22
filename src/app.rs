@@ -1,5 +1,6 @@
 use crate::http::Request;
 use crate::integrations::{Event, Registry, Sink};
+use crate::recorder::{self, Recorder};
 use crate::store::{Admin, Device, Store};
 use crate::util::{constant_eq, now, random_code, random_pin, random_token, sha256_hex};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -104,12 +105,16 @@ pub struct App {
     setup_failures: AtomicUsize,
     /// Invitations for another admin: (code, expires). One use each.
     pub invites: Mutex<Vec<(String, u64)>>,
+    /// A day of readings for sensors whose system keeps none.
+    pub recorder: Recorder,
 }
 
 impl App {
     pub fn new(cfg: Config, store: Store) -> Arc<App> {
         let setup_code = store.data.admins.is_empty().then(|| random_code(8));
+        let recorder = Recorder::open(&cfg.data_dir);
         Arc::new(App {
+            recorder,
             cfg,
             store: Mutex::new(store),
             registry: Arc::new(Registry::new()),
@@ -128,6 +133,32 @@ impl App {
         for i in list {
             self.registry.start(i.id.clone(), i.kind, i.config, self.sink(i.id));
         }
+    }
+
+    /// Samples on the quarter hour. The first one waits for integrations to connect.
+    pub fn record_forever(&self) {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        loop {
+            let t = now() / recorder::EVERY * recorder::EVERY;
+            self.record_readings(t as i64);
+            std::thread::sleep(std::time::Duration::from_secs((t + recorder::EVERY).saturating_sub(now()).max(1)));
+        }
+    }
+
+    /// The climate panels of every screen, unless their system has its own history.
+    /// An integration that is down is skipped: its last value is not a reading.
+    pub fn record_readings(&self, t: i64) {
+        let ids: HashSet<String> = {
+            let store = self.store.lock().unwrap();
+            store.data.devices.iter().map(|d| store.data.effective(d)).flat_map(|d| [d.panels.indoor, d.panels.outdoor, d.panels.wind]).flatten().collect()
+        };
+        let down: HashSet<String> = self.registry.down().into_iter().map(|(id, _)| id).collect();
+        let list: Vec<_> = ids.iter()
+            .filter(|id| id.split_once(':').is_some_and(|(i, _)| !down.contains(i)))
+            .filter_map(|id| self.registry.entity(id))
+            .filter(|e| !e.capabilities.contains_key("history"))
+            .collect();
+        self.recorder.record(t, &list);
     }
 
     /// Routes an integration's events to the tablets that show the entity.

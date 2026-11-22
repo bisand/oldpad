@@ -208,6 +208,22 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(tablet.call("GET", &format!("/api/tablet/history?id={lamp}"), None).0, 502, "a lamp has no history");
     assert_eq!(stranger.call("GET", &format!("/api/tablet/history?id={outdoor}"), None).0, 401);
 
+    // --- a sensor whose system keeps no history: oldpad records it, except while it is down
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "panels": { "outdoor": outdoor, "indoor": heater } }))).0, 200);
+    let heater_history = format!("/api/tablet/history?id={heater}");
+    assert!(tablet.call("GET", "/api/tablet", None).1["panels"]["indoor"]["capabilities"].get("history").is_some(), "offered to the graphs page");
+    assert_eq!(tablet.call("GET", &heater_history, None).0, 502, "nothing recorded yet");
+    let t = crate::util::now() as i64;
+    app.registry.force_down(&iid, Some(200));
+    app.record_readings(t - 900);
+    assert_eq!(tablet.call("GET", &heater_history, None).0, 502, "a stale value is not a reading");
+    app.registry.force_down(&iid, None);
+    app.record_readings(t);
+    let (s, recorded) = tablet.call("GET", &heater_history, None);
+    assert_eq!((s, recorded["measure_temperature"].as_array().map(Vec::len)), (200, Some(1)));
+    assert_eq!(app.recorder.get(&outdoor), None, "a system with its own history is not recorded twice");
+    assert_eq!(phone.call("PUT", &dev, Some(json!({ "panels": { "outdoor": outdoor } }))).0, 200);
+
     // --- live stream: flip the lamp, the event arrives on the stream
     let (_, ticket) = tablet.call("POST", "/api/tablet/ticket", Some(json!({})));
     let mut sse = TcpStream::connect(base.trim_start_matches("http://")).unwrap();
