@@ -486,8 +486,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
             if !app.store.lock().unwrap().data.devices.iter().any(|d| d.id == *id) {
                 return Err(Response::error(404, "No such device"));
             }
-            app.notify_device(id, "refresh");
-            Ok(Response::ok(json!({ "ok": app.live(id) })))
+            Ok(Response::ok(json!({ "ok": app.reload_screen(id), "live": app.live(id) })))
         }
         ("DELETE", ["devices", id]) => {
             let mut store = app.store.lock().unwrap();

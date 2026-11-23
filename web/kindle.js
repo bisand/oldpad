@@ -46,6 +46,13 @@
     if (!timer) { timer = setTimeout(function () { timer = null; refresh(); }, ms); }
   }
 
+  // The admin's Reload screen, for a browser with no stream to hear it on.
+  function told(xhr) {
+    if (xhr.status !== 200 || !xhr.getResponseHeader('X-Oldpad-Reload')) { return false; }
+    window.location.reload();
+    return true;
+  }
+
   function refresh() {
     var xhr, started = presses, field = document.activeElement;
     // Not under a finger or a half-typed search. Search results would ask the music service each time.
@@ -56,7 +63,7 @@
     xhr.onreadystatechange = function () {
       var shown = false;
       if (xhr.readyState === 4 && xhr.status === 0 && window.oldpadHealth) { window.oldpadHealth.drop(); }
-      if (xhr.readyState !== 4 || xhr.status !== 200 || started !== presses) { return; }
+      if (xhr.readyState !== 4 || told(xhr) || xhr.status !== 200 || started !== presses) { return; }
       try { shown = show(xhr.responseText); } catch (e) { shown = false; }
       if (!shown) { window.location.reload(); }
     };
@@ -82,6 +89,7 @@
       var shown = false;
       if (xhr.readyState !== 4) { return; }
       busy = false;
+      if (told(xhr)) { return; }
       try { shown = xhr.status === 200 && show(xhr.responseText); } catch (e) { shown = false; }
       // Reloading is a plain GET, so it can never press the control a second time.
       // With no answer at all, stay on this page: a reload would show the browser's error.

@@ -223,6 +223,10 @@ fn phone_and_tablet_end_to_end() {
     let health = &list.as_array().unwrap().iter().find(|d| d["id"] == kindle_id.as_str()).unwrap()["health"];
     assert_eq!((&health["ms"], &health["drops"], &health["error"], &health["browser"], &health["width"]), (&json!(40), &json!(50), &json!("boomx"), &json!("Kindle test"), &json!(1072)), "bounded and cleaned");
     assert_eq!(list[0]["health"]["ms"], 12, "each screen has its own report");
+    let (_, reload) = phone.call("POST", &format!("/api/admin/devices/{kindle_id}/reload"), Some(json!({})));
+    assert_eq!((&reload["ok"], &reload["live"]), (&json!(true), &json!(false)), "a polling Kindle is told at its next check");
+    assert_eq!(web("GET", "/kindle", &screen, None).headers.get("x-oldpad-reload").map(String::as_str), Some("1"));
+    assert!(!web("GET", "/kindle", &screen, None).headers.contains_key("x-oldpad-reload"), "once");
     assert!(page.headers["content-security-policy"].contains("form-action 'self'"));
     let html = text(&page);
     if let Ok(path) = std::env::var("OLDPAD_KINDLE_HTML") {

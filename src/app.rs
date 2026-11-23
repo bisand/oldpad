@@ -137,6 +137,8 @@ pub struct App {
     /// When each Kindle last asked for anything: its browser may hold no stream.
     polled: Mutex<HashMap<String, u64>>,
     health: Mutex<HashMap<String, Health>>,
+    /// Kindles to reload at their next check, since they hold no stream to be told on.
+    reloads: Mutex<HashSet<String>>,
     /// Printed at startup while no admin exists; needed to register the first passkey.
     pub setup_code: Mutex<Option<String>>,
     setup_failures: AtomicUsize,
@@ -163,6 +165,7 @@ impl App {
             clients: Mutex::new(Vec::new()),
             polled: Mutex::new(HashMap::new()),
             health: Mutex::new(HashMap::new()),
+            reloads: Mutex::new(HashSet::new()),
             setup_code: Mutex::new(setup_code),
             setup_failures: AtomicUsize::new(0),
             invites: Mutex::new(Vec::new()),
@@ -257,6 +260,23 @@ impl App {
         self.polled.lock().unwrap().insert(device_id.to_string(), now());
     }
 
+    /// Reloads a screen now over its stream, or at its next check. False if it is not there to ask.
+    pub fn reload_screen(&self, device_id: &str) -> bool {
+        self.notify_device(device_id, "refresh");
+        if self.live(device_id) {
+            return true;
+        }
+        let polling = self.online(device_id);
+        if polling {
+            self.reloads.lock().unwrap().insert(device_id.to_string());
+        }
+        polling
+    }
+
+    pub fn take_reload(&self, device_id: &str) -> bool {
+        self.reloads.lock().unwrap().remove(device_id)
+    }
+
     pub fn report_health(&self, device_id: &str, browser: &str, r: &Value) {
         let t = now();
         let mut all = self.health.lock().unwrap();
@@ -314,6 +334,7 @@ impl App {
         self.clients.lock().unwrap().retain(|c| ids.contains(&c.device_id));
         self.polled.lock().unwrap().retain(|id, _| ids.contains(id));
         self.health.lock().unwrap().retain(|id, _| ids.contains(id));
+        self.reloads.lock().unwrap().retain(|id| ids.contains(id));
     }
 
     pub fn add_client(&self, device: &Device, tx: Sender<String>) {

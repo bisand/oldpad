@@ -346,7 +346,8 @@ fn screen_device(app: &App, req: &Request) -> Option<Device> {
 fn show(app: &App, req: &Request) -> Response {
     let nb = app.store.lock().unwrap().data.settings.language == "nb";
     if let Some(device) = screen_device(app, req) {
-        return dashboard(app, req, &device, nb);
+        let page = dashboard(app, req, &device, nb);
+        return if app.take_reload(&device.id) { page.header("X-Oldpad-Reload", "1") } else { page };
     }
     let pending = req.cookie(PAIR_COOKIE);
     let parts: Vec<&str> = pending.as_deref().unwrap_or("").split('.').collect();

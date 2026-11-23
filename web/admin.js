@@ -390,10 +390,11 @@ function screenCard(d, devices) {
       linkButton('Preview', `/?preview=${encodeURIComponent(d.id)}`, '', { target: '_blank', rel: 'noopener' }),
       moreMenu(`More actions for ${d.name}`,
         btn('Reload screen', async () => {
-          await api('POST', `/devices/${d.id}/reload`, {});
-          toast(`${d.name} is reloading`);
+          const sent = await api('POST', `/devices/${d.id}/reload`, {});
+          if (!sent.ok) { toast(`${d.name} is offline`, true); return; }
+          toast(sent.live ? `${d.name} is reloading` : `${d.name} reloads within 15 seconds`);
           setTimeout(refresh, 4000);
-        }, { disabled: !d.live }),
+        }, { disabled: !d.online }),
         btn('Remove screen', async () => {
           const users = devices.filter((x) => x.follows === d.id);
           const yes = await ask({ title: `Remove ${d.name}?`, body: `It will have to be paired again.${users.length ? ` ${users[0].name} takes over the shared layout.` : ''}`, action: 'Remove', danger: true });
