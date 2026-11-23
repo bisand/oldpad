@@ -170,6 +170,7 @@ a.button { text-align: center; }
 .badge.wait { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .detail { margin: 8px 0 0; overflow-wrap: anywhere; }
 .shared { margin: 10px 0 0; }
+.health { margin: 10px 0 0; line-height: 1.45; overflow-wrap: anywhere; }
 .field { margin-top: 14px; }
 .field label { margin-top: 0; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

@@ -354,6 +354,26 @@ function layoutChoice(d, devices) {
   return field('Layout', id, pick);
 }
 
+function browserName(agent) {
+  const ios = /(iPad|iPhone).*? OS (\d+)[_.](\d+)/.exec(agent);
+  if (ios) return `${ios[1]} · iOS ${ios[2]}.${ios[3]}`;
+  return /Kindle/.test(agent) ? 'Kindle' : agent;
+}
+
+// What the screen itself last reported. Dropouts and errors cover the last 24 hours.
+function screenHealth(d) {
+  const x = d.health;
+  if (!x) return h('p', { class: 'small muted health' }, 'No health report yet');
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const link = [x.ms === null ? null : `Response ${x.ms} ms`, plural(x.drops, 'dropout'), plural(x.errors, 'script error')];
+  const device = [browserName(x.browser), x.width ? `${x.width}×${x.height} ${x.width > x.height ? 'landscape' : 'portrait'}` : null, x.version ? `oldpad ${x.version}` : null];
+  return h('div', { class: 'small muted health' },
+    h('div', {}, `${link.filter(Boolean).join(' · ')} (24 h)`),
+    h('div', {}, device.filter(Boolean).join(' · ')),
+    x.error ? h('div', {}, `Last error: ${x.error}`) : null,
+    d.online ? null : h('div', {}, `Last report ${ago(x.reported)}`));
+}
+
 function screenCard(d, devices) {
   const leader = devices.find((x) => x.id === d.follows);
   const pages = d.pages?.length || 0;
@@ -363,6 +383,7 @@ function screenCard(d, devices) {
       h('div', { class: 'grow' }, h('h2', { class: 'card-title' }, d.name),
         h('div', { class: 'small muted' }, leader ? `Uses ${leader.name}'s layout` : summary, d.online ? '' : ` · seen ${ago(d.lastSeen)}`)),
       badge(d.online ? 'ok' : '', d.online ? 'Online' : 'Offline')),
+    screenHealth(d),
     layoutChoice(d, devices),
     h('div', { class: 'card-actions' },
       linkButton(leader ? 'Details' : 'Edit layout', `#/device/${d.id}`, 'primary'),

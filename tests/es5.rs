@@ -80,6 +80,13 @@ fn tablet_js_is_es5() {
 }
 
 #[test]
+fn health_js_is_es5() {
+    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/web/health.js")).unwrap();
+    let found = problems(&src);
+    assert!(found.is_empty(), "health.js uses syntax old browsers do not support:\n{}", found.join("\n"));
+}
+
+#[test]
 fn kindle_js_is_es5() {
     let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/web/kindle.js")).unwrap();
     let found = problems(&src);

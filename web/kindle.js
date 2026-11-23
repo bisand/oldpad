@@ -55,6 +55,7 @@
     xhr.open('GET', address(), true);
     xhr.onreadystatechange = function () {
       var shown = false;
+      if (xhr.readyState === 4 && xhr.status === 0 && window.oldpadHealth) { window.oldpadHealth.drop(); }
       if (xhr.readyState !== 4 || xhr.status !== 200 || started !== presses) { return; }
       try { shown = show(xhr.responseText); } catch (e) { shown = false; }
       if (!shown) { window.location.reload(); }
@@ -99,4 +100,18 @@
     events.addEventListener('revoked', function () { window.location.reload(); }, false);
   }
   setInterval(function () { later(0); }, window.EventSource ? 60000 : 15000);
+  if (window.oldpadHealth) {
+    window.oldpadHealth.start(function (body, done) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/kindle/health', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.onreadystatechange = function () {
+        var data = null;
+        if (xhr.readyState !== 4) { return; }
+        try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+        done(xhr.status, data);
+      };
+      xhr.send(JSON.stringify(body));
+    });
+  }
 }());

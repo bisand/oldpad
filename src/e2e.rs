@@ -214,6 +214,15 @@ fn phone_and_tablet_end_to_end() {
     let (_, list) = phone.call("GET", "/api/admin/devices", None);
     let shown = list.as_array().unwrap().iter().find(|d| d["id"] == kindle_id.as_str()).unwrap();
     assert_eq!((&shown["online"], &shown["live"]), (&json!(true), &json!(false)), "a Kindle with no stream is online while it asks for pages");
+    assert_eq!(shown["health"], Value::Null, "nothing reported yet");
+    let report = json!({ "ms": 40, "drops": 9999, "errors": 1, "error": "boom\r\nx", "version": "0.7.3", "width": 1072, "height": 1226 }).to_string();
+    let send = |cookie: &str| request(&base, "POST", "/kindle/health", &[("Cookie", cookie), ("Content-Type", "application/json"), ("User-Agent", "Kindle test")], Some(report.as_bytes())).unwrap().status;
+    assert_eq!((send(""), send(&screen)), (401, 200), "only a paired screen reports");
+    assert_eq!(tablet.call("POST", "/api/tablet/health", Some(json!({ "ms": 12 }))).0, 200);
+    let (_, list) = phone.call("GET", "/api/admin/devices", None);
+    let health = &list.as_array().unwrap().iter().find(|d| d["id"] == kindle_id.as_str()).unwrap()["health"];
+    assert_eq!((&health["ms"], &health["drops"], &health["error"], &health["browser"], &health["width"]), (&json!(40), &json!(50), &json!("boomx"), &json!("Kindle test"), &json!(1072)), "bounded and cleaned");
+    assert_eq!(list[0]["health"]["ms"], 12, "each screen has its own report");
     assert!(page.headers["content-security-policy"].contains("form-action 'self'"));
     let html = text(&page);
     if let Ok(path) = std::env::var("OLDPAD_KINDLE_HTML") {

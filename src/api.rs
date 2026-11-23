@@ -44,6 +44,7 @@ pub fn handle(app: &Arc<App>, req: &Request) -> Response {
     match (m, s.as_slice()) {
         ("GET", []) => asset("text/html; charset=utf-8", TABLET_HTML),
         ("GET", ["tablet.js"]) => asset("text/javascript; charset=utf-8", TABLET_JS),
+        ("GET", ["health.js"]) => asset("text/javascript; charset=utf-8", crate::app::HEALTH_JS),
         ("GET", ["tablet.css"]) => asset("text/css; charset=utf-8", TABLET_CSS),
         ("GET", ["admin"]) => asset("text/html; charset=utf-8", ADMIN_HTML),
         ("GET", ["admin.js"]) => asset("text/javascript; charset=utf-8", ADMIN_JS),
@@ -178,6 +179,10 @@ fn tablet(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response
                 }
                 ("GET", ["tablet", "kindle.png"]) => Ok(crate::kindle::screen(app, &device, req)),
                 ("POST", ["tablet", "kindle", "tap"]) => crate::kindle::tap(app, &device, &req.json()?),
+                ("POST", ["tablet", "health"]) => {
+                    app.report_health(&device.id, req.header("user-agent").unwrap_or(""), &req.json()?);
+                    Ok(Response::ok(json!({ "version": crate::util::VERSION })))
+                }
                 ("POST", ["tablet", "ticket"]) => Ok(Response::ok(json!({ "ticket": app.new_ticket(&device.id) }))),
                 ("POST", ["tablet", "search"]) => {
                     let body = req.json()?;
@@ -403,7 +408,7 @@ fn admin(app: &Arc<App>, req: &Request, m: &str, s: &[&str]) -> Result<Response,
                 .devices
                 .iter()
                 .map(|d| store.data.effective(d))
-                .map(|d| json!({ "id": d.id, "name": d.name, "follows": d.follows, "online": app.online(&d.id), "live": app.live(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
+                .map(|d| json!({ "id": d.id, "name": d.name, "follows": d.follows, "online": app.online(&d.id), "live": app.live(&d.id), "health": app.health(&d.id), "created": d.created, "lastSeen": d.last_seen, "expires": d.expires, "tiles": d.tiles, "panels": d.panels, "more": d.more, "pages": d.pages, "favRows": d.fav_rows.unwrap_or(1), "names": d.names }))
                 .collect();
             Ok(Response::ok(json!(list)))
         }

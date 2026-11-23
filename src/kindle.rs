@@ -270,11 +270,20 @@ pub fn route(app: &App, req: &Request, s: &[&str]) -> Response {
             None => Response::error(401, "Not paired"),
         },
         ("GET", ["kindle", "app.js"]) => Response::new(200, "text/javascript; charset=utf-8", PAGE_JS).header("Cache-Control", "no-cache"),
+        ("GET", ["kindle", "health.js"]) => Response::new(200, "text/javascript; charset=utf-8", crate::app::HEALTH_JS).header("Cache-Control", "no-cache"),
         ("GET", ["kindle", "icons.png"]) => Response::new(200, "image/png", ICON_SHEET).header("Cache-Control", "public, max-age=86400"),
         ("GET", ["kindle", "qr", file]) => pairing_qr(app, req, file),
         ("POST", ["kindle", "pair"]) => start_pairing(app),
         ("POST", ["kindle", "press"]) => press(app, req),
         ("POST", ["kindle", "speaker"]) => speaker_action(app, req),
+        ("POST", ["kindle", "health"]) => match (screen_device(app, req), req.json()) {
+            (Some(device), Ok(report)) => {
+                app.report_health(&device.id, req.header("user-agent").unwrap_or(""), &report);
+                Response::ok(serde_json::json!({ "version": crate::util::VERSION }))
+            }
+            (None, _) => Response::error(401, "Not paired"),
+            (_, Err(e)) => e,
+        },
         _ => Response::error(404, "Not found"),
     }
 }
@@ -533,7 +542,7 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let rows = menu_rows(entries.len());
     let paged = if pages > 1 { " paged" } else { "" };
     let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}{paged}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
-    let body = format!("{body}<script src=\"/kindle/app.js\"></script>");
+    let body = format!("{body}<script src=\"/kindle/health.js\"></script><script src=\"/kindle/app.js\"></script>");
     html(&device.name, PAGE_REFRESH, &escape_xml(&here), &body, true)
 }
 

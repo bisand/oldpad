@@ -5,7 +5,7 @@ use crate::store::{Admin, Device, Store};
 use crate::util::{constant_eq, now, random_code, random_pin, random_token, sha256_hex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, Weak};
@@ -92,6 +92,37 @@ struct Client {
     tx: Sender<String>,
 }
 
+pub const HEALTH_JS: &str = include_str!("../web/health.js");
+const HEALTH_SAMPLES: usize = 60;
+const HEALTH_EVENTS: usize = 500;
+const DAY: u64 = 86_400;
+
+/// How a screen says it is doing. Kept in memory: a day of history is not worth writing to disk.
+#[derive(Default)]
+struct Health {
+    reported: u64,
+    browser: String,
+    width: u64,
+    height: u64,
+    version: String,
+    times: VecDeque<u64>,
+    drops: VecDeque<u64>,
+    errors: VecDeque<u64>,
+    last_error: String,
+}
+
+/// Screens are paired but still untrusted input: counts and text are bounded here.
+fn note_events(events: &mut VecDeque<u64>, count: u64, t: u64) {
+    events.extend(std::iter::repeat_n(t, count.min(50) as usize));
+    while events.front().is_some_and(|e| t.saturating_sub(*e) > DAY) || events.len() > HEALTH_EVENTS {
+        events.pop_front();
+    }
+}
+
+fn clipped(text: &str, most: usize) -> String {
+    text.chars().filter(|c| !c.is_control()).take(most).collect()
+}
+
 /// Seconds a Kindle counts as online after a request. Its page asks at least once a minute while awake.
 const POLL_WINDOW: u64 = 90;
 
@@ -105,6 +136,7 @@ pub struct App {
     clients: Mutex<Vec<Client>>,
     /// When each Kindle last asked for anything: its browser may hold no stream.
     polled: Mutex<HashMap<String, u64>>,
+    health: Mutex<HashMap<String, Health>>,
     /// Printed at startup while no admin exists; needed to register the first passkey.
     pub setup_code: Mutex<Option<String>>,
     setup_failures: AtomicUsize,
@@ -130,6 +162,7 @@ impl App {
             tickets: Mutex::new(HashMap::new()),
             clients: Mutex::new(Vec::new()),
             polled: Mutex::new(HashMap::new()),
+            health: Mutex::new(HashMap::new()),
             setup_code: Mutex::new(setup_code),
             setup_failures: AtomicUsize::new(0),
             invites: Mutex::new(Vec::new()),
@@ -224,6 +257,42 @@ impl App {
         self.polled.lock().unwrap().insert(device_id.to_string(), now());
     }
 
+    pub fn report_health(&self, device_id: &str, browser: &str, r: &Value) {
+        let t = now();
+        let mut all = self.health.lock().unwrap();
+        let h = all.entry(device_id.to_string()).or_default();
+        h.reported = t;
+        h.browser = clipped(browser, 300);
+        h.width = r["width"].as_u64().unwrap_or(0).min(20_000);
+        h.height = r["height"].as_u64().unwrap_or(0).min(20_000);
+        if let Some(v) = r["version"].as_str() {
+            h.version = clipped(v, 32);
+        }
+        if let Some(ms) = r["ms"].as_u64().filter(|ms| *ms <= 120_000) {
+            h.times.push_back(ms);
+            if h.times.len() > HEALTH_SAMPLES {
+                h.times.pop_front();
+            }
+        }
+        note_events(&mut h.drops, r["drops"].as_u64().unwrap_or(0), t);
+        note_events(&mut h.errors, r["errors"].as_u64().unwrap_or(0), t);
+        if let Some(e) = r["error"].as_str().filter(|e| !e.is_empty()) {
+            h.last_error = clipped(e, 200);
+        }
+    }
+
+    /// The last report, with a day's dropouts and script errors. Null until a screen has reported.
+    pub fn health(&self, device_id: &str) -> Value {
+        let t = now();
+        let all = self.health.lock().unwrap();
+        let Some(h) = all.get(device_id) else { return Value::Null };
+        let recent = |events: &VecDeque<u64>| events.iter().filter(|e| t.saturating_sub(**e) <= DAY).count();
+        let mut times: Vec<u64> = h.times.iter().copied().collect();
+        times.sort_unstable();
+        let errors = recent(&h.errors);
+        json!({ "reported": h.reported, "ms": times.get(times.len() / 2), "drops": recent(&h.drops), "errors": errors, "error": if errors > 0 { h.last_error.as_str() } else { "" }, "browser": h.browser, "width": h.width, "height": h.height, "version": h.version })
+    }
+
     pub fn notify_all(&self, event: &str) {
         self.send_where(|_| true, &sse(event, &json!({})));
     }
@@ -244,6 +313,7 @@ impl App {
         let ids: HashSet<String> = self.store.lock().unwrap().data.devices.iter().map(|d| d.id.clone()).collect();
         self.clients.lock().unwrap().retain(|c| ids.contains(&c.device_id));
         self.polled.lock().unwrap().retain(|id, _| ids.contains(id));
+        self.health.lock().unwrap().retain(|id, _| ids.contains(id));
     }
 
     pub fn add_client(&self, device: &Device, tx: Sender<String>) {

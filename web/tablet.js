@@ -318,6 +318,7 @@
       es.addEventListener('refresh', function () { window.location.reload(); }, false);
       // The ticket is single use, so let the browser's own retry fail and get a new one.
       es.onerror = function () {
+        if (window.oldpadHealth) { window.oldpadHealth.drop(); }
         es.close();
         linkLost();
         if (events === es) { events = null; setTimeout(connectEvents, 5000); }
@@ -1870,4 +1871,9 @@
   tick();
   token = PREVIEW ? null : load(TOKEN_KEY);
   if (token || PREVIEW) { loadState(); } else { startPairing(); }
+  if (window.oldpadHealth) {
+    window.oldpadHealth.start(function (body, done) {
+      if (token && !PREVIEW) { request('POST', '/api/tablet/health', body, {}, done); }
+    });
+  }
 }());
