@@ -221,8 +221,9 @@ const CSS: &str = "html{height:100%}body{height:100%;margin:0;padding:12px 14px;
 .shell{position:relative;min-height:100%;-webkit-box-sizing:border-box;box-sizing:border-box}.r1{padding-bottom:112px}.r2{padding-bottom:186px}.r3{padding-bottom:260px}\
 h1{font-size:34px;line-height:40px;margin:0}p{margin:8px 6px}form{margin:0}\
 table{width:100%;border-collapse:separate;border-spacing:6px;table-layout:fixed}td{padding:0;vertical-align:top}\
-.head{border-spacing:0;border-bottom:3px solid #000;margin-bottom:6px;padding:0 6px 6px}.head td{vertical-align:middle}.pager{width:190px;text-align:right;font-size:18px;white-space:nowrap}\
-.pager a{display:inline-block;width:52px;line-height:42px;margin:0 0 0 6px;border:2px solid #000;-webkit-border-radius:8px;border-radius:8px;color:#000;font-size:26px;text-align:center;text-decoration:none}\
+.head{border-spacing:0;border-bottom:3px solid #000;margin-bottom:6px;padding:0 6px 6px}.head td{vertical-align:middle}\
+.pager{height:52px;line-height:48px;text-align:center;font-size:20px;font-weight:bold;white-space:nowrap;background:#fff}.r1 .pager{position:absolute;left:0;right:0;bottom:104px}.r2 .pager{position:absolute;left:0;right:0;bottom:178px}.r3 .pager{position:absolute;left:0;right:0;bottom:252px}.paged .main{padding-bottom:58px}\
+.pager a{display:inline-block;width:104px;line-height:42px;margin:0 14px;border:2px solid #000;-webkit-border-radius:8px;border-radius:8px;color:#000;font-size:26px;text-align:center;text-decoration:none}\
 .box{height:88px;padding:8px 10px;border:1px solid #000;-webkit-border-radius:10px;border-radius:10px;overflow:hidden;word-wrap:break-word}.box .ic{float:right}\
 .box small{display:block;font-size:15px;line-height:18px;white-space:nowrap;overflow:hidden}.box b{display:block;font-size:30px;line-height:36px;white-space:nowrap;overflow:hidden}\
 .box b.words{font-size:17px;line-height:19px;height:38px;white-space:normal}.box span{display:block;font-size:14px;line-height:17px}\
@@ -230,11 +231,12 @@ table{width:100%;border-collapse:separate;border-spacing:6px;table-layout:fixed}
 button{display:block;width:100%;height:104px;padding:6px 10px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;-webkit-appearance:none;background:#fff;color:#000;font-family:sans-serif;text-align:left;overflow:hidden}\
 button.on{background:#000;color:#fff}button .ic{float:left}button span{float:right;font-size:15px;line-height:36px;white-space:nowrap}\
 button b{display:block;clear:both;max-height:44px;overflow:hidden;font-size:18px;line-height:22px;word-wrap:break-word}\
+.big button{height:120px}.big button span{font-size:20px}.big button b{max-height:60px;font-size:26px;line-height:30px}\
 .menu{position:absolute;left:0;right:0;bottom:28px;display:table;table-layout:fixed;width:100%;border-top:2px solid #000;border-spacing:4px;background:#fff}.menu div{display:table-row}\
 .menu a{display:table-cell;height:62px;vertical-align:middle;padding:0 2px;-webkit-border-radius:10px;border-radius:10px;color:#000;font-size:15px;font-weight:bold;text-align:center;text-decoration:none;overflow:hidden;word-wrap:break-word}\
 .menu a.on{background:#000;color:#fff}.menu .ic{display:block;margin:0 auto 1px}\
 @media (min-width:1000px){body{zoom:1.2}}\
-@media (orientation:landscape){.shell{padding-bottom:0}.menu{position:static;float:left;display:block;width:112px;border-top:0;border-right:2px solid #000;padding-right:6px}.menu div{display:block}.menu a{display:block;height:auto;padding:6px 2px;margin-bottom:4px}.main{margin-left:130px}}\
+@media (orientation:landscape){.shell{padding-bottom:0}.paged .main{padding-bottom:0}.r1 .pager,.r2 .pager,.r3 .pager{position:static}.menu{position:static;float:left;display:block;width:112px;border-top:0;border-right:2px solid #000;padding-right:6px}.menu div{display:block}.menu a{display:block;height:auto;padding:6px 2px;margin-bottom:4px}.main{margin-left:130px}}\
 .m{margin:6px;padding:10px;border:2px solid #000;-webkit-border-radius:10px;border-radius:10px;overflow:hidden}.m h2{margin:0 0 6px;font-size:17px;line-height:36px}.cols{border-spacing:0}\
 .m button{height:52px;padding:0;text-align:center;font-size:26px;font-weight:bold}.m button .ic{float:none;display:block;margin:0 auto}.m button span{float:none;display:block;white-space:normal}\
 .np{border-spacing:0}.np td{vertical-align:middle}.np .art{width:132px;text-align:center}.np img{display:block;width:120px;height:120px}.np small{display:block;font-size:16px;line-height:20px}.np b{display:block;font-size:26px;line-height:32px;white-space:nowrap;overflow:hidden}.np span{display:block;font-size:16px;line-height:20px;white-space:nowrap;overflow:hidden}.np .play{width:92px}.np .play button{height:84px}.np .nv{width:190px}\
@@ -444,17 +446,22 @@ fn menu_rows(entries: usize) -> usize {
 
 /// As many buttons as fit a Paperwhite in portrait below what else the page shows.
 /// shortcut: heights are measured for that one screen, make them per-device if another reader is used.
-fn page_size(boxes: &[Info], menu_entries: usize) -> usize {
+fn page_size(boxes: &[Info], menu_entries: usize, view: &str, total: usize) -> usize {
     const ROOM: usize = 828;
+    const PAGER_ROW: usize = 58;
+    const HOME_MOST: usize = 16;
     const HERO_ROW: usize = 148;
     const TILE_ROW: usize = 111;
     const MENU_ROW: usize = 74;
-    const BUTTON_ROW: usize = 110;
+    let button_row = if view == "home" { 126 } else { 110 };
     let heroes = boxes.iter().filter(|b| b.hero).count();
     let used = usize::from(heroes > 0) * HERO_ROW
         + (boxes.len() - heroes).div_ceil(COLUMNS) * TILE_ROW
         + menu_rows(menu_entries).saturating_sub(1) * MENU_ROW;
-    (ROOM.saturating_sub(used) / BUTTON_ROW).max(1) * COLUMNS
+    let most = if view == "home" { HOME_MOST } else { usize::MAX };
+    let fit = |room: usize| ((room.saturating_sub(used) / button_row).max(1) * COLUMNS).min(most);
+    // The arrows only take a row when there is a second page.
+    if total <= fit(ROOM) { fit(ROOM) } else { fit(ROOM - PAGER_ROW) }
 }
 
 fn menu_html(entries: &[(String, String, String)], view: &str) -> String {
@@ -475,15 +482,17 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let entries = menu(app, device, nb);
     let view = entries.iter().find(|(id, ..)| Some(id) == req.query.get("view")).map_or("home", |(id, ..)| id.as_str());
     let boxes = info_boxes(app, device, view, nb);
-    let (shown, page, pages, layout) = page_of(view_items(app, device, view), wanted, page_size(&boxes, entries.len()));
+    let all = view_items(app, device, view);
+    let per_page = page_size(&boxes, entries.len(), view, all.len());
+    let (shown, page, pages, layout) = page_of(all, wanted, per_page);
     let token = form_token(device);
     let title = entries.iter().find(|(id, ..)| id == view && view != "home").map_or(device.name.as_str(), |(_, label, _)| label.as_str());
     let pager = if pages > 1 {
-        format!("<td class=\"pager\"><a href=\"{}\" aria-label=\"{}\">&lsaquo;</a> {} / {pages} <a href=\"{}\" aria-label=\"{}\">&rsaquo;</a></td>", escape_xml(&link(view, (page + pages - 1) % pages)), if nb { "Forrige side" } else { "Previous page" }, page + 1, escape_xml(&link(view, (page + 1) % pages)), if nb { "Neste side" } else { "Next page" })
+        format!("<div class=\"pager\"><a href=\"{}\" aria-label=\"{}\">&lsaquo;</a> {} / {pages} <a href=\"{}\" aria-label=\"{}\">&rsaquo;</a></div>", escape_xml(&link(view, (page + pages - 1) % pages)), if nb { "Forrige side" } else { "Previous page" }, page + 1, escape_xml(&link(view, (page + 1) % pages)), if nb { "Neste side" } else { "Next page" })
     } else {
         String::new()
     };
-    let mut body = format!("<table class=\"head\"><tr><td><h1>{}</h1></td>{pager}</tr></table>", escape_xml(title));
+    let mut body = format!("<table class=\"head\"><tr><td><h1>{}</h1></td></tr></table>", escape_xml(title));
     let (heroes, tiles): (Vec<Info>, Vec<Info>) = boxes.into_iter().partition(|b| b.hero);
     body += &grid(heroes.iter().map(Info::html).collect(), heroes.len(), "hero");
     body += &grid(tiles.iter().map(Info::html).collect(), COLUMNS, "tiles");
@@ -519,9 +528,11 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
             icon(class_icon(&item.class)),
             escape_xml(&item.name)
         )
-    }).collect(), COLUMNS, "buttons");
+    }).collect(), COLUMNS, if view == "home" { "buttons big" } else { "buttons" });
+    body += &pager;
     let rows = menu_rows(entries.len());
-    let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
+    let paged = if pages > 1 { " paged" } else { "" };
+    let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}{paged}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
     let body = format!("{body}<script src=\"/kindle/app.js\"></script>");
     html(&device.name, PAGE_REFRESH, &escape_xml(&here), &body, true)
 }
@@ -893,7 +904,9 @@ fn press(app: &App, req: &Request) -> Response {
     }
     let entries = menu(app, &device, false);
     let view = entries.iter().find(|(id, ..)| id == field("view")).map_or("home", |(id, ..)| id.as_str());
-    let (shown, page, _, layout) = page_of(view_items(app, &device, view), field("page").parse().unwrap_or(0), page_size(&info_boxes(app, &device, view, false), entries.len()));
+    let all = view_items(app, &device, view);
+    let per_page = page_size(&info_boxes(app, &device, view, false), entries.len(), view, all.len());
+    let (shown, page, _, layout) = page_of(all, field("page").parse().unwrap_or(0), per_page);
     let item = field("item").parse::<usize>().ok().and_then(|i| shown.get(i));
     let Some(item) = item.filter(|_| field("layout") == layout) else {
         return redirect(&format!("{}&notice=stale", link(view, page)));
@@ -1217,11 +1230,13 @@ mod tests {
     fn pages_hold_what_fits() {
         let info = |hero| Info { hero, icon: "cloud", label: String::new(), value: String::new(), words: false, lines: Vec::new() };
         let home = |tiles: usize| [true, true].into_iter().chain((0..tiles).map(|_| false)).map(info).collect::<Vec<_>>();
-        assert_eq!(page_size(&home(2), 6), 20, "the Kitchen screen: one row of tiles");
-        assert_eq!(page_size(&home(6), 6), 16, "two rows of tiles");
-        assert_eq!(page_size(&[], 6), 28, "buttons alone");
-        assert_eq!(page_size(&home(2), 7), 16, "a second menu row");
-        assert_eq!(page_size(&(0..40).map(|_| info(false)).collect::<Vec<_>>(), 18), COLUMNS, "never none");
+        assert_eq!(page_size(&home(2), 6, "home", 19), 16, "the Kitchen screen stops at 16");
+        assert_eq!(page_size(&home(6), 6, "home", 19), 12, "two rows of tiles and the arrows");
+        assert_eq!(page_size(&[], 6, "lights", 28), 28, "all fit, so no arrows take room");
+        assert_eq!(page_size(&[], 6, "lights", 29), 28, "the arrows still leave seven rows");
+        assert_eq!(page_size(&home(2), 7, "lights", 16), 16, "a second menu row");
+        assert_eq!(page_size(&home(2), 7, "lights", 17), 12, "the arrows cost a row");
+        assert_eq!(page_size(&(0..40).map(|_| info(false)).collect::<Vec<_>>(), 18, "home", 9), COLUMNS, "never none");
     }
 
     #[test]
