@@ -170,7 +170,16 @@ a.button { text-align: center; }
 .badge.wait { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .detail { margin: 8px 0 0; overflow-wrap: anywhere; }
 .shared { margin: 10px 0 0; }
-.health { margin: 10px 0 0; line-height: 1.45; overflow-wrap: anywhere; }
+.health { margin: 12px 0 0; }
+.health-empty { margin: 12px 0 0; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 0; border-block: 1px solid var(--line); }
+.stat { min-width: 0; padding-left: 12px; border-left: 1px solid var(--line); }
+.stat:first-child { padding-left: 0; border-left: 0; }
+.stat strong { display: block; font-size: 18px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.health-line { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.health-line span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.health-line span + span { flex: none; }
 .field { margin-top: 14px; }
 .field label { margin-top: 0; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

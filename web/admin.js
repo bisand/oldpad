@@ -363,15 +363,17 @@ function browserName(agent) {
 // What the screen itself last reported. Dropouts and errors cover the last 24 hours.
 function screenHealth(d) {
   const x = d.health;
-  if (!x) return h('p', { class: 'small muted health' }, 'No health report yet');
-  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  const link = [x.ms === null ? null : `Response ${x.ms} ms`, plural(x.drops, 'dropout'), plural(x.errors, 'script error')];
-  const device = [browserName(x.browser), x.width ? `${x.width}×${x.height} ${x.width > x.height ? 'landscape' : 'portrait'}` : null, x.version ? `oldpad ${x.version}` : null];
-  return h('div', { class: 'small muted health' },
-    h('div', {}, `${link.filter(Boolean).join(' · ')} (24 h)`),
-    h('div', {}, device.filter(Boolean).join(' · ')),
-    x.error ? h('div', {}, `Last error: ${x.error}`) : null,
-    d.online ? null : h('div', {}, `Last report ${ago(x.reported)}`));
+  if (!x) return h('p', { class: 'small muted health-empty' }, 'Waiting for first report');
+  const stat = (value, label, bad) => h('div', { class: 'stat' }, h('strong', { class: bad ? 'bad' : '' }, value), h('span', {}, label));
+  const device = [browserName(x.browser), x.width ? `${x.width}×${x.height}` : null].filter(Boolean).join(' · ');
+  return h('div', { class: 'health' },
+    h('div', { class: 'stats' },
+      stat(x.ms === null ? '–' : `${x.ms} ms`, 'Response'),
+      stat(String(x.drops), 'Dropouts 24 h', x.drops > 0),
+      stat(String(x.errors), 'Errors 24 h', x.errors > 0)),
+    h('div', { class: 'health-line small muted' }, h('span', { title: x.browser }, device), x.version ? h('span', {}, `v${x.version}`) : null),
+    x.error ? h('div', { class: 'health-line small bad' }, h('span', { title: x.error }, x.error)) : null,
+    d.online ? null : h('div', { class: 'health-line small muted' }, h('span', {}, `Last report ${ago(x.reported)}`)));
 }
 
 function screenCard(d, devices) {
