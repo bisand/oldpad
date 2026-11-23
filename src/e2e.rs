@@ -226,7 +226,10 @@ fn phone_and_tablet_end_to_end() {
     let (_, reload) = phone.call("POST", &format!("/api/admin/devices/{kindle_id}/reload"), Some(json!({})));
     assert_eq!((&reload["ok"], &reload["live"]), (&json!(true), &json!(false)), "a polling Kindle is told at its next check");
     assert_eq!(web("GET", "/kindle", &screen, None).headers.get("x-oldpad-reload").map(String::as_str), Some("1"));
-    assert!(!web("GET", "/kindle", &screen, None).headers.contains_key("x-oldpad-reload"), "once");
+    let again = web("GET", "/kindle", &screen, None);
+    assert!(!again.headers.contains_key("x-oldpad-reload"), "once");
+    assert_eq!(again.headers["x-oldpad-version"], crate::util::VERSION);
+    assert!(text(&again).contains(&format!("<html data-version=\"{}\">", crate::util::VERSION)), "the page knows the version it came from");
     assert!(page.headers["content-security-policy"].contains("form-action 'self'"));
     let html = text(&page);
     if let Ok(path) = std::env::var("OLDPAD_KINDLE_HTML") {

@@ -327,10 +327,11 @@ fn html(title: &str, refresh: u32, refresh_to: &str, body: &str, live: bool) -> 
     let reload = format!("<meta http-equiv=\"refresh\" content=\"{refresh};url={refresh_to}\">");
     let reload = if live { format!("<noscript>{reload}</noscript>") } else { reload };
     let page = format!(
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">{reload}<title>{}</title><link rel=\"stylesheet\" href=\"/kindle/style.css\"></head><body>{body}</body></html>",
-        escape_xml(title)
+        "<!DOCTYPE html><html data-version=\"{version}\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">{reload}<title>{}</title><link rel=\"stylesheet\" href=\"/kindle/style.css\"></head><body>{body}</body></html>",
+        escape_xml(title),
+        version = escape_xml(crate::util::VERSION)
     );
-    Response::new(200, "text/html; charset=utf-8", page).header("Cache-Control", "no-store").header("Content-Security-Policy", PAGE_CSP)
+    Response::new(200, "text/html; charset=utf-8", page).header("Cache-Control", "no-store").header("Content-Security-Policy", PAGE_CSP).header("X-Oldpad-Version", crate::util::VERSION)
 }
 
 fn form_token(device: &Device) -> String {

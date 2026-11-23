@@ -46,9 +46,13 @@
     if (!timer) { timer = setTimeout(function () { timer = null; refresh(); }, ms); }
   }
 
-  // The admin's Reload screen, for a browser with no stream to hear it on.
+  // The admin's Reload screen, for a browser with no stream to hear it on, or a new oldpad version.
+  // Updates in place never load a new script, so without this a Kindle would keep the old one.
   function told(xhr) {
-    if (xhr.status !== 200 || !xhr.getResponseHeader('X-Oldpad-Reload')) { return false; }
+    var version;
+    if (xhr.status !== 200) { return false; }
+    version = xhr.getResponseHeader('X-Oldpad-Version');
+    if (!xhr.getResponseHeader('X-Oldpad-Reload') && (!version || version === document.documentElement.getAttribute('data-version'))) { return false; }
     window.location.reload();
     return true;
   }
