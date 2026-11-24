@@ -271,6 +271,9 @@ fn phone_and_tablet_end_to_end() {
     assert_eq!(speak(&speaker, "pause", "wrong").status, 403);
     assert_eq!(speak(&bath, "pause", &form_token).headers["location"], "/kindle?view=music&page=0&notice=stale", "only this screen's speakers");
     assert_eq!(speak(&speaker, "pause", &form_token).headers["location"], "/kindle?view=music&page=0");
+    let on_page = web("POST", "/kindle/speaker", &screen, Some(&format!("token={form_token}&id={speaker}&action=pause&page=1")));
+    assert_eq!(on_page.headers["location"], "/kindle?view=music&page=1", "a favourite keeps its page");
+    assert!(text(&web("GET", "/kindle?view=music&page=9", &screen, None)).contains("Favourites"), "a page past the end shows the last");
     assert!(!text(&web("GET", "/kindle?view=music", &screen, None)).contains("i-pause"));
     assert_eq!(speak(&speaker, "play", &form_token).status, 303);
     assert_eq!(speak(&speaker, "up", &form_token).status, 303);

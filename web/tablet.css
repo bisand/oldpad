@@ -68,6 +68,8 @@ body.day { background: #eceef2; color: #1b1d21; }
 .label-s { font-size: 14px; }
 .big { font-size: 46px; font-weight: 300; line-height: 1.1; }
 .sub { font-size: 14px; }
+/* Centred in landscape, where the cards are wide; portrait keeps the date at the corner. */
+@media (min-width: 901px) { .clock, .climate .half { text-align: center; } }
 
 /* ---------- forecast ---------- */
 .forecast { height: 90px; padding: 5px 14px; font-size: 0; }

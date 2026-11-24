@@ -498,11 +498,8 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     let (shown, page, pages, layout) = page_of(all, wanted, per_page);
     let token = form_token(device);
     let title = entries.iter().find(|(id, ..)| id == view && view != "home").map_or(device.name.as_str(), |(_, label, _)| label.as_str());
-    let pager = if pages > 1 {
-        format!("<div class=\"pager\"><a href=\"{}\" aria-label=\"{}\">&lsaquo;</a> {} / {pages} <a href=\"{}\" aria-label=\"{}\">&rsaquo;</a></div>", escape_xml(&link(view, (page + pages - 1) % pages)), if nb { "Forrige side" } else { "Previous page" }, page + 1, escape_xml(&link(view, (page + 1) % pages)), if nb { "Neste side" } else { "Next page" })
-    } else {
-        String::new()
-    };
+    let mut pager = pager_html(page, pages, |p| link(view, p), nb);
+    let mut paged = pages > 1;
     let mut body = format!("<table class=\"head\"><tr><td><h1>{}</h1></td></tr></table>", escape_xml(title));
     let (heroes, tiles): (Vec<Info>, Vec<Info>) = boxes.into_iter().partition(|b| b.hero);
     body += &grid(heroes.iter().map(Info::html).collect(), heroes.len(), "hero");
@@ -517,9 +514,11 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     }
     let mut here = link(view, page);
     if view == "music" {
-        let (music, address) = music_page(app, device, req, &token, nb);
+        let (music, address, favourites) = music_page(app, device, req, &token, nb);
         body += &music;
         here = address;
+        paged = !favourites.is_empty();
+        pager = favourites;
     } else if shown.is_empty() && view != "weather" {
         body += if nb { "<p class=\"empty\">Ingen knapper er valgt for denne skjermen.</p>" } else { "<p class=\"empty\">No controls are set up for this screen.</p>" };
     }
@@ -542,10 +541,18 @@ fn dashboard(app: &App, req: &Request, device: &Device, nb: bool) -> Response {
     }).collect(), COLUMNS, if view == "home" { "buttons big" } else { "buttons" });
     body += &pager;
     let rows = menu_rows(entries.len());
-    let paged = if pages > 1 { " paged" } else { "" };
+    let paged = if paged { " paged" } else { "" };
     let body = if entries.len() > 1 { format!("<div class=\"shell r{rows}{paged}\">{}<div class=\"main\">{body}</div></div>", menu_html(&entries, view)) } else { body };
     let body = format!("{body}<script src=\"/kindle/health.js\"></script><script src=\"/kindle/app.js\"></script>");
     html(&device.name, PAGE_REFRESH, &escape_xml(&here), &body, true)
+}
+
+/// Arrows to the previous and next page, wrapping around; nothing for a single page.
+fn pager_html(page: usize, pages: usize, url: impl Fn(usize) -> String, nb: bool) -> String {
+    if pages < 2 {
+        return String::new();
+    }
+    format!("<div class=\"pager\"><a href=\"{}\" aria-label=\"{}\">&lsaquo;</a> {} / {pages} <a href=\"{}\" aria-label=\"{}\">&rsaquo;</a></div>", escape_xml(&url((page + pages - 1) % pages)), if nb { "Forrige side" } else { "Previous page" }, page + 1, escape_xml(&url((page + 1) % pages)), if nb { "Neste side" } else { "Next page" })
 }
 
 /// Rows of equal columns; a short last row keeps its cells the same width.
@@ -739,8 +746,8 @@ fn encode(s: &str) -> String {
     s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
 }
 
-fn music_url(room: &str, query: &str) -> String {
-    let mut url = link("music", 0);
+fn music_url(room: &str, query: &str, page: usize) -> String {
+    let mut url = link("music", page);
     if !room.is_empty() {
         url += &format!("&room={}", encode(room));
     }
@@ -755,15 +762,18 @@ fn text_of<'a>(e: &'a Entity, capability: &str) -> &'a str {
 }
 
 /// The tablet's music page: what the group plays, its rooms, and favourites or search.
-/// Returns the page and its own address, for the refresh.
-fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) -> (String, String) {
-    // shortcut: the first 24 favourites, as each costs the reader a picture; page them if that is too few.
-    const MAX_FAVOURITES: usize = 24;
+/// Returns the page, its own address for the refresh, and the favourites' arrows.
+fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) -> (String, String, String) {
+    // Three rows fit above the arrows and the menu on a Paperwhite in portrait.
+    const FAVOURITES_PER_PAGE: usize = 9;
     let all = speakers(app, device);
-    let Some(room) = all.iter().find(|e| Some(&e.id) == req.query.get("room")).or(all.first()) else { return (String::new(), link("music", 0)) };
+    let Some(room) = all.iter().find(|e| Some(&e.id) == req.query.get("room")).or(all.first()) else { return (String::new(), link("music", 0), String::new()) };
     let query = req.query.get("q").map_or("", |q| q.trim());
     let query = if query.chars().count() <= 100 { query } else { "" };
     let lead = speaker_lead(app, room);
+    let favourites: &[Value] = if query.is_empty() { lead.capabilities.get("favourites").and_then(|c| c.value.as_array()).map_or(&[], |f| f.as_slice()) } else { &[] };
+    let pages = favourites.len().div_ceil(FAVOURITES_PER_PAGE).max(1);
+    let page = req.query.get("page").and_then(|p| p.parse::<usize>().ok()).unwrap_or(0).min(pages - 1);
     let lead_of_room = lead_id(room);
     let group: Vec<&Entity> = all.iter().filter(|e| lead_id(e) == lead_of_room).collect();
     let name = |e: &Entity| device.names.get(&e.id).unwrap_or(&e.name).clone();
@@ -771,7 +781,7 @@ fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) 
     let image_token = App::image_token(device);
     let picture = |key: &str| format!("<img src=\"/api/image/{}/{}?t={image_token}\" alt=\"\">", encode(&integration), escape_xml(key));
     let button = |target: &str, action: &str, extra: (&str, &str), label: &str, class: &str, inner: &str| format!(
-        "<form method=\"post\" action=\"/kindle/speaker\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"id\" value=\"{}\"><input type=\"hidden\" name=\"room\" value=\"{}\"><input type=\"hidden\" name=\"q\" value=\"{}\"><input type=\"hidden\" name=\"action\" value=\"{action}\"><input type=\"hidden\" name=\"{}\" value=\"{}\"><button{class} type=\"submit\" aria-label=\"{}\">{inner}</button></form>",
+        "<form method=\"post\" action=\"/kindle/speaker\"><input type=\"hidden\" name=\"token\" value=\"{token}\"><input type=\"hidden\" name=\"id\" value=\"{}\"><input type=\"hidden\" name=\"room\" value=\"{}\"><input type=\"hidden\" name=\"q\" value=\"{}\"><input type=\"hidden\" name=\"page\" value=\"{page}\"><input type=\"hidden\" name=\"action\" value=\"{action}\"><input type=\"hidden\" name=\"{}\" value=\"{}\"><button{class} type=\"submit\" aria-label=\"{}\">{inner}</button></form>",
         escape_xml(target), escape_xml(&room.id), escape_xml(query), extra.0, escape_xml(extra.1), escape_xml(label)
     );
     let volume = |e: &Entity, capability: &str, shown: f64| format!(
@@ -809,7 +819,7 @@ fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) 
         let vol = number(e, "volume_set").filter(|_| inside).map_or(String::new(), |v| volume(e, "volume_set", v));
         format!(
             "<tr class=\"rm{}\"><td class=\"chk\">{}</td><td><a href=\"{}\">{}{sub}</a></td><td class=\"rv\">{vol}</td></tr>",
-            if inside { " in" } else { "" }, button(&e.id, action, ("cap", ""), label, "", mark), escape_xml(&music_url(&e.id, query)), escape_xml(&name(e))
+            if inside { " in" } else { "" }, button(&e.id, action, ("cap", ""), label, "", mark), escape_xml(&music_url(&e.id, query, 0)), escape_xml(&name(e))
         )
     }).collect();
     let rooms = format!("<div class=\"m\">{all_button}<h2>{}</h2><table class=\"rooms\">{rows}</table></div>", if nb { "Rom" } else { "Rooms" });
@@ -837,7 +847,7 @@ fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) 
         }
     };
     let choices = if !query.is_empty() { found } else {
-        let cells: Vec<String> = lead.capabilities.get("favourites").and_then(|c| c.value.as_array()).into_iter().flatten().take(MAX_FAVOURITES).filter_map(|f| {
+        let cells: Vec<String> = favourites.iter().skip(page * FAVOURITES_PER_PAGE).take(FAVOURITES_PER_PAGE).filter_map(|f| {
             let (id, title) = (f["id"].as_str()?, f["title"].as_str()?);
             let pic = f["art"].as_str().filter(|a| !a.is_empty()).map_or_else(|| format!("<span class=\"no\">{}</span>", escape_xml(&title.chars().take(1).collect::<String>())), &picture);
             Some(button(&room.id, "fav", ("fav", id), title, if title == track { " class=\"on\"" } else { "" }, &format!("{pic}{}", escape_xml(title))))
@@ -845,7 +855,9 @@ fn music_page(app: &App, device: &Device, req: &Request, token: &str, nb: bool) 
         format!("<h2>{}</h2>{}", if nb { "Favoritter" } else { "Favourites" }, grid(cells, 3, "favs"))
     };
     body += &grid(vec![rooms, format!("<div class=\"m\">{search}{choices}</div>")], 2, "cols");
-    (body, music_url(if req.query.contains_key("room") { &room.id } else { "" }, query))
+    let room_id = if req.query.contains_key("room") { room.id.as_str() } else { "" };
+    let pager = pager_html(page, pages, |p| music_url(room_id, query, p), nb);
+    (body, music_url(room_id, query, page), pager)
 }
 
 /// Volume moves from its live value, and play and pause say which they mean, so an old page cannot do the opposite.
@@ -862,7 +874,7 @@ fn speaker_action(app: &App, req: &Request) -> Response {
     let mut back_room = field("room").to_string();
     let all = speakers(app, &device);
     let Some(e) = all.iter().find(|e| e.id == field("id")) else {
-        return redirect(&format!("{}&notice=stale", music_url(&back_room, query)));
+        return redirect(&format!("{}&notice=stale", music_url(&back_room, query, 0)));
     };
     let bare = |x: &Entity| x.id.split_once(':').map_or(String::new(), |(_, id)| id.to_string());
     // Rooms only group with rooms of the same integration on this screen.
@@ -902,7 +914,7 @@ fn speaker_action(app: &App, req: &Request) -> Response {
         }),
         _ => return Response::error(400, "Unknown action"),
     };
-    let back = music_url(&back_room, query);
+    let back = music_url(&back_room, query, field("page").parse().unwrap_or(0));
     redirect(&if done.is_ok() { back } else { format!("{back}&notice=failed") })
 }
 
@@ -1233,8 +1245,8 @@ mod tests {
 
     #[test]
     fn music_addresses_are_encoded() {
-        assert_eq!(music_url("", ""), "/kindle?view=music&page=0");
-        assert_eq!(music_url("a:b", "rock & roll\r\nX: y"), "/kindle?view=music&page=0&room=a%3Ab&q=rock%20%26%20roll%0D%0AX%3A%20y");
+        assert_eq!(music_url("", "", 0), "/kindle?view=music&page=0");
+        assert_eq!(music_url("a:b", "rock & roll\r\nX: y", 2), "/kindle?view=music&page=2&room=a%3Ab&q=rock%20%26%20roll%0D%0AX%3A%20y");
     }
 
     #[test]
