@@ -68,7 +68,7 @@ pre code { background: none; padding: 0; overflow-wrap: normal; font-size: 1em; 
 /* The hardware: bezels sized like the real thing, black in either theme. */
 .ipad, .kindle, .phone { background: #15171b; box-shadow: 0 0 0 1px #5d6470, 0 18px 40px -18px rgb(10 16 28 / .6); }
 .ipad { padding: 5.6% ; border-radius: clamp(14px, 2.2vw, 30px); }
-.ipad img { border-radius: 2px; }
+.ipad img { width: 100%; border-radius: 2px; }
 .kindle { padding: 7% 6% 11%; border-radius: 18px; max-width: 390px; width: 100%; justify-self: center; }
 .phone { padding: 12px; border-radius: 38px; max-width: 280px; width: 100%; justify-self: center; }
 .phone img { border-radius: 27px; }
