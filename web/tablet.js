@@ -1565,6 +1565,7 @@
     if (forecast) { forecast.style.height = ''; }
     if (row) { row.className = row.className.replace(/ fit\d/g, ''); }
     for (i = 0; i < inner.length; i++) { inner[i].style.height = ''; }
+    $('app').style.zoom = '';
     if (page !== 'home') { return; }
     over = root.offsetHeight - window.innerHeight;
     if (over > 0 && forecast && window.innerWidth > 900) {
@@ -1572,11 +1573,15 @@
       forecast.style.height = (forecast.offsetHeight - cut) + 'px';
       over -= cut;
     }
-    if (over <= 0 || !inner.length) { return; }
-    rows = Math.max(1, Math.round(row.offsetHeight / (inner[0].offsetHeight + 12)));
-    h = Math.max(TILE_MIN, inner[0].offsetHeight - Math.ceil(over / rows));
-    row.className += h < 160 ? ' fit2' : h < 186 ? ' fit1' : '';
-    for (i = 0; i < inner.length; i++) { inner[i].style.height = h + 'px'; }
+    if (over > 0 && inner.length) {
+      rows = Math.max(1, Math.round(row.offsetHeight / (inner[0].offsetHeight + 12)));
+      h = Math.max(TILE_MIN, inner[0].offsetHeight - Math.ceil(over / rows));
+      row.className += h < 160 ? ' fit2' : h < 186 ? ' fit1' : '';
+      for (i = 0; i < inner.length; i++) { inner[i].style.height = h + 'px'; }
+    }
+    // Short wide screens (a 16:10 tablet in landscape): zoom out the rest, but keep it readable.
+    over = root.offsetHeight - window.innerHeight;
+    if (over > 0) { $('app').style.zoom = Math.max(0.75, window.innerHeight / root.offsetHeight); }
   }
 
   window.addEventListener('resize', function () { if (page === 'calendar' || page === 'graphs') { render(); } else { fitHome(); } }, false);
